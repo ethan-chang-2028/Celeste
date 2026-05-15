@@ -1,4 +1,8 @@
-var builder = WebApplication.CreateBuilder(args);
+var builder = WebApplication.CreateBuilder(new WebApplicationOptions
+{
+    Args = args,
+    WebRootPath = "webSite"
+});
 
 builder.Services.AddControllersWithViews();
 
