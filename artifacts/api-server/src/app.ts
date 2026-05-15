@@ -1,6 +1,7 @@
 import express, { type Express } from "express";
 import cors from "cors";
 import pinoHttp from "pino-http";
+import path from "path";
 import router from "./routes";
 import { logger } from "./lib/logger";
 
@@ -30,5 +31,12 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 app.use("/api", router);
+
+const webSitePath = path.resolve(__dirname, "../../../game-app/webSite");
+app.use(express.static(webSitePath));
+
+app.get("/{*path}", (_req, res) => {
+  res.sendFile(path.join(webSitePath, "index.html"));
+});
 
 export default app;
