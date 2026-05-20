@@ -5,6 +5,26 @@ const path = require('path');
 
 const PORT = 3000;
 const DATA_FILE_PATH = path.join(__dirname, 'game-app', 'Data', 'players.json');
+const BRIDGE_JS_PATH = path.join(__dirname, 'translation-layer', 'js-bridge.js');
+
+// Detect whether the request came from a CelesteBridge client.
+// If so, wrap every response in the shared BridgeMessage envelope.
+function isBridgeRequest(req) {
+    return !!req.headers['x-bridge-source'];
+}
+
+function sendResponse(res, statusCode, type, payload, req) {
+    res.writeHead(statusCode, { 'Content-Type': 'application/json' });
+    if (isBridgeRequest(req)) {
+        return res.end(JSON.stringify({
+            type,
+            source: 'node-server',
+            timestamp: new Date().toISOString(),
+            payload,
+        }));
+    }
+    return res.end(JSON.stringify(payload));
+}
 
 // --- Helper: Ensure the players.json file exists when the server starts ---
 async function initDataFile() {
@@ -45,7 +65,7 @@ const server = http.createServer(async (req, res) => {
     // 1. Handle CORS (Allows browser to talk to server smoothly)
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'OPTIONS, GET, POST');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Bridge-Source');
 
     // Handle preflight requests
     if (req.method === 'OPTIONS') {
@@ -70,49 +90,64 @@ const server = http.createServer(async (req, res) => {
             return res.end(jsContent);
         }
 
+        // 3b. Serve the translation bridge for the browser
+        if (req.method === 'GET' && req.url === '/js-bridge.js') {
+            const jsContent = await fs.readFile(BRIDGE_JS_PATH, 'utf-8');
+            res.writeHead(200, { 'Content-Type': 'application/javascript' });
+            return res.end(jsContent);
+        }
+
         // 4. Handle Registration POST Request
         if (req.method === 'POST' && req.url === '/register') {
             const data = await getRequestBody(req);
+            const isBridge = isBridgeRequest(req);
+
+            // Bridge clients wrap credentials in data.payload; plain clients send them directly
+            const username = isBridge ? data.payload?.username : data.username;
+            const password = isBridge ? data.payload?.password : data.password;
 
             // Read current players
             const fileData = await fs.readFile(DATA_FILE_PATH, 'utf-8');
             const players = JSON.parse(fileData || '[]');
 
             // Check if username exists
-            if (players.find(p => p.username === data.username)) {
-                res.writeHead(400, { 'Content-Type': 'application/json' });
-                return res.end(JSON.stringify({ message: "Username is already taken!" }));
+            if (players.find(p => p.username === username)) {
+                return sendResponse(res, 400, 'auth.response',
+                    { message: "Username is already taken!" }, req);
             }
 
             // Save new player
-            players.push({ 
-                username: data.username, 
-                password: data.password, 
-                registeredAt: new Date().toISOString() 
-            });
+            players.push({ username, password, registeredAt: new Date().toISOString() });
             await fs.writeFile(DATA_FILE_PATH, JSON.stringify(players, null, 2));
 
-            res.writeHead(201, { 'Content-Type': 'application/json' });
-            return res.end(JSON.stringify({ message: "Account created successfully!" }));
+            return sendResponse(res, 201, 'auth.response',
+                { message: "Account created successfully!" }, req);
         }
 
         // 5. Handle Login POST Request
         if (req.method === 'POST' && req.url === '/login') {
             const data = await getRequestBody(req);
+            const isBridge = isBridgeRequest(req);
+
+            // Bridge clients wrap credentials in data.payload; plain clients send them directly
+            const username = isBridge ? data.payload?.username : data.username;
+            const password = isBridge ? data.payload?.password : data.password;
 
             // Read current players
             const fileData = await fs.readFile(DATA_FILE_PATH, 'utf-8');
             const players = JSON.parse(fileData || '[]');
 
             // Check if credentials match
-            const validUser = players.find(p => p.username === data.username && p.password === data.password);
+            const validUser = players.find(
+                p => p.username === username && p.password === password
+            );
 
             if (validUser) {
-                res.writeHead(200, { 'Content-Type': 'application/json' });
-                return res.end(JSON.stringify({ message: "Login successful!" }));
+                return sendResponse(res, 200, 'auth.response',
+                    { message: "Login successful!", username: validUser.username }, req);
             } else {
-                res.writeHead(401, { 'Content-Type': 'application/json' });
-                return res.end(JSON.stringify({ message: "Invalid username or password!" }));
+                return sendResponse(res, 401, 'auth.response',
+                    { message: "Invalid username or password!" }, req);
             }
         }
 
