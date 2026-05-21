@@ -1,0 +1,58 @@
+* { box-sizing: border-box; }
+
+body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: #1a1d29;
+    color: #e6e8ef;
+    min-height: 100vh;
+}
+
+.game-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1rem 2rem;
+    background: #11131c;
+    border-bottom: 1px solid #2a2f42;
+}
+
+.game-header h1 {
+    margin: 0;
+    font-size: 1.25rem;
+    letter-spacing: 0.05em;
+}
+
+.back-link {
+    color: #7aa2ff;
+    text-decoration: none;
+    font-size: 0.9rem;
+}
+
+.back-link:hover { text-decoration: underline; }
+
+.game-main {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 1.5rem;
+    gap: 1rem;
+}
+
+#game-canvas {
+    background: linear-gradient(180deg, #2d3450 0%, #4a5a8a 100%);
+    border: 2px solid #2a2f42;
+    border-radius: 4px;
+    max-width: 100%;
+    image-rendering: pixelated;
+}
+
+.controls {
+    text-align: center;
+    font-size: 0.9rem;
+    color: #aab1c6;
+}
+
+.controls p { margin: 0.25rem 0; }
+
+#status { color: #7aa2ff; font-family: monospace; }

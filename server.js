@@ -113,6 +113,21 @@ const server = http.createServer(async (req, res) => {
             return res.end(jsContent);
         }
 
+        // 3c. Serve the game test page and its assets
+        const gameAssets = {
+            '/game':      { file: 'game.html', type: 'text/html' },
+            '/game.html': { file: 'game.html', type: 'text/html' },
+            '/game.js':   { file: 'game.js',   type: 'application/javascript' },
+            '/game.css':  { file: 'game.css',  type: 'text/css' },
+        };
+        if (req.method === 'GET' && gameAssets[req.url]) {
+            const { file, type } = gameAssets[req.url];
+            const filePath = path.join(__dirname, 'game-app', 'webSite', file);
+            const content = await fs.readFile(filePath, 'utf-8');
+            res.writeHead(200, { 'Content-Type': type });
+            return res.end(content);
+        }
+
         // 4. Handle Registration POST Request
         if (req.method === 'POST' && req.url === '/register') {
             const data = await getRequestBody(req);
