@@ -1,0 +1,113 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema",
+  "$id": "celeste-shared-contract",
+  "title": "Celeste Multi-Language Shared Contract",
+  "description": "Single source of truth for all data types and service endpoints used across JavaScript, TypeScript, C#, and C++.",
+
+  "services": {
+    "node-server":  { "baseUrl": "http://localhost:3000", "language": "JavaScript", "file": "server.js" },
+    "express-api":  { "baseUrl": "http://localhost:5000", "language": "TypeScript", "file": "artifacts/api-server/src/index.ts" },
+    "game-server":  { "baseUrl": "http://localhost:3001", "language": "C#",         "file": "game-app/Program.cs" },
+    "native-engine":{ "baseUrl": null,                    "language": "C++",        "file": "game-app/Native/Engine/GameEngine.cpp" },
+    "browser":      { "baseUrl": null,                    "language": "JavaScript", "file": "game-app/webSite/app.js" }
+  },
+
+  "messageTypes": [
+    "auth.register",
+    "auth.login",
+    "auth.response",
+    "game.state",
+    "game.update",
+    "health.check",
+    "health.response",
+    "error"
+  ],
+
+  "definitions": {
+
+    "BridgeMessage": {
+      "description": "Universal wrapper — every cross-language message uses this envelope.",
+      "type": "object",
+      "required": ["type", "source", "timestamp", "payload"],
+      "properties": {
+        "type":      { "type": "string", "description": "One of messageTypes above" },
+        "source":    { "type": "string", "description": "Service that created this message" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "payload":   { "type": "object", "description": "Message-specific data (see types below)" }
+      }
+    },
+
+    "AuthRequest": {
+      "description": "Sent by browser/C#/C++ → node-server for login or register.",
+      "type": "object",
+      "required": ["username", "password"],
+      "properties": {
+        "username": { "type": "string" },
+        "password": { "type": "string" }
+      }
+    },
+
+    "AuthResponse": {
+      "description": "Returned by node-server after login or register.",
+      "type": "object",
+      "required": ["message"],
+      "properties": {
+        "message":  { "type": "string" },
+        "username": { "type": "string" }
+      }
+    },
+
+    "Player": {
+      "description": "Canonical player record shared between Node.js, C#, and C++.",
+      "type": "object",
+      "required": ["username"],
+      "properties": {
+        "username":     { "type": "string" },
+        "registeredAt": { "type": "string", "format": "date-time" },
+        "score":        { "type": "integer", "default": 0 },
+        "level":        { "type": "integer", "default": 1 }
+      }
+    },
+
+    "GameState": {
+      "description": "Live game state — produced by C++ engine, consumed by C# server and browser.",
+      "type": "object",
+      "required": ["playerId", "level", "score", "lives", "timestamp"],
+      "properties": {
+        "playerId":  { "type": "string" },
+        "level":     { "type": "integer" },
+        "score":     { "type": "integer" },
+        "lives":     { "type": "integer" },
+        "position":  {
+          "type": "object",
+          "properties": {
+            "x": { "type": "number" },
+            "y": { "type": "number" }
+          }
+        },
+        "timestamp": { "type": "string", "format": "date-time" }
+      }
+    },
+
+    "HealthStatus": {
+      "description": "Service health — returned by every /healthz endpoint.",
+      "type": "object",
+      "required": ["status"],
+      "properties": {
+        "status":  { "type": "string", "enum": ["ok", "error", "degraded"] },
+        "service": { "type": "string" },
+        "uptime":  { "type": "number" }
+      }
+    },
+
+    "ApiError": {
+      "description": "Error payload inside a BridgeMessage.",
+      "type": "object",
+      "required": ["message", "code"],
+      "properties": {
+        "message": { "type": "string" },
+        "code":    { "type": "integer" }
+      }
+    }
+  }
+}
