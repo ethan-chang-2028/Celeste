@@ -26,14 +26,14 @@ function sendResponse(res, statusCode, type, payload, req) {
     return res.end(JSON.stringify(payload));
 }
 
-// --- Helper: Ensure the players.json file exists when the server starts ---
+// --- Helper: Ensure the players.json file exists and is valid on startup ---
 async function initDataFile() {
     try {
         await fs.mkdir(path.dirname(DATA_FILE_PATH), { recursive: true });
         let needsInit = false;
         try {
             const content = await fs.readFile(DATA_FILE_PATH, 'utf-8');
-            JSON.parse(content || 'null'); // throws if corrupt
+            JSON.parse(content || 'null');
             if (!content.trim()) needsInit = true;
         } catch {
             needsInit = true;
@@ -62,6 +62,17 @@ function getRequestBody(req) {
             }
         });
     });
+}
+
+// --- Helper: Safely read and parse players array from disk ---
+async function readPlayers() {
+    try {
+        const fileData = await fs.readFile(DATA_FILE_PATH, 'utf-8');
+        const parsed = JSON.parse(fileData);
+        return Array.isArray(parsed) ? parsed : [];
+    } catch {
+        return [];
+    }
 }
 
 // Create the server
@@ -111,11 +122,7 @@ const server = http.createServer(async (req, res) => {
             const username = isBridge ? data.payload?.username : data.username;
             const password = isBridge ? data.payload?.password : data.password;
 
-            // Read current players
-            const fileData = await fs.readFile(DATA_FILE_PATH, 'utf-8');
-            let players;
-            try { players = JSON.parse(fileData); } catch { players = []; }
-            if (!Array.isArray(players)) players = [];
+            const players = await readPlayers();
 
             // Check if username exists
             if (players.find(p => p.username === username)) {
@@ -140,11 +147,7 @@ const server = http.createServer(async (req, res) => {
             const username = isBridge ? data.payload?.username : data.username;
             const password = isBridge ? data.payload?.password : data.password;
 
-            // Read current players
-            const fileData = await fs.readFile(DATA_FILE_PATH, 'utf-8');
-            let players;
-            try { players = JSON.parse(fileData); } catch { players = []; }
-            if (!Array.isArray(players)) players = [];
+            const players = await readPlayers();
 
             // Check if credentials match
             const validUser = players.find(
