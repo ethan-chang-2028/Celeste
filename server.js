@@ -30,10 +30,15 @@ function sendResponse(res, statusCode, type, payload, req) {
 async function initDataFile() {
     try {
         await fs.mkdir(path.dirname(DATA_FILE_PATH), { recursive: true });
+        let needsInit = false;
         try {
-            await fs.access(DATA_FILE_PATH);
+            const content = await fs.readFile(DATA_FILE_PATH, 'utf-8');
+            JSON.parse(content || 'null'); // throws if corrupt
+            if (!content.trim()) needsInit = true;
         } catch {
-            // File doesn't exist, create it with an empty array
+            needsInit = true;
+        }
+        if (needsInit) {
             await fs.writeFile(DATA_FILE_PATH, JSON.stringify([]));
         }
     } catch (error) {
@@ -108,7 +113,9 @@ const server = http.createServer(async (req, res) => {
 
             // Read current players
             const fileData = await fs.readFile(DATA_FILE_PATH, 'utf-8');
-            const players = JSON.parse(fileData || '[]');
+            let players;
+            try { players = JSON.parse(fileData); } catch { players = []; }
+            if (!Array.isArray(players)) players = [];
 
             // Check if username exists
             if (players.find(p => p.username === username)) {
@@ -135,7 +142,9 @@ const server = http.createServer(async (req, res) => {
 
             // Read current players
             const fileData = await fs.readFile(DATA_FILE_PATH, 'utf-8');
-            const players = JSON.parse(fileData || '[]');
+            let players;
+            try { players = JSON.parse(fileData); } catch { players = []; }
+            if (!Array.isArray(players)) players = [];
 
             // Check if credentials match
             const validUser = players.find(

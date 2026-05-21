@@ -57,8 +57,12 @@ class CelesteBridge {
     });
 
     if (!response.ok) {
-      const text = await response.text();
-      const err = new Error(`Bridge error ${response.status}: ${text}`);
+      let message = `Server error (${response.status})`;
+      try {
+        const body = await response.json();
+        message = body.payload?.message || body.message || message;
+      } catch {}
+      const err = new Error(message);
       err.code = response.status;
       throw err;
     }
