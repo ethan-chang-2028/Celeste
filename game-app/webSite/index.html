@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login & Register System</title>
+</head>
+<body>
+
+    <div id="login-view">
+        <h2>Sign In</h2>
+        <div id="login-error" style="color: red;"></div>
+        <form id="login-form">
+            <input type="text" id="login-username" placeholder="Username" required>
+            <input type="password" id="login-password" placeholder="Password" required>
+            <button type="submit">Log In</button>
+        </form>
+        <p>Don't have an account? <button id="show-register-btn">Register here</button></p>
+    </div>
+
+    <div id="register-view" style="display: none;">
+        <h2>Create an Account</h2>
+        <div id="register-msg" style="color: blue;"></div>
+        <form id="register-form">
+            <input type="text" id="reg-username" placeholder="New Username" required>
+            <input type="password" id="reg-password" placeholder="New Password" required>
+            <button type="submit">Register</button>
+        </form>
+        <p>Already have an account? <button id="show-login-btn">Log in here</button></p>
+    </div>
+
+    <div id="dashboard-view" style="display: none;">
+        <h2>Welcome, <span id="user-display"></span>!</h2>
+        <p>Your game data has loaded.</p>
+        <button id="logout-btn">Log Out</button>
+    </div>
+
+    <script src="/js-bridge.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
