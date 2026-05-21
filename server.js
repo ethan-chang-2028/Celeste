@@ -115,10 +115,11 @@ const server = http.createServer(async (req, res) => {
 
         // 3c. Serve the game test page and its assets
         const gameAssets = {
-            '/game':      { file: 'game.html', type: 'text/html' },
-            '/game.html': { file: 'game.html', type: 'text/html' },
-            '/game.js':   { file: 'game.js',   type: 'application/javascript' },
-            '/game.css':  { file: 'game.css',  type: 'text/css' },
+            '/game':       { file: 'game.html', type: 'text/html' },
+            '/game.html':  { file: 'game.html', type: 'text/html' },
+            '/game.js':    { file: 'game.js',   type: 'application/javascript' },
+            '/game.css':   { file: 'game.css',  type: 'text/css' },
+            '/player.js':  { file: 'player.js', type: 'application/javascript' },
         };
         if (req.method === 'GET' && gameAssets[req.url]) {
             const { file, type } = gameAssets[req.url];
