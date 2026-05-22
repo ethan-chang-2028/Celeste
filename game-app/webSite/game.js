@@ -13,43 +13,77 @@
 
     // Fixed 60 Hz simulation step. Player.cs (and player.js) is tuned to this dt.
     const FIXED_DT = 1 / 60;
-    const MAX_ACCUM = 0.25;  // panic-clamp so tab-backgrounding doesn't spiral
+    const MAX_ACCUM = 0.25;
 
-    // ---- Level: ground, platforms, walls (positions in 320×180 space) -------
-    // Layout is intentionally a wall-jump training ground: a tall chimney in
-    // the middle with two facing surfaces ~24 px apart so you can wall-jump
-    // up between them. Side walls have a clear in-air section above the
-    // floor for single-wall wall jumps. A low overhang on the right tests
-    // corner correction.
-    const GROUND_Y = H - 20;
+    // ---- Test level: "First Ascent" -----------------------------------------
+    // Single-screen course exercising every mechanic in player.js. Path:
+    //   1. Run right from spawn (RUN + variable jump)
+    //   2. Jump a 40 px death pit (running jump at MaxRun)
+    //   3. Walk through the gap under the left chimney wall to enter the shaft
+    //   4. Wall-jump up the chimney between the two facing walls
+    //   5. Land on the exit platform at the top
+    //   6. Dash right across the 20 px gap
+    //   7. Hit the right wall and grab (hold Z) to climb
+    //   8. Climb-jump out of climb state to reach the top platform
+    //   9. Touch the gold block to win
+    //
+    // Anything with y > DEATH_Y kills and respawns.
+    const DEATH_Y = H + 20;
+
+    // Distinct colors so each surface type reads at a glance:
+    //   floor / ledge   green   #3a5a3a / #5a7a5a
+    //   boundary wall   slate   #4a5570
+    //   chimney wall    purple  #5a6b88
+    //   climbable wall  violet  #7a6b8a — color hint
+    //   goal block      gold    #d4af37
     const platforms = [
-        { x: 0,   y: GROUND_Y, w: W,   h: 20, color: '#3a5a3a' },   // ground
+        // Left boundary
+        { x: 0,   y: 0,   w: 8,   h: 180, color: '#4a5570' },
 
-        // Side walls — extend from floor up to y=40 so there's a tall in-air
-        // section to wall-slide and wall-jump against.
-        { x: 0,   y: 40,       w: 8,   h: 120, color: '#4a5570' }, // left wall
-        { x: W-8, y: 40,       w: 8,   h: 120, color: '#4a5570' }, // right wall
+        // Section 1: spawn floor + death pit + landing floor
+        { x: 0,   y: 168, w: 100, h: 12,  color: '#3a5a3a' },  // spawn floor
+        // (death pit x=100 to x=140)
+        { x: 140, y: 168, w: 88,  h: 12,  color: '#3a5a3a' },  // landing floor
 
-        // Mid chimney — two pillars facing each other 24 px apart.
-        // Wall-jumping zig-zags up between them.
-        { x: 140, y: 50,       w: 8,   h: 90,  color: '#5a6b88' },
-        { x: 172, y: 50,       w: 8,   h: 90,  color: '#5a6b88' },
+        // Section 2: chimney. Left wall doesn't reach the floor — that gap
+        // (y=154..168) is how the player enters. Right wall is full-height.
+        // Inside-edge spacing 24 px = standard Celeste chimney width.
+        { x: 192, y: 50,  w: 6,   h: 104, color: '#5a6b88' },  // left chimney wall
+        { x: 222, y: 50,  w: 6,   h: 118, color: '#5a6b88' },  // right chimney wall
 
-        // Floating ledges to land on.
-        { x: 60,  y: 132,      w: 40,  h: 6,  color: '#5a7a5a' },
-        { x: 220, y: 132,      w: 40,  h: 6,  color: '#5a7a5a' },
-        { x: 60,  y: 96,       w: 30,  h: 6,  color: '#5a7a5a' },
-        { x: 230, y: 96,       w: 30,  h: 6,  color: '#5a7a5a' },
+        // Section 3: chimney exit platform (you land here after wall-jumping up)
+        { x: 198, y: 44,  w: 94,  h: 6,   color: '#5a7a5a' },
 
-        // Low overhang on the right — leaves a 4-px corner gap right above
-        // the floating ledge at y=96 so a jump straight up clips the corner
-        // by 1-2 px. Corner correction should kick in and slide the player
-        // past instead of bonking.
-        { x: 246, y: 78,       w: 60,  h: 8,  color: '#7a5a5a' },
+        // Section 4: climb wall on the right (dash across the 20 px gap to reach it)
+        { x: 312, y: 20,  w: 8,   h: 148, color: '#7a6b8a' },
+
+        // Section 5: top platform that holds the goal block
+        { x: 280, y: 20,  w: 32,  h: 4,   color: '#5a7a5a' },
     ];
 
-    const SPAWN = { x: 24, y: GROUND_Y - 11 };
+    // Goal is a sensor — drawn but not solid. Overlapping it wins.
+    const GOAL = { x: 290, y: 8, w: 12, h: 12, color: '#d4af37' };
+
+    const SPAWN = { x: 14, y: 157 };
     const player = new CelestePlayer(SPAWN.x, SPAWN.y);
+
+    // ---- Run state ----------------------------------------------------------
+    let runStart = performance.now();
+    let deaths = 0;
+    let bestMs = null;
+    let won = false;
+    let winMs = 0;
+
+    function respawn() {
+        player.reset(SPAWN.x, SPAWN.y);
+        if (!won) deaths++;
+    }
+    function restartRun() {
+        player.reset(SPAWN.x, SPAWN.y);
+        runStart = performance.now();
+        deaths = 0;
+        won = false;
+    }
 
     // ---- Input ---------------------------------------------------------------
     const keys = Object.create(null);
@@ -65,7 +99,7 @@
             keys[e.code] = true;
             e.preventDefault();
         }
-        if (e.code === 'KeyR') player.reset(SPAWN.x, SPAWN.y);
+        if (e.code === 'KeyR') restartRun();
     });
     window.addEventListener('keyup', (e) => {
         if (tracked.has(e.code)) keys[e.code] = false;
@@ -83,23 +117,66 @@
         };
     }
 
+    function playerOverlapsGoal() {
+        return player.x < GOAL.x + GOAL.w && player.x + player.w > GOAL.x
+            && player.y < GOAL.y + GOAL.h && player.y + player.h > GOAL.y;
+    }
+
     // ---- Render --------------------------------------------------------------
     function render() {
-        ctx.clearRect(0, 0, W, H);
+        // Sky gradient (drawn each frame; dash-trail alpha doesn't accumulate).
+        const sky = ctx.createLinearGradient(0, 0, 0, H);
+        sky.addColorStop(0, '#2a3550');
+        sky.addColorStop(1, '#4a5a8a');
+        ctx.fillStyle = sky;
+        ctx.fillRect(0, 0, W, H);
+
+        // Death pit warning shading.
+        ctx.fillStyle = 'rgba(150, 40, 40, 0.25)';
+        ctx.fillRect(100, 168, 40, 12);
+
         for (const p of platforms) {
             ctx.fillStyle = p.color;
             ctx.fillRect(p.x, p.y, p.w, p.h);
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
-            ctx.fillRect(p.x, p.y, p.w, 1);
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.12)';
+            ctx.fillRect(p.x, p.y, p.w, 1);  // top-edge highlight
         }
+
+        // Pulsing goal block.
+        const pulse = 0.6 + 0.4 * Math.sin(performance.now() / 250);
+        ctx.fillStyle = GOAL.color;
+        ctx.globalAlpha = pulse;
+        ctx.fillRect(GOAL.x, GOAL.y, GOAL.w, GOAL.h);
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = 'rgba(0,0,0,0.35)';
+        ctx.fillRect(GOAL.x, GOAL.y, GOAL.w, 1);
+
         player.draw(ctx);
+
+        // Tiny pixel-style section labels.
+        ctx.fillStyle = 'rgba(230, 230, 230, 0.55)';
+        ctx.font = '6px monospace';
+        ctx.fillText('JUMP',    104, 178);
+        ctx.fillText('CHIMNEY', 196, 165);
+        ctx.fillText('DASH→',   270, 42);
+        ctx.fillText('CLIMB',   294, 100);
+        ctx.fillText('GOAL',    288, 6);
+
+        if (won) {
+            ctx.fillStyle = 'rgba(0,0,0,0.65)';
+            ctx.fillRect(60, 60, 200, 60);
+            ctx.fillStyle = '#d4af37';
+            ctx.font = '12px monospace';
+            ctx.fillText('FIRST ASCENT — CLEARED', 72, 82);
+            ctx.fillStyle = '#fff';
+            ctx.font = '8px monospace';
+            ctx.fillText(`time   ${(winMs / 1000).toFixed(2)}s`, 76, 98);
+            ctx.fillText(`deaths ${deaths}`,                       76, 108);
+            ctx.fillText('press R to retry',                       76, 118);
+        }
     }
 
     // ---- Loop ---------------------------------------------------------------
-    // Fixed-step accumulator: physics runs at exactly 60 Hz regardless of the
-    // monitor's refresh rate. On a 120 Hz display we step the simulation once
-    // every 2 vsyncs; on 144 Hz roughly every 2.4. dt seen by player.update
-    // is always FIXED_DT, so behavior is deterministic and matches Player.cs.
     let last = performance.now();
     let accum = 0;
     let stepCount = 0;
@@ -110,12 +187,15 @@
         const input = readInput();
         player.update(input, platforms, FIXED_DT);
 
-        // Death pit: respawn if off-screen
-        if (player.y > H + 40) player.reset(SPAWN.x, SPAWN.y);
+        if (!won && playerOverlapsGoal()) {
+            won = true;
+            winMs = performance.now() - runStart;
+            if (bestMs === null || winMs < bestMs) bestMs = winMs;
+        }
 
-        // Clear edge-trigger inputs after the player consumes them
+        if (player.y > DEATH_Y) respawn();
+
         for (const k of Object.keys(pressed)) delete pressed[k];
-
         stepCount++;
     }
 
@@ -130,21 +210,19 @@
             accum -= FIXED_DT;
             didStep = true;
         }
-
         if (didStep) render();
 
-        // Live FPS readout, averaged over 1s.
         if (now - fpsWindow >= 1000) {
             measuredFps = stepCount * 1000 / (now - fpsWindow);
             stepCount = 0;
             fpsWindow = now;
         }
 
+        const elapsed = won ? winMs : (performance.now() - runStart);
         statusEl.textContent =
-            `x=${player.x.toFixed(0)}  y=${player.y.toFixed(0)}  ` +
-            `vx=${player.vx.toFixed(0)}  vy=${player.vy.toFixed(0)}  ` +
-            `dashes=${player.dashes}  stamina=${player.stamina.toFixed(0)}  ` +
-            `${player.state}  |  ${measuredFps.toFixed(0)} fps (locked 60)`;
+            `time=${(elapsed/1000).toFixed(2)}s  deaths=${deaths}  ` +
+            (bestMs !== null ? `best=${(bestMs/1000).toFixed(2)}s  ` : '') +
+            `${player.state}  ${measuredFps.toFixed(0)} fps`;
 
         requestAnimationFrame(frame);
     }
