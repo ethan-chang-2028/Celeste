@@ -49,6 +49,14 @@ const DashRefillCooldown   = 0.10;           // Player.cs:80
 const DashAttackTime       = 0.30;           // Player.cs:84
 const DodgeSlideSpeedMult  = 1.2;            // Player.cs:44
 
+// Game-feel values straight from Player.cs:
+const DashFreezeTime       = 0.05;           // Player.cs:3449 (Celeste.Freeze(.05f))
+const SquashRecoverRate    = 4.0;            // Sprite.Scale lerps back to 1 over ~0.25s
+const DashTrailInterval    = 0.06;           // Player.cs:3589 ish — trail copy cadence
+const DashTrailLifetime    = 0.30;           // how long each trail ghost persists
+const JumpSquashScale      = { X: 0.6, Y: 1.4 };  // Player.cs:1688 (jump/wall-jump)
+const LandSquashScale      = { X: 1.4, Y: 0.6 };  // Player.cs:2838 (land/un-duck)
+
 const ClimbMaxStamina      = 110;            // Player.cs:102
 const ClimbUpCost          = 100 / 2.2;      // Player.cs:103
 const ClimbStillCost       = 100 / 10;       // Player.cs:104
@@ -145,6 +153,12 @@ class CelestePlayer {
         // post-dash var-jump applies even without holding C; cleared on Jump().
         this.AutoJump = false;
         this.beforeDashSpeed = { X: 0, Y: 0 };  // Player.cs:3374
+
+        // Game-feel state (visual only, no effect on physics correctness):
+        this.freezeTimer = 0;                   // Player.cs:3449 hit-stop on dash start
+        this.squashScale = { X: 1, Y: 1 };      // current sprite squash, lerps to (1,1)
+        this.dashTrail = [];                    // [{x, y, age}, ...] for ghost trail
+        this._dashTrailAccum = 0;
     }
 
     reset(x, y) {
@@ -161,6 +175,9 @@ class CelestePlayer {
         this.wallSlideDir = 0;
         this.maxFall = MaxFall;
         this.AutoJump = false;
+        this.freezeTimer = 0;
+        this.squashScale.X = this.squashScale.Y = 1;
+        this.dashTrail.length = 0;
     }
 
     // Returns true if there is a solid `dir` pixels in the X direction.
@@ -178,6 +195,17 @@ class CelestePlayer {
     update(input, platforms, dt) {
         this._platforms = platforms;
         this._input = input;
+
+        // Decay visual state every frame even when frozen so trails fade through hit-stop.
+        this._decayVisuals(dt);
+
+        // Player.cs:3449 — hit-stop on dash start. While freezeTimer > 0, the
+        // engine in Celeste does Engine.FreezeTimer-=DeltaTime and skips
+        // Scene.Update. We mirror that: decrement and bail.
+        if (this.freezeTimer > 0) {
+            this.freezeTimer -= dt;
+            return;
+        }
 
         // Player.cs:760-769 — read move input (forceMoveX overrides while timer > 0)
         if (this.forceMoveXTimer > 0) {
@@ -243,6 +271,34 @@ class CelestePlayer {
         // Update onGround for next frame (Player.cs:636-648)
         this.wasOnGround = this.onGround;
         this.onGround = this._wallCheck(0) ? false : this._isOnGround();
+
+        // Landing squash — Player.cs:2838 sets Sprite.Scale = (.8, 1.2) on
+        // un-duck-land. Celeste uses (1.4, .6) for a hard landing thud.
+        if (!this.wasOnGround && this.onGround && this.State === StNormal) {
+            this.squashScale.X = LandSquashScale.X;
+            this.squashScale.Y = LandSquashScale.Y;
+        }
+
+        // Dash trail — Player.cs:3454, 3589. While dashing, push a ghost copy
+        // every DashTrailInterval seconds.
+        if (this.State === StDash) {
+            this._dashTrailAccum += dt;
+            if (this._dashTrailAccum >= DashTrailInterval) {
+                this._dashTrailAccum = 0;
+                this.dashTrail.push({ x: this.x, y: this.y, age: 0, facing: this.Facing });
+            }
+        }
+    }
+
+    _decayVisuals(dt) {
+        // Lerp squash back to (1, 1)
+        this.squashScale.X = Approach(this.squashScale.X, 1, SquashRecoverRate * dt);
+        this.squashScale.Y = Approach(this.squashScale.Y, 1, SquashRecoverRate * dt);
+        // Age out trail ghosts
+        for (const t of this.dashTrail) t.age += dt;
+        while (this.dashTrail.length > 0 && this.dashTrail[0].age >= DashTrailLifetime) {
+            this.dashTrail.shift();
+        }
     }
 
     _isOnGround() {
@@ -519,6 +575,11 @@ class CelestePlayer {
         this.dashRefillCooldownTimer = DashRefillCooldown;
         this.Dashes--;
 
+        // Game-feel: 50 ms hit-stop and an initial trail ghost. Player.cs:3449.
+        this.freezeTimer = DashFreezeTime;
+        this.dashTrail.push({ x: this.x, y: this.y, age: 0, facing: this.Facing });
+        this._dashTrailAccum = 0;
+
         // 8-direction snap. Player.cs uses `lastAim` (input snapped to one
         // of 8 directions with a small dead zone). With keyboard input
         // (-1/0/1) we already get clean 8-way directions; just normalize.
@@ -604,6 +665,8 @@ class CelestePlayer {
         this.Speed.X += JumpHBoost * this.moveX;
         this.Speed.Y = JumpSpeed;
         this.varJumpSpeed = this.Speed.Y;
+        this.squashScale.X = JumpSquashScale.X;  // Player.cs:1688
+        this.squashScale.Y = JumpSquashScale.Y;
     }
 
     SuperJump() {
@@ -616,6 +679,8 @@ class CelestePlayer {
         this.Speed.X = 260 * this.Facing;
         this.Speed.Y = JumpSpeed;
         this.varJumpSpeed = this.Speed.Y;
+        this.squashScale.X = JumpSquashScale.X;  // Player.cs:1724
+        this.squashScale.Y = JumpSquashScale.Y;
     }
 
     WallJump(dir) {
@@ -634,6 +699,8 @@ class CelestePlayer {
         this.Speed.Y = JumpSpeed;
         this.varJumpSpeed = this.Speed.Y;
         this.Facing = dir;
+        this.squashScale.X = JumpSquashScale.X;  // Player.cs:1774
+        this.squashScale.Y = JumpSquashScale.Y;
     }
 
     ClimbJump() {
@@ -659,13 +726,42 @@ class CelestePlayer {
 
     // ----- Render: 12×16 pixel sprite, 1 canvas pixel = 1 unit ---------------
     draw(ctx) {
+        // Trail ghosts first (behind the player).
+        for (const t of this.dashTrail) {
+            const a = 1 - (t.age / DashTrailLifetime);
+            if (a <= 0) continue;
+            const tx = Math.round(t.x + this.spriteOffsetX);
+            const ty = Math.round(t.y + this.spriteOffsetY);
+            ctx.save();
+            ctx.globalAlpha = 0.5 * a;
+            if (t.facing < 0) { ctx.translate(tx + SPRITE_W, ty); ctx.scale(-1, 1); }
+            else              { ctx.translate(tx, ty); }
+            ctx.fillStyle = '#8ad6ff';  // dash-trail tint, ~Celeste cyan
+            for (let py = 0; py < SPRITE_H; py++) {
+                const row = SPRITE_PIXELS[py];
+                for (let px = 0; px < SPRITE_W; px++) {
+                    if (row[px] !== '.') ctx.fillRect(px, py, 1, 1);
+                }
+            }
+            ctx.restore();
+        }
+
         const sx = Math.round(this.x + this.spriteOffsetX);
         const sy = Math.round(this.y + this.spriteOffsetY);
         const flip = this.Facing < 0;
         const dashed = this.Dashes <= 0;
+
+        // Squash/stretch around the player's foot-center, so squash never
+        // looks like the sprite floats off the ground.
+        const sxC = sx + SPRITE_W / 2;
+        const syF = sy + SPRITE_H;
+        const ssx = this.squashScale.X;
+        const ssy = this.squashScale.Y;
+
         ctx.save();
-        if (flip) { ctx.translate(sx + SPRITE_W, sy); ctx.scale(-1, 1); }
-        else      { ctx.translate(sx, sy); }
+        ctx.translate(sxC, syF);
+        ctx.scale(ssx * (flip ? -1 : 1), ssy);
+        ctx.translate(-SPRITE_W / 2, -SPRITE_H);
         for (let py = 0; py < SPRITE_H; py++) {
             const row = SPRITE_PIXELS[py];
             for (let px = 0; px < SPRITE_W; px++) {
@@ -676,10 +772,6 @@ class CelestePlayer {
             }
         }
         ctx.restore();
-        if (this.State === StDash) {
-            ctx.fillStyle = 'rgba(150, 220, 255, 0.35)';
-            ctx.fillRect(sx - 1, sy, SPRITE_W + 2, SPRITE_H);
-        }
     }
 
     // Backward-compat helpers used by game.js
