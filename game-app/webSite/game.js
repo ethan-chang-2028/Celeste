@@ -16,16 +16,36 @@
     const MAX_ACCUM = 0.25;  // panic-clamp so tab-backgrounding doesn't spiral
 
     // ---- Level: ground, platforms, walls (positions in 320×180 space) -------
+    // Layout is intentionally a wall-jump training ground: a tall chimney in
+    // the middle with two facing surfaces ~24 px apart so you can wall-jump
+    // up between them. Side walls have a clear in-air section above the
+    // floor for single-wall wall jumps. A low overhang on the right tests
+    // corner correction.
     const GROUND_Y = H - 20;
     const platforms = [
         { x: 0,   y: GROUND_Y, w: W,   h: 20, color: '#3a5a3a' },   // ground
-        { x: 60,  y: 132,      w: 50,  h: 6,  color: '#5a7a5a' },
-        { x: 140, y: 100,      w: 50,  h: 6,  color: '#5a7a5a' },
-        { x: 220, y: 132,      w: 50,  h: 6,  color: '#5a7a5a' },
-        { x: 0,   y: 80,       w: 8,   h: 80, color: '#4a5570' }, // left wall
-        { x: W-8, y: 80,       w: 8,   h: 80, color: '#4a5570' }, // right wall
-        { x: 104, y: 50,       w: 8,   h: 50, color: '#4a5570' }, // mid pillars
-        { x: 208, y: 50,       w: 8,   h: 50, color: '#4a5570' },
+
+        // Side walls — extend from floor up to y=40 so there's a tall in-air
+        // section to wall-slide and wall-jump against.
+        { x: 0,   y: 40,       w: 8,   h: 120, color: '#4a5570' }, // left wall
+        { x: W-8, y: 40,       w: 8,   h: 120, color: '#4a5570' }, // right wall
+
+        // Mid chimney — two pillars facing each other 24 px apart.
+        // Wall-jumping zig-zags up between them.
+        { x: 140, y: 50,       w: 8,   h: 90,  color: '#5a6b88' },
+        { x: 172, y: 50,       w: 8,   h: 90,  color: '#5a6b88' },
+
+        // Floating ledges to land on.
+        { x: 60,  y: 132,      w: 40,  h: 6,  color: '#5a7a5a' },
+        { x: 220, y: 132,      w: 40,  h: 6,  color: '#5a7a5a' },
+        { x: 60,  y: 96,       w: 30,  h: 6,  color: '#5a7a5a' },
+        { x: 230, y: 96,       w: 30,  h: 6,  color: '#5a7a5a' },
+
+        // Low overhang on the right — leaves a 4-px corner gap right above
+        // the floating ledge at y=96 so a jump straight up clips the corner
+        // by 1-2 px. Corner correction should kick in and slide the player
+        // past instead of bonking.
+        { x: 246, y: 78,       w: 60,  h: 8,  color: '#7a5a5a' },
     ];
 
     const SPAWN = { x: 24, y: GROUND_Y - 11 };

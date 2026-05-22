@@ -36,6 +36,7 @@ const VarJumpTime          = 0.20;           // Player.cs:51
 const WallJumpCheckDist    = 3;              // Player.cs:56
 const WallJumpForceTime    = 0.16;           // Player.cs:57
 const WallJumpHSpeed       = MaxRun + JumpHBoost;  // Player.cs:58 (=130)
+const UpwardCornerCorrection = 4;            // Player.cs:53 (px slack at ceiling corners)
 
 const WallSlideStartMax    = 20;             // Player.cs:60
 const WallSlideTime        = 1.2;            // Player.cs:61
@@ -68,6 +69,7 @@ const ClimbDownSpeed       = 80;             // Player.cs:111
 const ClimbSlipSpeed       = 30;             // Player.cs:112
 const ClimbAccel           = 900;            // Player.cs:113
 const ClimbGrabYMult       = 0.2;            // Player.cs:114
+const ClimbJumpBoostTime   = 0.20;           // Player.cs:118 (wall-boost window after climb-jump)
 
 // State ids (Player.cs:140–142)
 const StNormal = 0;
@@ -149,6 +151,12 @@ class CelestePlayer {
         this.climbNoMoveTimer = 0;
         this.maxFall = MaxFall;
 
+        // Player.cs:232-233 — wallBoost: after a no-input climb-jump,
+        // pressing INTO wallBoostDir within wallBoostTimer (0.2s) converts
+        // the climb-jump into a full wall jump with stamina refund.
+        this.wallBoostTimer = 0;
+        this.wallBoostDir   = 0;
+
         // Player.cs:188, 244 — AutoJump = true after dash end (line 3623) so the
         // post-dash var-jump applies even without holding C; cleared on Jump().
         this.AutoJump = false;
@@ -178,6 +186,8 @@ class CelestePlayer {
         this.freezeTimer = 0;
         this.squashScale.X = this.squashScale.Y = 1;
         this.dashTrail.length = 0;
+        this.wallBoostTimer = 0;
+        this.wallBoostDir = 0;
     }
 
     // Returns true if there is a solid `dir` pixels in the X direction.
@@ -253,6 +263,19 @@ class CelestePlayer {
         // Player.cs:682-686 — wall slide direction reset each frame
         this.wallSlideDir = 0;
 
+        // Player.cs:688-699 — Wall Boost. If the player climb-jumped with no
+        // input, wallBoostTimer is ticking and wallBoostDir = -Facing. If
+        // they press INTO wallBoostDir during the window, swap the climb-jump
+        // out for a real wall jump (full horizontal speed + stamina refund).
+        if (this.wallBoostTimer > 0) {
+            this.wallBoostTimer -= dt;
+            if (this.moveX === this.wallBoostDir) {
+                this.Speed.X = WallJumpHSpeed * this.moveX;
+                this.Stamina += ClimbJumpCost;     // refund the climb-jump cost
+                this.wallBoostTimer = 0;
+            }
+        }
+
         // Climb no-move timer
         if (this.climbNoMoveTimer > 0) this.climbNoMoveTimer -= dt;
 
@@ -327,6 +350,12 @@ class CelestePlayer {
                     this.y = p.y - this.h;
                     this.Speed.Y = 0;
                 } else if (this.Speed.Y < 0) {
+                    // Corner Correction (Player.cs:2587-2612). Before
+                    // bonking the ceiling, try shifting horizontally by
+                    // 1..UpwardCornerCorrection pixels and stepping up by 1.
+                    // Direction priority follows Speed.X (Player.cs first
+                    // tries the sign of Speed.X, then the other side).
+                    if (this._cornerCorrect()) return;
                     this.y = p.y + p.h;
                     this.Speed.Y = 0;
                     this.varJumpTimer = 0;
@@ -334,6 +363,30 @@ class CelestePlayer {
                 if (this.State === StDash) this.DashDir.Y = 0;
             }
         }
+    }
+
+    // Returns true if a corner nudge of 1..UpwardCornerCorrection pixels
+    // cleared the ceiling. Mirrors Player.cs:2587-2612.
+    _cornerCorrect() {
+        const tryDir = (sign) => {
+            for (let i = 1; i <= UpwardCornerCorrection; i++) {
+                const nx = this.x + sign * i;
+                const ny = this.y - 1;
+                let clear = true;
+                for (const p of this._platforms) {
+                    if (nx < p.x + p.w && nx + this.w > p.x &&
+                        ny < p.y + p.h && ny + this.h > p.y) { clear = false; break; }
+                }
+                if (clear) { this.x = nx; this.y = ny; return true; }
+            }
+            return false;
+        };
+        // Player.cs checks Speed.X <= 0 first then Speed.X >= 0. When
+        // Speed.X == 0 both halves run, which means the LEFT side is tried
+        // first — same here.
+        if (this.Speed.X <= 0 && tryDir(-1)) return true;
+        if (this.Speed.X >= 0 && tryDir( 1)) return true;
+        return false;
     }
 
     // ================================================================
@@ -661,6 +714,7 @@ class CelestePlayer {
         this.AutoJump = false;          // Player.cs:1665
         this.dashAttackTimer = 0;
         this.wallSlideTimer = WallSlideTime;
+        this.wallBoostTimer = 0;        // Player.cs:1668
 
         this.Speed.X += JumpHBoost * this.moveX;
         this.Speed.Y = JumpSpeed;
@@ -676,6 +730,7 @@ class CelestePlayer {
         this.varJumpTimer = VarJumpTime;
         this.AutoJump = false;          // Player.cs:1700
         this.dashAttackTimer = 0;
+        this.wallBoostTimer = 0;        // Player.cs:1703
         this.Speed.X = 260 * this.Facing;
         this.Speed.Y = JumpSpeed;
         this.varJumpSpeed = this.Speed.Y;
@@ -691,6 +746,7 @@ class CelestePlayer {
         this.AutoJump = false;          // Player.cs:1742
         this.dashAttackTimer = 0;
         this.wallSlideTimer = WallSlideTime;
+        this.wallBoostTimer = 0;        // Player.cs:1745
         if (this.moveX !== 0) {
             this.forceMoveX = dir;
             this.forceMoveXTimer = WallJumpForceTime;
@@ -707,6 +763,12 @@ class CelestePlayer {
         // Player.cs:1813-1842
         if (!this.onGround) this.Stamina -= ClimbJumpCost;
         this.Jump();
+        // Player.cs:1826-1830 — if no horizontal input, arm the wall-boost
+        // window so a follow-up tap INTO -Facing converts to a wall jump.
+        if (this.moveX === 0) {
+            this.wallBoostDir = -this.Facing;
+            this.wallBoostTimer = ClimbJumpBoostTime;
+        }
     }
 
     // ----- helpers -----
