@@ -50,13 +50,16 @@ const DashRefillCooldown   = 0.10;           // Player.cs:80
 const DashAttackTime       = 0.30;           // Player.cs:84
 const DodgeSlideSpeedMult  = 1.2;            // Player.cs:44
 
-// Game-feel values straight from Player.cs:
+// Game-feel values.
 const DashFreezeTime       = 0.05;           // Player.cs:3449 (Celeste.Freeze(.05f))
-const SquashRecoverRate    = 4.0;            // Sprite.Scale lerps back to 1 over ~0.25s
-const DashTrailInterval    = 0.06;           // Player.cs:3589 ish — trail copy cadence
-const DashTrailLifetime    = 0.30;           // how long each trail ghost persists
-const JumpSquashScale      = { X: 0.6, Y: 1.4 };  // Player.cs:1688 (jump/wall-jump)
-const LandSquashScale      = { X: 1.4, Y: 0.6 };  // Player.cs:2838 (land/un-duck)
+const SquashRecoverRate    = 1.75;           // Player.cs:1165-1166 (Calc.Approach Sprite.Scale toward 1 at 1.75/sec)
+const DashTrailInterval    = 0.08;           // Player.cs:3589 (dashTrailTimer = .08f)
+const JumpSquashScale      = { X: 0.6, Y: 1.4 };  // Player.cs:1688, 1724, 1774, 1803
+
+// Values NOT in Player.cs as constants — flagged honestly:
+const DashTrailLifetime    = 0.30;           // NOT in Player.cs. Trails use TrailManager with a longer duration; 0.30 is a tighter visual choice for this test scene.
+const LandSquashScale      = { X: 1.4, Y: 0.6 };  // NOT in Player.cs. Player.cs plays a landInPose animation, no squash on land. Value reuses the duck-start scale at Player.cs:2861.
+const JumpBufferTime       = 0.08;           // NOT in Player.cs constants block. Sourced from Celeste's Input.cs setup; 0.08s is the value the real game ships with.
 
 const ClimbMaxStamina      = 110;            // Player.cs:102
 const ClimbUpCost          = 100 / 2.2;      // Player.cs:103
@@ -76,8 +79,6 @@ const StNormal = 0;
 const StClimb  = 1;
 const StDash   = 2;
 
-// Input.Jump.Pressed buffer time used by Celeste internally.
-const JumpBufferTime = 0.08;
 
 // ---- Sprite (12×16 pixel art; same data + palette as the real game) --------
 const SPRITE_W = 12, SPRITE_H = 16;
