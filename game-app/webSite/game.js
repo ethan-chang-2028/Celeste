@@ -8,8 +8,12 @@
     const statusEl = document.getElementById('status');
     ctx.imageSmoothingEnabled = false;
 
-    // 320×180 — Celeste's native render resolution.
+    // 320×180 — Celeste's native render resolution (matches game.html canvas).
     const W = canvas.width, H = canvas.height;
+
+    // Fixed 60 Hz simulation step. Player.cs (and player.js) is tuned to this dt.
+    const FIXED_DT = 1 / 60;
+    const MAX_ACCUM = 0.25;  // panic-clamp so tab-backgrounding doesn't spiral
 
     // ---- Level: ground, platforms, walls (positions in 320×180 space) -------
     const GROUND_Y = H - 20;
@@ -72,13 +76,19 @@
     }
 
     // ---- Loop ---------------------------------------------------------------
+    // Fixed-step accumulator: physics runs at exactly 60 Hz regardless of the
+    // monitor's refresh rate. On a 120 Hz display we step the simulation once
+    // every 2 vsyncs; on 144 Hz roughly every 2.4. dt seen by player.update
+    // is always FIXED_DT, so behavior is deterministic and matches Player.cs.
     let last = performance.now();
-    function frame(now) {
-        const dt = Math.min((now - last) / 1000, 1 / 30);
-        last = now;
+    let accum = 0;
+    let stepCount = 0;
+    let fpsWindow = last;
+    let measuredFps = 60;
 
+    function step() {
         const input = readInput();
-        player.update(input, platforms, dt);
+        player.update(input, platforms, FIXED_DT);
 
         // Death pit: respawn if off-screen
         if (player.y > H + 40) player.reset(SPAWN.x, SPAWN.y);
@@ -86,12 +96,35 @@
         // Clear edge-trigger inputs after the player consumes them
         for (const k of Object.keys(pressed)) delete pressed[k];
 
-        render();
+        stepCount++;
+    }
+
+    function frame(now) {
+        accum += (now - last) / 1000;
+        last = now;
+        if (accum > MAX_ACCUM) accum = MAX_ACCUM;
+
+        let didStep = false;
+        while (accum >= FIXED_DT) {
+            step();
+            accum -= FIXED_DT;
+            didStep = true;
+        }
+
+        if (didStep) render();
+
+        // Live FPS readout, averaged over 1s.
+        if (now - fpsWindow >= 1000) {
+            measuredFps = stepCount * 1000 / (now - fpsWindow);
+            stepCount = 0;
+            fpsWindow = now;
+        }
 
         statusEl.textContent =
             `x=${player.x.toFixed(0)}  y=${player.y.toFixed(0)}  ` +
             `vx=${player.vx.toFixed(0)}  vy=${player.vy.toFixed(0)}  ` +
-            `dashes=${player.dashes}  stamina=${player.stamina.toFixed(0)}  ${player.state}`;
+            `dashes=${player.dashes}  stamina=${player.stamina.toFixed(0)}  ` +
+            `${player.state}  |  ${measuredFps.toFixed(0)} fps (locked 60)`;
 
         requestAnimationFrame(frame);
     }
