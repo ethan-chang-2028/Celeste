@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>Celeste — Player.cs in browser</title>
+    <base href="/" />
+    <link href="css/app.css" rel="stylesheet" />
+    <link rel="icon" type="image/png" href="favicon.png" />
+    <link href="game-app-blazor.styles.css" rel="stylesheet" />
+</head>
+<body>
+    <div id="app">Loading Player.cs WebAssembly runtime…</div>
+
+    <script src="_framework/blazor.webassembly.js"></script>
+
+    <script>
+      // Keyboard bridge — Blazor JSInterop calls into [JSInvokable] OnKey.
+      window.celesteInput = {
+        dotnet: null,
+        attach(dotnetRef) {
+          this.dotnet = dotnetRef;
+          window.addEventListener('keydown', e => {
+            if (['ArrowLeft','ArrowRight','ArrowUp','ArrowDown',' ','x','X','c','C','z','Z'].includes(e.key)) e.preventDefault();
+            dotnetRef.invokeMethodAsync('OnKey', e.key, true);
+          });
+          window.addEventListener('keyup', e => {
+            dotnetRef.invokeMethodAsync('OnKey', e.key, false);
+          });
+        }
+      };
+
+      // Canvas renderer — pure JS, fed positions by Blazor each tick.
+      window.celesteRender = {
+        draw(state) {
+          const c = document.getElementById('celeste-canvas');
+          if (!c) return;
+          const ctx = c.getContext('2d');
+          ctx.imageSmoothingEnabled = false;
+          ctx.fillStyle = '#1a1a2a'; ctx.fillRect(0,0,c.width,c.height);
+          ctx.fillStyle = '#3a3a5a';
+          for (const s of state.solids) ctx.fillRect(s.x, s.y, s.w, s.h);
+          ctx.fillStyle = '#ac3232';
+          // Player drawn as 8×11 red rectangle for the scaffold; PlayerSprite is stubbed.
+          ctx.fillRect(state.player.x, state.player.y, 8, 11);
+        }
+      };
+    </script>
+</body>
+</html>

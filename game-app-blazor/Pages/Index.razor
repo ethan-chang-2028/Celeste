@@ -1,0 +1,137 @@
+@page "/"
+@inject IJSRuntime JS
+@implements IDisposable
+@using Celeste
+@using Monocle
+@using Microsoft.Xna.Framework
+
+<PageTitle>Celeste (Player.cs in browser)</PageTitle>
+
+<div style="font-family: monospace; color: #ddd; background: #1a1a2a; min-height:100vh; padding:16px;">
+    <h2 style="margin:0 0 8px 0;">Celeste — Player.cs running in browser as WebAssembly</h2>
+    <p style="margin:0 0 12px 0; font-size: 13px; opacity:.8;">
+        The Player.cs file at <code>game-app/CelesteCode/Player.cs</code> is compiled here unchanged.
+        Stubs in <code>Stubs/</code> stand in for Monocle / MonoGame / FMOD.
+    </p>
+
+    <canvas id="celeste-canvas" width="320" height="180"
+            style="image-rendering: pixelated; width: 960px; height: 540px; background:#000; display:block;"></canvas>
+
+    <div style="margin-top:10px; font-size:12px;">
+        Arrows = move &nbsp;·&nbsp; X = jump &nbsp;·&nbsp; C = dash &nbsp;·&nbsp; Z = grab
+        <br />
+        <span>State: @stateLabel &nbsp;·&nbsp; Pos: (@posX, @posY) &nbsp;·&nbsp; Speed: (@spdX, @spdY) &nbsp;·&nbsp; Dashes: @dashes &nbsp;·&nbsp; Stamina: @stam</span>
+    </div>
+</div>
+
+@code {
+    private Level level;
+    private Player player;
+    private System.Threading.Timer tickTimer;
+    private DateTime lastTick;
+
+    private string stateLabel = "?";
+    private int posX, posY, spdX, spdY, dashes, stam;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Build a one-room "level" entirely in-memory.
+        level = new Level();
+        Engine.Scene = level;
+
+        // Floor and a couple of walls so the player has something to land on.
+        AddSolid(level,  0, 160, 320, 20);
+        AddSolid(level,  0,   0,  10, 180);
+        AddSolid(level, 310,  0,  10, 180);
+        AddSolid(level,120, 110,  40, 10);
+
+        // Spawn player.
+        player = new Player(new Vector2(40, 100), PlayerSpriteMode.Madeline);
+        level.Add(player);
+
+        // Hook keyboard from JS.
+        await JS.InvokeVoidAsync("celesteInput.attach",
+            DotNetObjectReference.Create(this));
+
+        // 60 Hz fixed step.
+        lastTick = DateTime.UtcNow;
+        tickTimer = new System.Threading.Timer(_ => InvokeAsync(Tick), null, 0, 16);
+    }
+
+    private static void AddSolid(Level lvl, float x, float y, float w, float h)
+    {
+        var s = new Solid { Position = new Vector2(x, y), Collider = new Hitbox(w, h) };
+        lvl.Add(s);
+    }
+
+    [JSInvokable]
+    public void OnKey(string key, bool down)
+    {
+        switch (key)
+        {
+            case "ArrowLeft":  Input.MoveX.Value = down ? -1 : (Input.MoveX.Value == -1 ? 0 : Input.MoveX.Value); break;
+            case "ArrowRight": Input.MoveX.Value = down ?  1 : (Input.MoveX.Value ==  1 ? 0 : Input.MoveX.Value); break;
+            case "ArrowUp":    Input.MoveY.Value = down ? -1 : (Input.MoveY.Value == -1 ? 0 : Input.MoveY.Value); break;
+            case "ArrowDown":  Input.MoveY.Value = down ?  1 : (Input.MoveY.Value ==  1 ? 0 : Input.MoveY.Value); break;
+            case "x": case "X": Input.Jump.Check = down; if (down) Input.Jump.Pressed = true; break;
+            case "c": case "C": Input.Dash.Check = down; if (down) Input.Dash.Pressed = true; break;
+            case "z": case "Z": Input.Grab.Check = down; break;
+        }
+    }
+
+    private async Task Tick()
+    {
+        var now = DateTime.UtcNow;
+        float dt = (float)(now - lastTick).TotalSeconds;
+        if (dt > 0.1f) dt = 0.1f;
+        lastTick = now;
+        Engine.DeltaTime = dt;
+        level.TimeActive += dt;
+
+        // Drive Player.cs forward one frame.
+        // NOTE: Player.Update() in Player.cs walks the StateMachine and physics.
+        try
+        {
+            player.Update();
+        }
+        catch (Exception ex)
+        {
+            // Surface what's missing. Many calls inside Player.cs will throw
+            // NullReferenceException through stubs until more is filled in.
+            stateLabel = "EX: " + ex.GetType().Name + " " + ex.Message;
+        }
+
+        // Clear one-shot press flags.
+        Input.Jump.Pressed = false;
+        Input.Dash.Pressed = false;
+
+        // Update HUD.
+        posX = (int)player.Position.X;
+        posY = (int)player.Position.Y;
+        spdX = (int)player.Speed.X;
+        spdY = (int)player.Speed.Y;
+        dashes = player.Dashes;
+        stam = (int)player.Stamina;
+        if (!stateLabel.StartsWith("EX:"))
+        {
+            stateLabel = player.StateMachine?.State switch
+            {
+                Player.StNormal => "Normal",
+                Player.StClimb  => "Climb",
+                Player.StDash   => "Dash",
+                _ => "?"
+            };
+        }
+
+        await JS.InvokeVoidAsync("celesteRender.draw",
+            new {
+                player = new { x = player.Position.X, y = player.Position.Y, facing = (int)player.Facing },
+                solids = level.Tracker.GetEntities<Solid>().ConvertAll(s => new {
+                    x = s.Left, y = s.Top, w = s.Width, h = s.Height
+                })
+            });
+        StateHasChanged();
+    }
+
+    public void Dispose() => tickTimer?.Dispose();
+}
