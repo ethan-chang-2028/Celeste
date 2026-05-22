@@ -47,6 +47,7 @@ const DashTime             = 0.15;           // Player.cs:78
 const DashCooldown         = 0.20;           // Player.cs:79
 const DashRefillCooldown   = 0.10;           // Player.cs:80
 const DashAttackTime       = 0.30;           // Player.cs:84
+const DodgeSlideSpeedMult  = 1.2;            // Player.cs:44
 
 const ClimbMaxStamina      = 110;            // Player.cs:102
 const ClimbUpCost          = 100 / 2.2;      // Player.cs:103
@@ -139,6 +140,11 @@ class CelestePlayer {
         this.wallSlideDir    = 0;
         this.climbNoMoveTimer = 0;
         this.maxFall = MaxFall;
+
+        // Player.cs:188, 244 — AutoJump = true after dash end (line 3623) so the
+        // post-dash var-jump applies even without holding C; cleared on Jump().
+        this.AutoJump = false;
+        this.beforeDashSpeed = { X: 0, Y: 0 };  // Player.cs:3374
     }
 
     reset(x, y) {
@@ -154,6 +160,7 @@ class CelestePlayer {
         this.wallSlideTimer = WallSlideTime;
         this.wallSlideDir = 0;
         this.maxFall = MaxFall;
+        this.AutoJump = false;
     }
 
     // Returns true if there is a solid `dir` pixels in the X direction.
@@ -202,10 +209,11 @@ class CelestePlayer {
         if (this.dashRefillCooldownTimer > 0) this.dashRefillCooldownTimer -= dt;
         else if (this.onGround && this.Dashes < this.MaxDashes) this.Dashes = this.MaxDashes;
 
-        // Player.cs:702-707 — on ground refresh stamina
+        // Player.cs:702-707 — on ground refresh stamina, wall-slide, AutoJump
         if (this.onGround && this.State !== StClimb) {
             this.Stamina = ClimbMaxStamina;
             this.wallSlideTimer = WallSlideTime;
+            this.AutoJump = false;
         }
 
         // Player.cs:743-744 — varJumpTimer countdown
@@ -307,9 +315,14 @@ class CelestePlayer {
 
         // Player.cs:2897-2958 — Vertical: maxFall + wall slide + gravity
         if (!this.onGround) {
-            let max = MaxFall;
-            this.maxFall = Approach(this.maxFall, MaxFall, FastMaxAccel * dt);
-            max = this.maxFall;
+            // Fast Fall — Player.cs:2911-2924. maxFall lerps toward FastMaxFall
+            // (240) while holding down past MaxFall, otherwise back to MaxFall.
+            if (input.moveY === 1 && this.Speed.Y >= MaxFall) {
+                this.maxFall = Approach(this.maxFall, FastMaxFall, FastMaxAccel * dt);
+            } else {
+                this.maxFall = Approach(this.maxFall, MaxFall, FastMaxAccel * dt);
+            }
+            let max = this.maxFall;
 
             // Wall slide — Player.cs:2932-2950
             if ((this.moveX === this.Facing || (this.moveX === 0 && input.grabHeld)) && input.moveY !== 1) {
@@ -318,24 +331,25 @@ class CelestePlayer {
                     this.wallSlideDir = this.Facing;
                 }
                 if (this.wallSlideDir !== 0) {
-                    // MathHelper.Lerp(MaxFall, WallSlideStartMax, t)
+                    // MathHelper.Lerp(MaxFall, WallSlideStartMax, t) — Player.cs:2946
                     const t = this.wallSlideTimer / WallSlideTime;
                     max = MaxFall + (WallSlideStartMax - MaxFall) * t;
                     this.wallSlideTimer = Math.max(0, this.wallSlideTimer - dt);
                 }
             } else {
-                // recover wall-slide timer when off wall
                 this.wallSlideTimer = Math.min(WallSlideTime, this.wallSlideTimer + dt);
             }
 
-            // Half-grav near apex — Player.cs:2952
-            const mult = (Math.abs(this.Speed.Y) < HalfGravThreshold && input.jumpHeld) ? 0.5 : 1;
+            // Half-grav near apex — Player.cs:2952 (AutoJump || JumpHeld)
+            const halfGrav = Math.abs(this.Speed.Y) < HalfGravThreshold
+                          && (input.jumpHeld || this.AutoJump);
+            const mult = halfGrav ? 0.5 : 1;
             this.Speed.Y = Approach(this.Speed.Y, max, Gravity * mult * dt);
         }
 
-        // Player.cs:2960-2967 — Variable jump
+        // Player.cs:2960-2967 — Variable jump (AutoJump keeps var-jump alive after dash)
         if (this.varJumpTimer > 0) {
-            if (input.jumpHeld) {
+            if (this.AutoJump || input.jumpHeld) {
                 this.Speed.Y = Math.min(this.Speed.Y, this.varJumpSpeed);
             } else {
                 this.varJumpTimer = 0;
@@ -374,38 +388,118 @@ class CelestePlayer {
     }
 
     ClimbUpdate(dt) {
+        // Port of Player.cs:3102-3277. Slimmed: no wall-boosters, no
+        // climb-hop ledge transition (that lives in ClimbHop()), no sweat
+        // sprite, no rumble. The state logic and stamina drain match.
         const input = this._input;
 
-        // Drop the climb if grab released, no wall, or stamina spent
-        if (!input.grabHeld || !this._climbCheck(this.Facing) || this._isTired()) {
-            return StNormal;
-        }
+        // Player.cs:3107-3108 — refill stamina on ground
+        if (this.onGround) this.Stamina = ClimbMaxStamina;
 
-        // Jump cancels into a normal/climb jump
+        // Player.cs:3110-3119 — Wall jump from climb
         if (this._jumpPressedThisFrame) {
-            this.ClimbJump();
+            if (this.moveX === -this.Facing) this.WallJump(-this.Facing);
+            else this.ClimbJump();
             return StNormal;
         }
 
-        // Dash from climb (StartDash uses lastAim direction, here = input)
+        // Player.cs:3121-3126 — dash from climb
         if (input.dashPressed && this.Dashes > 0 && this.dashCooldownTimer <= 0) {
             return this.StartDash();
         }
 
-        // Player.cs (ClimbAccel toward ClimbUpSpeed / ClimbDownSpeed / 0)
-        let target = 0;
-        if (input.moveY < 0) {
-            target = ClimbUpSpeed;
-            if (this.climbNoMoveTimer <= 0) this.Stamina -= ClimbUpCost * dt;
-        } else if (input.moveY > 0) {
-            target = ClimbDownSpeed;
-        } else {
-            this.Stamina -= ClimbStillCost * dt;
+        // Player.cs:3128-3134 — Grab released
+        if (!input.grabHeld) return StNormal;
+
+        // Player.cs:3136-3152 — No wall to hold
+        if (!this._climbCheck(this.Facing)) {
+            // Climbed-over-ledge: tiny upward boost into normal. Real
+            // Player.cs runs ClimbHop() here — we approximate with a brief
+            // forceMoveX in the facing direction so the player doesn't
+            // immediately re-grab the wall they just topped.
+            if (this.Speed.Y < 0) {
+                this.Speed.X = this.Facing * 60;
+                this.Speed.Y = Math.min(this.Speed.Y, -120);  // ~ClimbHopY
+                this.forceMoveX = 0;
+                this.forceMoveXTimer = 0.2;  // ClimbHopForceTime
+            }
+            return StNormal;
         }
+
+        // Player.cs:3179-3231 — Climbing target speed
+        let target = 0;
+        let trySlip = false;
+        if (this.climbNoMoveTimer <= 0) {
+            if (input.moveY < 0) {
+                target = ClimbUpSpeed;
+                // Up Limit (Player.cs:3191-3197) — ceiling stops upward climb
+                if (this._headCheck()) {
+                    if (this.Speed.Y < 0) this.Speed.Y = 0;
+                    target = 0;
+                    trySlip = true;
+                }
+            } else if (input.moveY > 0) {
+                target = ClimbDownSpeed;
+                if (this.onGround) {
+                    if (this.Speed.Y > 0) this.Speed.Y = 0;
+                    target = 0;
+                }
+            } else {
+                trySlip = true;  // no vertical input → slip if at top
+            }
+        } else {
+            trySlip = true;
+        }
+
+        // Slip at top of wall (Player.cs:3226-3227)
+        if (trySlip && this._slipCheck()) target = ClimbSlipSpeed;
+
+        // Set Speed (Player.cs:3230)
         this.Speed.Y = Approach(this.Speed.Y, target, ClimbAccel * dt);
         this.Speed.X = 0;
 
+        // Down Limit (Player.cs:3234-3235) — if not pressing down and no
+        // wall against your lower corner, zero downward speed.
+        if (input.moveY !== 1 && this.Speed.Y > 0
+            && !this._wallCheckAt(this.Facing, 1)) {
+            this.Speed.Y = 0;
+        }
+
+        // Stamina drain (Player.cs:3238-3265)
+        if (this.climbNoMoveTimer <= 0) {
+            if (input.moveY < 0)        this.Stamina -= ClimbUpCost    * dt;
+            else if (input.moveY === 0) this.Stamina -= ClimbStillCost * dt;
+            // Climbing down is free.
+        }
+
+        // Out of stamina (Player.cs:3270-3274) — note: > 0 to stay in climb,
+        // NOT the entry-side ClimbTiredThreshold.
+        if (this.Stamina <= 0) return StNormal;
+
         return StClimb;
+    }
+
+    // Solid one pixel above the player (ceiling probe for climb Up Limit).
+    _headCheck() {
+        const probe = { x: this.x, y: this.y - 1, w: this.w, h: 1 };
+        for (const p of this._platforms) if (rectsOverlap(probe, p)) return true;
+        return false;
+    }
+    // Solid offset by (dx, dy) in pixels.
+    _wallCheckAt(dx, dy) {
+        const probe = { x: this.x + dx, y: this.y + dy + 1, w: this.w, h: this.h - 2 };
+        for (const p of this._platforms) if (rectsOverlap(probe, p)) return true;
+        return false;
+    }
+    // SlipCheck — true when hands have reached the top of the wall.
+    // Simplified version of Player.cs:3316-3325: if there's no solid one
+    // pixel above the player at their facing edge, they're at the top.
+    _slipCheck() {
+        const probeY = this.y - 1;
+        const probeX = this.Facing > 0 ? this.x + this.w : this.x - 1;
+        const probe = { x: probeX, y: probeY, w: 1, h: 4 };
+        for (const p of this._platforms) if (rectsOverlap(probe, p)) return false;
+        return true;
     }
 
     // ================================================================
@@ -413,31 +507,60 @@ class CelestePlayer {
     // DashCoroutine (Player.cs:3548-…).
     // ================================================================
     StartDash() {
-        // Player.cs:DashBegin / DashCoroutine entry
+        // Port of Player.cs:DashBegin (3442-3467) + DashCoroutine prologue
+        // (3548-3589). Steps: stash beforeDashSpeed, zero Speed, decrement
+        // Dashes, set cooldowns, then compute DashDir from aim with the
+        // pre-dash X-speed retention rule.
+        this.beforeDashSpeed.X = this.Speed.X;
+        this.beforeDashSpeed.Y = this.Speed.Y;
+        this.Speed.X = 0; this.Speed.Y = 0;
         this.dashAttackTimer = DashAttackTime;
         this.dashCooldownTimer = DashCooldown;
         this.dashRefillCooldownTimer = DashRefillCooldown;
         this.Dashes--;
 
+        // 8-direction snap. Player.cs uses `lastAim` (input snapped to one
+        // of 8 directions with a small dead zone). With keyboard input
+        // (-1/0/1) we already get clean 8-way directions; just normalize.
         let dx = this._input.moveX, dy = this._input.moveY;
         if (dx === 0 && dy === 0) dx = this.Facing;
         const len = Math.hypot(dx, dy) || 1;
         this.DashDir.X = dx / len;
         this.DashDir.Y = dy / len;
-        this.Speed.X = this.DashDir.X * DashSpeed;
+
+        // Player.cs:3556-3559 — speed retention if pre-dash X is faster
+        // in the same direction as the new dash. (Lets you chain a dash
+        // out of a super-jump without losing horizontal momentum.)
+        let newX = this.DashDir.X * DashSpeed;
+        if (Math.sign(this.beforeDashSpeed.X) === Math.sign(newX)
+            && Math.abs(this.beforeDashSpeed.X) > Math.abs(newX)) {
+            newX = this.beforeDashSpeed.X;
+        }
+        this.Speed.X = newX;
         this.Speed.Y = this.DashDir.Y * DashSpeed;
+
         if (this.DashDir.X !== 0) this.Facing = Math.sign(this.DashDir.X);
+
+        // Player.cs:3577-3585 — Dash Slide. Grounded diagonal-down dash
+        // converts to a horizontal slide with DodgeSlideSpeedMult (1.2).
+        if (this.onGround && this.DashDir.X !== 0 && this.DashDir.Y > 0) {
+            this.DashDir.X = Math.sign(this.DashDir.X);
+            this.DashDir.Y = 0;
+            this.Speed.Y = 0;
+            this.Speed.X *= DodgeSlideSpeedMult;
+        }
+
         this._dashTimer = DashTime;
         return StDash;
     }
 
     DashUpdate(dt) {
-        // Player.cs:3502-3506 — super jump out of horizontal dash
+        // Player.cs:3503-3507 — Super Jump out of horizontal dash
         if (this.DashDir.Y === 0 && this._jumpPressedThisFrame && this.jumpGraceTimer > 0) {
             this.SuperJump();
             return StNormal;
         }
-        // Player.cs:3526-3540 — wall jump out of dash
+        // Player.cs:3528-3540 — Wall Jump cancels dash
         if (this._jumpPressedThisFrame) {
             if (this._wallJumpCheck(1))  { this.WallJump(-1); return StNormal; }
             if (this._wallJumpCheck(-1)) { this.WallJump( 1); return StNormal; }
@@ -445,12 +568,22 @@ class CelestePlayer {
 
         this._dashTimer -= dt;
         if (this._dashTimer <= 0) {
-            // End of dash — drop to EndDashSpeed (Player.cs:76-77)
-            this.Speed.X = this.DashDir.X * EndDashSpeed;
-            this.Speed.Y = this.DashDir.Y * EndDashSpeed * (this.DashDir.Y < 0 ? EndDashUpMult : 1);
+            // End of dash (DashCoroutine after `yield return DashTime`,
+            // Player.cs:3623-3633):
+            //   AutoJump = true; AutoJumpTimer = 0;
+            //   if DashDir.Y <= 0:  Speed = DashDir * EndDashSpeed
+            //   if Speed.Y < 0:     Speed.Y *= EndDashUpMult
+            //   else: keep momentum (downward dashes retain Y velocity)
+            this.AutoJump = true;
+            if (this.DashDir.Y <= 0) {
+                this.Speed.X = this.DashDir.X * EndDashSpeed;
+                this.Speed.Y = this.DashDir.Y * EndDashSpeed;
+            }
+            if (this.Speed.Y < 0) this.Speed.Y *= EndDashUpMult;
             return StNormal;
         }
-        // Maintain dash velocity while in state
+
+        // Maintain dash velocity through the state (DashSpeed, not lerping).
         this.Speed.X = this.DashDir.X * DashSpeed;
         this.Speed.Y = this.DashDir.Y * DashSpeed;
         return StDash;
@@ -464,6 +597,7 @@ class CelestePlayer {
         this.jumpGraceTimer = 0;
         this.jumpBufferTimer = 0;
         this.varJumpTimer = VarJumpTime;
+        this.AutoJump = false;          // Player.cs:1665
         this.dashAttackTimer = 0;
         this.wallSlideTimer = WallSlideTime;
 
@@ -477,6 +611,7 @@ class CelestePlayer {
         this.jumpGraceTimer = 0;
         this.jumpBufferTimer = 0;
         this.varJumpTimer = VarJumpTime;
+        this.AutoJump = false;          // Player.cs:1700
         this.dashAttackTimer = 0;
         this.Speed.X = 260 * this.Facing;
         this.Speed.Y = JumpSpeed;
@@ -488,6 +623,7 @@ class CelestePlayer {
         this.jumpGraceTimer = 0;
         this.jumpBufferTimer = 0;
         this.varJumpTimer = VarJumpTime;
+        this.AutoJump = false;          // Player.cs:1742
         this.dashAttackTimer = 0;
         this.wallSlideTimer = WallSlideTime;
         if (this.moveX !== 0) {
