@@ -393,10 +393,13 @@
         if (aiEnabled && typeof NeuralAI !== 'undefined') {
             const ai = NeuralAI;
             ctx.fillStyle = '#44ff44'; ctx.font = 'bold 7px monospace';
-            ctx.fillText(`NEURAL AI  ${aiSpeedMult}x`, W - 72, 10);
+            ctx.fillText(`NEURAL AI  ${aiSpeedMult}x`, W - 80, 10);
             ctx.font = '6px monospace';
-            ctx.fillText(`Gen ${ai.generation}  Run ${ai.runCount}`, W - 72, 18);
-            ctx.fillText(`Best ${(ai.globalBestFit * 100).toFixed(0)}%`, W - 72, 25);
+            ctx.fillText(`Gen ${ai.generation}  Run ${ai.runCount}`, W - 80, 18);
+            ctx.fillText(`Best ${(ai.globalBestFit * 100).toFixed(0)}%`, W - 80, 25);
+            const stag = ai._runsSinceImproved || 0;
+            ctx.fillStyle = stag >= 15 ? '#ff8844' : '#aaffaa';
+            ctx.fillText(`Stag ${stag}/20`, W - 80, 32);
         }
 
         if (won) {

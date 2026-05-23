@@ -12,27 +12,29 @@
     const N_OUT  = 6;
     const W_SIZE = N_IN * N_HID + N_HID + N_HID * N_OUT + N_OUT; // 342
 
-    // ── Hyperparameters (from Hyperparams struct) ─────────────────────────────
+    // ── Hyperparameters ───────────────────────────────────────────────────────
     const HP = {
         ELITE_K:        2,
         CROSS_ALPHA:    0.5,
-        MUTATE_RATE:    0.20,
-        MUTATE_STR:     0.35,
+        MUTATE_RATE:    0.25,   // was 0.20 — explore weight space faster
+        MUTATE_STR:     0.50,   // was 0.35 — bigger jumps to escape local optima
         MUTATE_DECAY:   0.003,
-        MUTATE_MIN_R:   0.04,
-        MUTATE_MIN_S:   0.04,
+        MUTATE_MIN_R:   0.05,   // was 0.04
+        MUTATE_MIN_S:   0.06,   // was 0.04
         GLOBAL_BEST_P:  0.15,
         ADAPT_INTERVAL: 40,
-        ADAPT_PERTURB:  0.08,
-        ADAPT_FRAC:     0.08,
-        ADAPT_LR:       0.015,
+        ADAPT_PERTURB:  0.10,   // was 0.08
+        ADAPT_FRAC:     0.10,   // was 0.08
+        ADAPT_LR:       0.020,  // was 0.015
         ADAPT_ABSORB:   0.30,
         ADAPT_WINDOW:   8,
-        STUCK_THRESH:   80,
-        STUCK_NOISE:    0.15,
-        STUCK_PULL_P:   0.40,
+        STUCK_THRESH:   50,     // was 80 — detect in-run stagnation sooner
+        STUCK_NOISE:    0.20,   // was 0.15
+        STUCK_PULL_P:   0.50,   // was 0.40
         SPAWN_NOISE_R:  0.05,
-        SPAWN_NOISE_S:  0.08,
+        SPAWN_NOISE_S:  0.12,   // was 0.08
+        EXPLORE_TEMP:   0.55,   // NEW: softmax temperature (lower = greedier)
+        STAGNATE_RUNS:  20,     // NEW: inject fresh agents after this many non-improving runs
     };
 
     // ── Raycast config (from sensor section) ─────────────────────────────────
@@ -67,7 +69,7 @@
     const relu    = x => x > 0 ? x : 0;
     const sigmoid = x => 1 / (1 + Math.exp(-Math.max(-10, Math.min(10, x))));
 
-    // ── Forward pass (mirrors think()) ───────────────────────────────────────
+    // ── Forward pass ─────────────────────────────────────────────────────────
     function think(weights, inputs) {
         // Hidden layer
         const h = new Float32Array(N_HID);
@@ -86,12 +88,16 @@
                 s += h[j] * weights[base + j * N_OUT + k];
             out[k] = sigmoid(s);
         }
-        // Best action + 4% exploration
-        let best = 0;
-        for (let k = 1; k < N_OUT; k++) if (out[k] > out[best]) best = k;
-        if (rand() < 0.04) best = randInt(N_OUT);
-        // Output mapping (from C++ comment):
-        //   0=left  1=right  2=jump  3=dash  4=jump+right  5=jump+left
+        // Softmax temperature sampling — probabilistic, not deterministic argmax.
+        // Same weights → different actions → the AI explores rather than repeating.
+        let maxO = out[0];
+        for (let k = 1; k < N_OUT; k++) if (out[k] > maxO) maxO = out[k];
+        let sumE = 0;
+        const exps = new Float32Array(N_OUT);
+        for (let k = 0; k < N_OUT; k++) { exps[k] = Math.exp((out[k] - maxO) / HP.EXPLORE_TEMP); sumE += exps[k]; }
+        let r = rand() * sumE, best = N_OUT - 1;
+        for (let k = 0; k < N_OUT; k++) { r -= exps[k]; if (r <= 0) { best = k; break; } }
+        // 0=left  1=right  2=jump  3=dash  4=jump+right  5=jump+left
         return {
             L: best === 0 || best === 5,
             R: best === 1 || best === 4,
@@ -243,7 +249,7 @@
     }
 
     // ── Training manager ──────────────────────────────────────────────────────
-    const POOL_SIZE   = 12;
+    const POOL_SIZE   = 16;  // was 12 — more diversity in gene pool
     const STORAGE_KEY = 'apexAI_bestWeights_v1';
 
     const NeuralAI = {
@@ -253,15 +259,16 @@
         globalBestFit: 0,
 
         // Internal
-        _weights:    null,
-        _adaptSt:    null,
-        _stuckSt:    null,
-        _globalBest: null,
-        _pool:       [],
-        _maxX:       0,
-        _spawnX:     0,
-        _goalEnd:    1600,
-        _prevJ:      false,
+        _weights:           null,
+        _adaptSt:           null,
+        _stuckSt:           null,
+        _globalBest:        null,
+        _pool:              [],
+        _maxX:              0,
+        _spawnX:            0,
+        _goalEnd:           1600,
+        _prevJ:             false,
+        _runsSinceImproved: 0,
 
         // Expose RAY_DIRS so game.js can draw the rays
         RAY_DIRS,
@@ -332,11 +339,24 @@
                 this._pool.shift();
             }
 
-            // Update global best
+            // Update global best & stagnation counter
             if (fitness > this.globalBestFit) {
-                this.globalBestFit = fitness;
-                this._globalBest   = copyW(this._weights);
+                this.globalBestFit      = fitness;
+                this._globalBest        = copyW(this._weights);
+                this._runsSinceImproved = 0;
                 this._save();
+            } else {
+                this._runsSinceImproved++;
+            }
+
+            // Stagnation escape: inject a heavily-mutated best + one random agent
+            // into the worst two pool slots to break the gene pool out of a plateau.
+            if (this._runsSinceImproved >= HP.STAGNATE_RUNS && this._pool.length >= 3) {
+                const base = this._globalBest || this._weights;
+                this._pool.sort((a, b) => a.fitness - b.fitness);
+                this._pool[0] = { weights: mutateWeights(base, 0.45, 0.75), fitness: 0 };
+                this._pool[1] = { weights: randWeights(),                    fitness: 0 };
+                this._runsSinceImproved = 0;
             }
 
             // Breed next weights
@@ -355,14 +375,14 @@
 
         resetWeights() {
             try { localStorage.removeItem(STORAGE_KEY); } catch (_) {}
-            // Also wipe server copy
             this._serverSave(null).catch(() => {});
-            this._weights    = randWeights();
-            this._pool       = [];
-            this._globalBest = null;
-            this.generation  = 0;
-            this.runCount    = 0;
-            this.globalBestFit = 0;
+            this._weights           = randWeights();
+            this._pool              = [];
+            this._globalBest        = null;
+            this.generation         = 0;
+            this.runCount           = 0;
+            this.globalBestFit      = 0;
+            this._runsSinceImproved = 0;
             this._adaptSt = makeAdaptState();
             this._stuckSt = makeStuckState(this._weights);
         },
