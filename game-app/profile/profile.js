@@ -4,10 +4,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const loggedInUserData = sessionStorage.getItem('loggedInUser');
 
     if (!loggedInUserData) {
-        // If there's no data, they aren't logged in. Redirect them back to the login page!
-        // (Going up one folder, then into webSite folder)
-        window.location.href = '/';
-        return; // Stop running the rest of the script
+        const loginUrl = window.location.protocol === 'file:'
+            ? '../webSite/index.html'
+            : '/';
+        window.location.href = loginUrl;
+        return;
     }
 
     // 2. Parse the JSON string back into a JavaScript object
@@ -31,7 +32,9 @@ document.addEventListener('DOMContentLoaded', () => {
         // Clear the saved user data
         sessionStorage.removeItem('loggedInUser');
 
-        // Send them back to the login page
-        window.location.href = '/';
+        const loginUrl = window.location.protocol === 'file:'
+            ? '../webSite/index.html'
+            : '/';
+        window.location.href = loginUrl;
     });
 });
