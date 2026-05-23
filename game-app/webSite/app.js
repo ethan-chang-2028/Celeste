@@ -1,101 +1,42 @@
-// game-app/webSite/app.js
-//
-// Browser UI logic — uses CelesteBridge (loaded from /js-bridge.js)
-// instead of raw fetch calls so all languages share the same protocol.
+document.addEventListener('DOMContentLoaded', () => {
+    const loginForm = document.getElementById('loginForm');
+    const errorMessage = document.getElementById('errorMessage');
 
-const bridge = new CelesteBridge("browser");
+    // Hardcoded dummy data instead of fetching account.json
+    const users = [
+        {
+            "id": "u-4f2a9c",
+            "username": "SkyDasher99",
+            "email": "sky@example.com",
+            "passwordHash": "testpassword123", 
+            "role": "player"
+        }
+    ];
 
-// ── DOM references ────────────────────────────────────────────────────────────
+    loginForm.addEventListener('submit', (e) => {
+        e.preventDefault(); // Stop page refresh
 
-const loginView     = document.getElementById('login-view');
-const registerView  = document.getElementById('register-view');
-const dashboardView = document.getElementById('dashboard-view');
-const loginForm     = document.getElementById('login-form');
-const registerForm  = document.getElementById('register-form');
-const logoutBtn     = document.getElementById('logout-btn');
-const loginError    = document.getElementById('login-error');
-const registerMsg   = document.getElementById('register-msg');
-const userDisplay   = document.getElementById('user-display');
+        const usernameInput = document.getElementById('usernameInput').value;
+        const passwordInput = document.getElementById('passwordInput').value;
 
-// ── Boot ──────────────────────────────────────────────────────────────────────
+        // Check if credentials match our hardcoded data
+        const foundUser = users.find(user => 
+            (user.username === usernameInput || user.email === usernameInput) && 
+            user.passwordHash === passwordInput
+        );
 
-document.addEventListener('DOMContentLoaded', updateUI);
+        if (foundUser) {
+            sessionStorage.setItem('loggedInUser', JSON.stringify(foundUser));
 
-// ── Navigation ────────────────────────────────────────────────────────────────
+            // IMPORTANT PATH CHECK:
+            // If profile.html is in the SAME folder as index.html, use this:
+            window.location.href = '../profie/profile.html'; 
 
-document.getElementById('show-register-btn').addEventListener('click', () => {
-    loginView.style.display    = 'none';
-    registerView.style.display = 'block';
-    loginError.textContent     = '';
+            // If profile.html is inside a folder named 'profile', use this:
+            // window.location.href = 'profile/profile.html';
+        } else {
+            errorMessage.textContent = "Invalid username or password.";
+            errorMessage.style.display = "block";
+        }
+    });
 });
-
-document.getElementById('show-login-btn').addEventListener('click', () => {
-    registerView.style.display = 'none';
-    loginView.style.display    = 'block';
-    registerMsg.textContent    = '';
-});
-
-// ── Register ──────────────────────────────────────────────────────────────────
-
-registerForm.addEventListener('submit', async function (event) {
-    event.preventDefault();
-
-    const username = document.getElementById('reg-username').value;
-    const password = document.getElementById('reg-password').value;
-
-    try {
-        const data = await bridge.register(username, password);
-        registerMsg.style.color = 'green';
-        registerMsg.textContent = data.message + ' You can now log in.';
-        registerForm.reset();
-    } catch (err) {
-        registerMsg.style.color = 'red';
-        registerMsg.textContent = err.message || 'Server error. Is Node.js running?';
-    }
-});
-
-// ── Login ─────────────────────────────────────────────────────────────────────
-
-loginForm.addEventListener('submit', async function (event) {
-    event.preventDefault();
-
-    const username = document.getElementById('login-username').value;
-    const password = document.getElementById('login-password').value;
-
-    try {
-        const data = await bridge.login(username, password);
-        localStorage.setItem('isLoggedIn', 'true');
-        localStorage.setItem('username', username);
-        loginForm.reset();
-        loginError.textContent = '';
-        updateUI();
-    } catch (err) {
-        loginError.textContent = err.message || 'Server error. Is Node.js running?';
-    }
-});
-
-// ── Logout ────────────────────────────────────────────────────────────────────
-
-logoutBtn.addEventListener('click', function () {
-    localStorage.removeItem('isLoggedIn');
-    localStorage.removeItem('username');
-    updateUI();
-});
-
-// ── UI state ──────────────────────────────────────────────────────────────────
-
-function updateUI() {
-    const isLoggedIn      = localStorage.getItem('isLoggedIn');
-    const storedUsername  = localStorage.getItem('username');
-
-    if (isLoggedIn === 'true') {
-        loginView.style.display     = 'none';
-        registerView.style.display  = 'none';
-        dashboardView.style.display = 'block';
-        userDisplay.textContent     = storedUsername;
-    } else {
-        loginView.style.display     = 'block';
-        registerView.style.display  = 'none';
-        dashboardView.style.display = 'none';
-    }
-}
