@@ -6,7 +6,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!loggedInUserData) {
         // If there's no data, they aren't logged in. Redirect them back to the login page!
         // (Going up one folder, then into webSite folder)
-        window.location.href = '../webSite/index.html';
+        window.location.href = '/';
         return; // Stop running the rest of the script
     }
 
@@ -32,6 +32,6 @@ document.addEventListener('DOMContentLoaded', () => {
         sessionStorage.removeItem('loggedInUser');
 
         // Send them back to the login page
-        window.location.href = '../webSite/index.html';
+        window.location.href = '/';
     });
 });

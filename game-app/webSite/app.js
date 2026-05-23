@@ -2,36 +2,33 @@ document.addEventListener('DOMContentLoaded', () => {
     const loginForm = document.getElementById('loginForm');
     const errorMessage = document.getElementById('errorMessage');
 
-    // Hardcoded dummy data instead of fetching account.json
-    const users = [
-        {
-            "id": "u-4f2a9c",
-            "username": "SkyDasher99",
-            "email": "sky@example.com",
-            "passwordHash": "testpassword123", 
-            "role": "player"
-        }
-    ];
+    loginForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
 
-    loginForm.addEventListener('submit', (e) => {
-        e.preventDefault(); // Stop page refresh
-
-        const usernameInput = document.getElementById('usernameInput').value;
+        const usernameInput = document.getElementById('usernameInput').value.trim();
         const passwordInput = document.getElementById('passwordInput').value;
 
-        // Check if credentials match our hardcoded data
-        const foundUser = users.find(user => 
-            (user.username === usernameInput || user.email === usernameInput) && 
-            user.passwordHash === passwordInput
-        );
+        errorMessage.style.display = 'none';
 
-        if (foundUser) {
-            sessionStorage.setItem('loggedInUser', JSON.stringify(foundUser));
+        try {
+            const res = await fetch('/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username: usernameInput, password: passwordInput })
+            });
 
-            window.location.href = '../profile/profile.html';
-        } else {
-            errorMessage.textContent = "Invalid username or password.";
-            errorMessage.style.display = "block";
+            const data = await res.json();
+
+            if (res.ok) {
+                sessionStorage.setItem('loggedInUser', JSON.stringify(data.user));
+                window.location.href = '/profile';
+            } else {
+                errorMessage.textContent = data.message || 'Invalid username or password.';
+                errorMessage.style.display = 'block';
+            }
+        } catch (err) {
+            errorMessage.textContent = 'Could not reach the server. Is it running?';
+            errorMessage.style.display = 'block';
         }
     });
 });
