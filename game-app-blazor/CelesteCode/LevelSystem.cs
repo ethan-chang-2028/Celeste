@@ -338,6 +338,10 @@ namespace Celeste
                 .Build();
         }
 
+        // "The Gauntlet" — showcase level that uses every entity type.
+        // 640 × 800 px vertical climb from ground to golden strawberry.
+        public static Level CreateGauntletLevel() => TheGauntletMap.Build();
+
         // Minimal test room for unit-testing physics.
         public static Level CreateTestLevel()
         {

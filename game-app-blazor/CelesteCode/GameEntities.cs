@@ -512,9 +512,10 @@ namespace Celeste
             openTarget = position + openDirection.SafeNormalize() * slideDistance;
             openSpeed  = 60f;
 
-            // Subscribe to both types of switch events
+            // Subscribe to all three activation sources
             TouchSwitch.OnGroupActivated += OnGroupActivated;
             DashSwitch.OnGroupActivated  += OnGroupActivated;
+            BlueTorch.OnAllLit           += OnGroupActivated;
         }
 
         private void OnGroupActivated(string groupId)
