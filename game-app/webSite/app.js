@@ -28,12 +28,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (foundUser) {
             sessionStorage.setItem('loggedInUser', JSON.stringify(foundUser));
 
-            // IMPORTANT PATH CHECK:
-            // If profile.html is in the SAME folder as index.html, use this:
-            window.location.href = '../profie/profile.html'; 
-
-            // If profile.html is inside a folder named 'profile', use this:
-            // window.location.href = 'profile/profile.html';
+            window.location.href = '../profile/profile.html';
         } else {
             errorMessage.textContent = "Invalid username or password.";
             errorMessage.style.display = "block";
