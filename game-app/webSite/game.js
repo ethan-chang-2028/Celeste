@@ -205,13 +205,19 @@
     let won      = false;
     let winMs    = 0;
 
+    // AI stuck-death: if position hasn't changed in 3 s, force a death
+    const AI_STUCK_LIMIT = 180; // frames (~3 s at 60 fps)
+    let aiStuckFrames = 0;
+    let aiStuckLastX  = 0;
+
     function getRoomIdx() {
         return Math.max(0, Math.min(NUM_ROOMS - 1, Math.floor(player.x / ROOM_W)));
     }
     function respawn() {
+        aiStuckFrames = 0;
+        aiStuckLastX  = player.x;
         if (aiEnabled && typeof NeuralAI !== 'undefined') {
             NeuralAI.onDeath();
-            // AI always restarts from room 0 for consistent training episodes
             respawnRoom = 0;
             NeuralAI.reset(roomSpawns[0].x);
             updateAIBtn();
@@ -220,6 +226,8 @@
         if (!won) deaths++;
     }
     function restartRun() {
+        aiStuckFrames = 0;
+        aiStuckLastX  = roomSpawns[0] ? roomSpawns[0].x : 0;
         respawnRoom = furthestRoom = 0;
         player.reset(roomSpawns[0].x, roomSpawns[0].y);
         runStart = performance.now();
@@ -416,7 +424,21 @@
                 updateAIBtn();
             }
         }
-        if (player.y > DEATH_Y) respawn();
+        if (player.y > DEATH_Y) { respawn(); return; }
+
+        // AI stuck-death: no x movement for AI_STUCK_LIMIT frames → die and retry
+        if (aiEnabled) {
+            if (Math.abs(player.x - aiStuckLastX) > 1) {
+                aiStuckFrames = 0;
+                aiStuckLastX  = player.x;
+            } else {
+                aiStuckFrames++;
+                if (aiStuckFrames >= AI_STUCK_LIMIT) {
+                    player.y = DEATH_Y + 1; // push below death line → triggers respawn next tick
+                    return;
+                }
+            }
+        }
 
         for (const k of Object.keys(pressed)) delete pressed[k];
         stepCount++;
