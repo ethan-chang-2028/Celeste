@@ -4,8 +4,10 @@ const fs = require('fs').promises;
 const path = require('path');
 
 const PORT = 3000;
-const DATA_FILE_PATH = path.join(__dirname, 'game-app', 'Data', 'players.json');
-const BRIDGE_JS_PATH = path.join(__dirname, 'translation-layer', 'js-bridge.js');
+const DATA_FILE_PATH    = path.join(__dirname, 'game-app', 'Data', 'players.json');
+const LEADERBOARD_PATH  = path.join(__dirname, 'game-app', 'Data', 'leaderboard.json');
+const AI_MODEL_PATH     = path.join(__dirname, 'game-app', 'Data', 'ai-model.json');
+const BRIDGE_JS_PATH    = path.join(__dirname, 'translation-layer', 'js-bridge.js');
 
 // Detect whether the request came from a CelesteBridge client.
 // If so, wrap every response in the shared BridgeMessage envelope.
@@ -234,7 +236,54 @@ const server = http.createServer(async (req, res) => {
             }
         }
 
-        // 6. Catch-all for files or routes not found
+        // 6. AI model weights — GET loads, POST saves
+        if (req.method === 'GET' && req.url === '/ai-model') {
+            try {
+                const data = await fs.readFile(AI_MODEL_PATH, 'utf-8');
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                return res.end(data);
+            } catch {
+                res.writeHead(404, { 'Content-Type': 'application/json' });
+                return res.end(JSON.stringify({ weights: null }));
+            }
+        }
+
+        if (req.method === 'POST' && req.url === '/ai-model') {
+            const data = await getRequestBody(req);
+            await fs.mkdir(path.dirname(AI_MODEL_PATH), { recursive: true });
+            await fs.writeFile(AI_MODEL_PATH, JSON.stringify(data, null, 2));
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            return res.end(JSON.stringify({ message: 'AI model saved.' }));
+        }
+
+        // 7. Leaderboard — GET loads, POST appends a run record
+        if (req.method === 'GET' && req.url === '/leaderboard') {
+            try {
+                const data = await fs.readFile(LEADERBOARD_PATH, 'utf-8');
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                return res.end(data);
+            } catch {
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                return res.end(JSON.stringify([]));
+            }
+        }
+
+        if (req.method === 'POST' && req.url === '/leaderboard') {
+            const entry = await getRequestBody(req);
+            let records = [];
+            try {
+                const existing = await fs.readFile(LEADERBOARD_PATH, 'utf-8');
+                records = JSON.parse(existing);
+                if (!Array.isArray(records)) records = [];
+            } catch { /* file missing or corrupt — start fresh */ }
+            records.push({ ...entry, savedAt: new Date().toISOString() });
+            await fs.mkdir(path.dirname(LEADERBOARD_PATH), { recursive: true });
+            await fs.writeFile(LEADERBOARD_PATH, JSON.stringify(records, null, 2));
+            res.writeHead(201, { 'Content-Type': 'application/json' });
+            return res.end(JSON.stringify({ message: 'Run saved.' }));
+        }
+
+        // 8. Catch-all for files or routes not found
         res.writeHead(404, { 'Content-Type': 'text/plain' });
         res.end('404 Not Found');
 

@@ -355,6 +355,8 @@
 
         resetWeights() {
             try { localStorage.removeItem(STORAGE_KEY); } catch (_) {}
+            // Also wipe server copy
+            this._serverSave(null).catch(() => {});
             this._weights    = randWeights();
             this._pool       = [];
             this._globalBest = null;
@@ -365,19 +367,73 @@
             this._stuckSt = makeStuckState(this._weights);
         },
 
+        // ── Persistence: server-first, localStorage fallback ──────────────────
         _save() {
-            try { localStorage.setItem(STORAGE_KEY, JSON.stringify(Array.from(this._globalBest))); } catch (_) {}
+            if (!this._globalBest) return;
+            const payload = {
+                weights:    Array.from(this._globalBest),
+                generation: this.generation,
+                runCount:   this.runCount,
+                bestFit:    this.globalBestFit,
+                savedAt:    new Date().toISOString(),
+            };
+            // localStorage (instant, always works)
+            try { localStorage.setItem(STORAGE_KEY, JSON.stringify(payload)); } catch (_) {}
+            // Server (fire-and-forget, works when server is running)
+            this._serverSave(payload).catch(() => {});
+        },
+
+        async _serverSave(payload) {
+            await fetch('/ai-model', {
+                method:  'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body:    JSON.stringify(payload || {}),
+                signal:  AbortSignal.timeout(3000),
+            });
         },
 
         _load() {
+            // Try localStorage first (synchronous, works offline)
             try {
                 const s = localStorage.getItem(STORAGE_KEY);
                 if (s) {
-                    const arr = JSON.parse(s);
-                    if (arr.length === W_SIZE) return new Float32Array(arr);
+                    const obj = JSON.parse(s);
+                    const arr = obj.weights || obj; // handle both formats
+                    if (Array.isArray(arr) && arr.length === W_SIZE) {
+                        if (obj.generation) this.generation  = obj.generation;
+                        if (obj.runCount)   this.runCount    = obj.runCount;
+                        if (obj.bestFit)    this.globalBestFit = obj.bestFit;
+                        return new Float32Array(arr);
+                    }
                 }
             } catch (_) {}
+
+            // Try server async (load in background, apply once received)
+            this._serverLoad();
             return null;
+        },
+
+        async _serverLoad() {
+            try {
+                const res = await fetch('/ai-model', { signal: AbortSignal.timeout(3000) });
+                if (!res.ok) return;
+                const obj = await res.json();
+                const arr = obj.weights;
+                if (!arr || arr.length !== W_SIZE) return;
+                // Only apply if better than what we already have
+                if ((obj.bestFit || 0) > this.globalBestFit) {
+                    this._globalBest   = new Float32Array(arr);
+                    this.globalBestFit = obj.bestFit    || 0;
+                    this.generation    = obj.generation || 0;
+                    this.runCount      = obj.runCount   || 0;
+                    // Seed current weights from server best
+                    this._weights = spawnNoise(this._globalBest);
+                    this._stuckSt = makeStuckState(this._weights);
+                    console.log(`[NeuralAI] Loaded server weights — Gen ${this.generation}, Best ${(this.globalBestFit*100).toFixed(0)}%`);
+                    // Cache locally
+                    try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ weights: arr, generation: this.generation, runCount: this.runCount, bestFit: this.globalBestFit })); } catch (_) {}
+                }
+            } catch (_) {}
         },
     };
 
