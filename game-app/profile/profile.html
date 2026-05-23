@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Apex Platformer - My Profile</title>
+    <link rel="stylesheet" href="/style.css">
+    <style>
+        /* A little bit of inline CSS just to make the profile look neat */
+        .profile-container { max-width: 600px; margin: 40px auto; padding: 20px; text-align: center; font-family: sans-serif;}
+        .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 20px; }
+        .stat-box { background: #eee; padding: 15px; border-radius: 8px; }
+        .logout-btn { margin-top: 30px; background: #ff4c4c; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; }
+    </style>
+</head>
+<body>
+
+    <main class="profile-container">
+        <h1>Player Profile</h1>
+
+        <div id="userInfo">
+            <h2 id="displayUsername">Loading...</h2>
+            <p><strong>Email:</strong> <span id="displayEmail">...</span></p>
+            <p><strong>Role:</strong> <span id="displayRole">...</span></p>
+        </div>
+
+        <hr>
+
+        <h3>My Speedrun Stats</h3>
+        <div class="stats-grid">
+            <div class="stat-box">
+                <h4>Total Deaths</h4>
+                <p id="statDeaths">0</p>
+            </div>
+            <div class="stat-box">
+                <h4>Strawberries (Collectibles)</h4>
+                <p id="statBerries">0 / 175</p>
+            </div>
+            <div class="stat-box">
+                <h4>Best Any% Time</h4>
+                <p id="statTime">--:--.---</p>
+            </div>
+            <div class="stat-box">
+                <h4>Custom Maps Cleared</h4>
+                <p id="statMaps">0</p>
+            </div>
+        </div>
+
+        <button id="logoutButton" class="logout-btn">Log Out</button>
+    </main>
+
+    <script src="profile.js"></script>
+</body>
+</html>

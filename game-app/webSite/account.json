@@ -1,0 +1,9 @@
+[
+  {
+    "id": "u-4f2a9c",
+    "username": "SkyDasher99",
+    "email": "sky@example.com",
+    "passwordHash": "testpassword123", 
+    "role": "player"
+  }
+]

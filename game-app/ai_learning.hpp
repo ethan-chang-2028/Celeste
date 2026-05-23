@@ -1,10 +1,6 @@
 /**
  * ============================================================
- *  ADAPTIVE NEURAL AI — Architecture Reference (C++ design doc)
- *
- *  NOTE: The active JavaScript implementation is:
- *        game-app/webSite/ai-neural.js
- *        This file serves as the architectural reference only.
+ *  ADAPTIVE NEURAL AI — Platformer Learning System (C++ port)
  *
  *  Architecture:
  *    - Each agent has a small neural net: 17 inputs → 14 hidden → 6 outputs

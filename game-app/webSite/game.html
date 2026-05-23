@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Apex Platformer — Game</title>
+    <link rel="stylesheet" href="/game.css">
+    <style>
+        .ai-panel {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin: 10px 0;
+            flex-wrap: wrap;
+        }
+        .ai-panel button {
+            background: #5a2a80;
+            color: #fff;
+            border: none;
+            border-radius: 5px;
+            padding: 8px 16px;
+            font-size: 0.85rem;
+            cursor: pointer;
+            font-family: monospace;
+        }
+        .ai-panel button:hover { background: #7a3aaa; }
+        .ai-panel input[type="number"] {
+            width: 90px;
+            padding: 7px 8px;
+            border: 1px solid #555;
+            border-radius: 5px;
+            background: #1a1a2a;
+            color: #ddd;
+            font-family: monospace;
+            font-size: 0.85rem;
+        }
+        #map-seed {
+            font-family: monospace;
+            font-size: 0.8rem;
+            color: #aaa;
+        }
+        .ai-speed-btn {
+            padding: 7px 10px !important;
+            min-width: 36px;
+        }
+    </style>
+</head>
+<body>
+    <header class="game-header">
+        <h1>Apex Platformer</h1>
+        <a href="/" class="back-link">&larr; Back to menu</a>
+    </header>
+
+    <main class="game-main">
+        <div class="ai-panel">
+            <button onclick="aiGenerateMap()">&#x2728; Generate AI Map</button>
+            <input type="number" id="seed-input" placeholder="Seed #" min="0" max="999999">
+            <button onclick="loadSeed()">Load Seed</button>
+            <span id="map-seed">Seed: —</span>
+            <button id="ai-control-btn" onclick="toggleAIControl()" style="background:#5a2a80;">&#129504; Neural AI: OFF</button>
+            <button onclick="resetAI()" style="background:#7a2020;" title="Wipe learned weights and start from scratch">&#128260; Reset AI</button>
+            <span style="color:#aaa;font-family:monospace;font-size:0.8rem;">Speed:</span>
+            <button class="ai-speed-btn" data-speed="1"  onclick="setAISpeed(1)"  style="background:#1a6a1a;" title="1× speed">1x</button>
+            <button class="ai-speed-btn" data-speed="2"  onclick="setAISpeed(2)"  style="background:#3a3a6a;" title="2× speed">2x</button>
+            <button class="ai-speed-btn" data-speed="4"  onclick="setAISpeed(4)"  style="background:#3a3a6a;" title="4× speed">4x</button>
+            <button class="ai-speed-btn" data-speed="8"  onclick="setAISpeed(8)"  style="background:#3a3a6a;" title="8× speed">8x</button>
+        </div>
+
+        <canvas id="game-canvas" width="320" height="180"></canvas>
+
+        <div class="controls">
+            <p><strong>Controls:</strong>
+                Arrow keys to move &middot;
+                <kbd>C</kbd> jump &middot;
+                <kbd>X</kbd> dash (8-directional) &middot;
+                <kbd>Z</kbd> / <kbd>Shift</kbd> grab walls &middot;
+                <kbd>R</kbd> reset
+            </p>
+            <p id="status">Ready.</p>
+        </div>
+    </main>
+
+    <script src="/player.js"></script>
+    <script src="/ai-neural.js"></script>
+    <script src="/game.js"></script>
+</body>
+</html>

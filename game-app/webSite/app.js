@@ -1,114 +1,69 @@
-// HTML Elements
-const loginView = document.getElementById('login-view');
-const registerView = document.getElementById('register-view');
-const dashboardView = document.getElementById('dashboard-view');
+document.addEventListener('DOMContentLoaded', () => {
+    const loginForm = document.getElementById('loginForm');
+    const errorMessage = document.getElementById('errorMessage');
 
-const loginForm = document.getElementById('login-form');
-const registerForm = document.getElementById('register-form');
-const logoutBtn = document.getElementById('logout-btn');
+    // Built-in test account (works without a server)
+    const seedUsers = [
+        { id: 'u-4f2a9c', username: 'SkyDasher99', email: 'sky@example.com',
+          password: 'testpassword123', role: 'player', country: '', avatar: 'Madeline' }
+    ];
 
-const loginError = document.getElementById('login-error');
-const registerMsg = document.getElementById('register-msg');
-const userDisplay = document.getElementById('user-display');
+    function getLocalUsers() {
+        return JSON.parse(localStorage.getItem('registeredUsers') || '[]');
+    }
 
-// Check login status on page load
-document.addEventListener('DOMContentLoaded', updateUI);
+    function localLogin(identifier, password) {
+        const allUsers = [...seedUsers, ...getLocalUsers()];
+        const found = allUsers.find(u =>
+            (u.username === identifier || u.email === identifier) && u.password === password
+        );
+        if (!found) return null;
+        const { password: _pw, ...safeUser } = found;
+        return safeUser;
+    }
 
-// --- NAVIGATION BETWEEN FORMS ---
-document.getElementById('show-register-btn').addEventListener('click', () => {
-    loginView.style.display = 'none';
-    registerView.style.display = 'block';
-    loginError.textContent = '';
-});
+    loginForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        errorMessage.style.display = 'none';
 
-document.getElementById('show-login-btn').addEventListener('click', () => {
-    registerView.style.display = 'none';
-    loginView.style.display = 'block';
-    registerMsg.textContent = '';
-});
+        const identifier = document.getElementById('usernameInput').value.trim();
+        const password   = document.getElementById('passwordInput').value;
 
-// --- REGISTER LOGIC ---
-registerForm.addEventListener('submit', async function(event) {
-    event.preventDefault(); 
+        // Try server first, fall back to localStorage
+        try {
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), 3000);
+            const res = await fetch('/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username: identifier, password }),
+                signal: controller.signal
+            });
+            clearTimeout(timer);
 
-    const username = document.getElementById('reg-username').value;
-    const password = document.getElementById('reg-password').value;
-
-    try {
-        const response = await fetch('http://localhost:3000/register', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username, password })
-        });
-
-        const data = await response.json();
-
-        if (response.ok) {
-            registerMsg.style.color = "green";
-            registerMsg.textContent = data.message + " You can now log in.";
-            registerForm.reset();
-        } else {
-            registerMsg.style.color = "red";
-            registerMsg.textContent = data.message; // E.g., "Username taken"
+            const data = await res.json();
+            if (res.ok) {
+                sessionStorage.setItem('loggedInUser', JSON.stringify(data.user));
+                window.location.href = '/profile';
+                return;
+            }
+            errorMessage.textContent = data.message || 'Invalid username or password.';
+            errorMessage.style.display = 'block';
+            return;
+        } catch (_) {
+            // Server unreachable — use local fallback
         }
-    } catch (error) {
-        registerMsg.style.color = "red";
-        registerMsg.textContent = "Server error. Is Node.js running?";
-    }
-});
 
-// --- LOGIN LOGIC ---
-loginForm.addEventListener('submit', async function(event) {
-    event.preventDefault(); 
-
-    const username = document.getElementById('login-username').value;
-    const password = document.getElementById('login-password').value;
-
-    try {
-        const response = await fetch('http://localhost:3000/login', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username, password })
-        });
-
-        const data = await response.json();
-
-        if (response.ok) {
-            // Login successful! Save state and update screen
-            localStorage.setItem('isLoggedIn', 'true');
-            localStorage.setItem('username', username);
-            loginForm.reset();
-            loginError.textContent = '';
-            updateUI();
+        const user = localLogin(identifier, password);
+        if (user) {
+            sessionStorage.setItem('loggedInUser', JSON.stringify(user));
+            // Redirect: prefer server route, fall back to relative path
+            window.location.href = window.location.protocol === 'file:'
+                ? '../profile/profile.html'
+                : '/profile';
         } else {
-            // Login failed (wrong password or user doesn't exist)
-            loginError.textContent = data.message;
+            errorMessage.textContent = 'Invalid username or password.';
+            errorMessage.style.display = 'block';
         }
-    } catch (error) {
-        loginError.textContent = "Server error. Is Node.js running?";
-    }
+    });
 });
-
-// --- LOGOUT LOGIC ---
-logoutBtn.addEventListener('click', function() {
-    localStorage.removeItem('isLoggedIn');
-    localStorage.removeItem('username');
-    updateUI();
-});
-
-// --- UI UPDATE LOGIC ---
-function updateUI() {
-    const isLoggedIn = localStorage.getItem('isLoggedIn');
-    const storedUsername = localStorage.getItem('username');
-
-    if (isLoggedIn === 'true') {
-        loginView.style.display = 'none';
-        registerView.style.display = 'none';
-        dashboardView.style.display = 'block';
-        userDisplay.textContent = storedUsername; 
-    } else {
-        loginView.style.display = 'block';
-        registerView.style.display = 'none';
-        dashboardView.style.display = 'none';
-    }
-}

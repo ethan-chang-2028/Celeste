@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk.BlazorWebAssembly">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <RootNamespace>CelesteBlazor</RootNamespace>
+    <!-- Player.cs uses unsafe-ish patterns (out params on struct refs) we keep relaxed -->
+    <LangVersion>latest</LangVersion>
+    <NoWarn>CS0414;CS0649;CS0169;CS0067;CS0108;CS0162;CS0219;CS0414;CS8632;CS1998;CS8618</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly" Version="8.0.0" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.DevServer" Version="8.0.0" PrivateAssets="all" />
+  </ItemGroup>
+
+  <!--
+    Key line: Player.cs is referenced FROM ITS EXISTING LOCATION.
+    No copy. Editing game-app/CelesteCode/Player.cs changes what this project compiles.
+  -->
+  <ItemGroup>
+    <Compile Include="..\game-app\CelesteCode\Player.cs" Link="CelesteCode\Player.cs" />
+  </ItemGroup>
+
+</Project>
