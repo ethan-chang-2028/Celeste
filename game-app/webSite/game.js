@@ -36,13 +36,14 @@
         'ROOM 5 — SUMMIT',
     ];
 
-    // Sky gradient per room: [top, bottom]. Gets progressively darker (ascent).
+    // Sky gradient per room: [top, bottom].
+    // Each room has a CLEARLY distinct palette so transitions are obvious.
     const roomSkies = [
-        ['#2a3550', '#4a5a8a'],
-        ['#2a2850', '#3a3a7a'],
-        ['#1a2540', '#2a3a6a'],
-        ['#15203a', '#253060'],
-        ['#0a1020', '#152040'],
+        ['#1a2a4a', '#3a5a8a'], // room 1: blue   (Run & Jump)
+        ['#2a1040', '#5a2a80'], // room 2: purple (Chimney)
+        ['#0a2010', '#1a5a2a'], // room 3: green  (Platforms)
+        ['#3a1000', '#7a3010'], // room 4: red    (Climb)
+        ['#0a0a18', '#101828'], // room 5: near-black (Summit)
     ];
 
     // ── Platforms ─────────────────────────────────────────────────────────────
@@ -109,7 +110,7 @@
         { x: 1020, y: 168, w:  20, h: 12 }, // room 4 gap before wall A
     ];
 
-    // Labels drawn in world-space.
+    // Small mechanic hints in world-space.
     const labels = [
         { text: 'JUMP',      x:   84, y: 178 },
         { text: 'JUMP',      x:  204, y: 178 },
@@ -117,10 +118,19 @@
         { text: 'STEP UP',   x:  732, y: 142 },
         { text: 'STEP UP',   x:  812, y: 122 },
         { text: 'STEP UP',   x:  882, y: 102 },
-        { text: 'GRAB+↑',   x: 1008, y:  90 },
-        { text: 'DASH→',    x: 1058, y:  24 },
-        { text: 'GRAB+↑',   x: 1128, y:  90 },
+        { text: 'GRAB+UP',  x: 1008, y:  90 },
+        { text: 'DASH->',   x: 1058, y:  24 },
+        { text: 'GRAB+UP',  x: 1128, y:  90 },
         { text: 'SUMMIT',   x: 1546, y:  14 },
+    ];
+
+    // Large room-number banners drawn at the top-center of each room in world-space.
+    const roomBanners = [
+        { text: '1', x:  148 },
+        { text: '2', x:  468 },
+        { text: '3', x:  788 },
+        { text: '4', x: 1108 },
+        { text: '5', x: 1428 },
     ];
 
     // Goal block sits on top of the summit platform (room 5).
@@ -139,8 +149,10 @@
     let winMs = 0;
 
     function getRoomIdx() {
+        // Snap on the player's LEFT edge so the camera switches the exact
+        // frame they cross the boundary — no off-screen flicker.
         return Math.max(0, Math.min(NUM_ROOMS - 1,
-            Math.floor((player.x + player.w / 2) / ROOM_W)));
+            Math.floor(player.x / ROOM_W)));
     }
 
     function respawn() {
@@ -240,6 +252,11 @@
         ctx.globalAlpha = 1;
 
         player.draw(ctx);
+
+        // Large room-number banners.
+        ctx.fillStyle = 'rgba(255,255,255,0.08)';
+        ctx.font = 'bold 80px monospace';
+        for (const b of roomBanners) ctx.fillText(b.text, b.x, 120);
 
         // Section labels.
         ctx.fillStyle = 'rgba(220,220,220,0.55)';
