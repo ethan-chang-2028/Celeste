@@ -189,17 +189,17 @@ namespace Monocle
         {
             if (Scene == null) return false;
             foreach (var e in Scene.Tracker.GetEntities<T>())
-                if (Collide.Check(this, e, at)) return true;
+                if (e.Collidable && e != this && Collide.Check(this, e, at)) return true;
             return false;
         }
-        public bool CollideCheck(Entity other) => Collide.Check(this, other, Position);
-        public bool CollideCheck(Entity other, Vector2 at) => Collide.Check(this, other, at);
+        public bool CollideCheck(Entity other) => other != null && other.Collidable && Collide.Check(this, other, Position);
+        public bool CollideCheck(Entity other, Vector2 at) => other != null && other.Collidable && Collide.Check(this, other, at);
         public T CollideFirst<T>() where T : Entity => CollideFirst<T>(Position);
         public T CollideFirst<T>(Vector2 at) where T : Entity
         {
             if (Scene == null) return null;
             foreach (var e in Scene.Tracker.GetEntities<T>())
-                if (Collide.Check(this, e, at)) return (T)e;
+                if (e.Collidable && e != this && Collide.Check(this, e, at)) return (T)e;
             return null;
         }
         public List<T> CollideAll<T>(Vector2 at, List<T> into) where T : Entity
@@ -207,7 +207,7 @@ namespace Monocle
             into.Clear();
             if (Scene == null) return into;
             foreach (var e in Scene.Tracker.GetEntities<T>())
-                if (Collide.Check(this, e, at)) into.Add((T)e);
+                if (e.Collidable && e != this && Collide.Check(this, e, at)) into.Add((T)e);
             return into;
         }
         public bool CollideCheckOutside<T>(Vector2 at) where T : Entity
