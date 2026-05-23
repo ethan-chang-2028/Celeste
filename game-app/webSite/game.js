@@ -1,5 +1,7 @@
-// Celeste — 5-room test level "Five Peaks". Game loop, level layout, input, rendering.
-// All player mechanics live in player.js (CelestePlayer).
+// Celeste — "Five Peaks": a physically connected 5-room level.
+// The level is 1600 px wide (5 × 320). The camera snaps to whichever room
+// the player is currently in, exactly like the original Celeste engine.
+// Walk right through all five rooms and touch the gold block to win.
 
 (function () {
     const canvas = document.getElementById('game-canvas');
@@ -7,174 +9,155 @@
     const statusEl = document.getElementById('status');
     ctx.imageSmoothingEnabled = false;
 
-    // 320×180 — Celeste's native render resolution (matches game.html canvas).
-    const W = canvas.width, H = canvas.height;
+    const W = canvas.width, H = canvas.height; // 320 × 180
 
-    // Fixed 60 Hz simulation step.
     const FIXED_DT = 1 / 60;
     const MAX_ACCUM = 0.25;
     const DEATH_Y = H + 20;
 
-    // ── 5-Room Level: "Five Peaks" ──────────────────────────────────────────
-    // Each room is one 320×180 screen. Walking off the right edge advances to
-    // the next room. Room 5 has a goal block — touching it wins.
-    //
-    // Colors:
-    //   floor / ledge   green   #3a5a3a / #5a7a5a
-    //   boundary wall   slate   #4a5570
-    //   chimney wall    purple  #5a6b88
-    //   climbable wall  violet  #7a6b8a
-    //   goal block      gold    #d4af37
+    // ── Level geometry (world-space, 1600 px wide) ──────────────────────────
+    const ROOM_W = W;      // 320 px per room
+    const NUM_ROOMS = 5;
 
-    const rooms = [
-
-        // ── Room 1: RUN & JUMP ───────────────────────────────────────────────
-        // Two 40-px ground pits. Learn running-jump timing.
-        {
-            name: 'ROOM 1 — RUN & JUMP',
-            spawn: { x: 14, y: 157 },
-            platforms: [
-                { x: 0,   y: 0,   w: 8,   h: 180, color: '#4a5570' }, // left wall
-                { x: 0,   y: 168, w: 80,  h: 12,  color: '#3a5a3a' }, // spawn floor
-                { x: 120, y: 168, w: 80,  h: 12,  color: '#3a5a3a' }, // mid platform
-                { x: 240, y: 168, w: 80,  h: 12,  color: '#3a5a3a' }, // exit floor
-            ],
-            pitShading: [
-                { x: 80,  y: 168, w: 40, h: 12 },
-                { x: 200, y: 168, w: 40, h: 12 },
-            ],
-            labels: [
-                { text: 'JUMP', x: 84,  y: 178 },
-                { text: 'JUMP', x: 204, y: 178 },
-                { text: '→',    x: 304, y: 162 },
-            ],
-        },
-
-        // ── Room 2: CHIMNEY ──────────────────────────────────────────────────
-        // Wall-jump up a 24-px-wide shaft. Left wall has a 14-px gap at the
-        // bottom so the player can walk inside; right wall is flush to the floor.
-        // Exit by running right along the top ledge.
-        {
-            name: 'ROOM 2 — CHIMNEY',
-            spawn: { x: 14, y: 157 },
-            platforms: [
-                { x: 0,   y: 0,   w: 8,   h: 180, color: '#4a5570' }, // left wall
-                { x: 0,   y: 168, w: 150, h: 12,  color: '#3a5a3a' }, // entry floor
-                { x: 150, y: 50,  w: 6,   h: 104, color: '#5a6b88' }, // left chimney wall (gap at bottom)
-                { x: 180, y: 50,  w: 6,   h: 118, color: '#5a6b88' }, // right chimney wall (to floor)
-                { x: 156, y: 44,  w: 164, h: 6,   color: '#5a7a5a' }, // top exit ledge
-            ],
-            pitShading: [],
-            labels: [
-                { text: 'WALL JUMP', x: 148, y: 165 },
-                { text: '→',         x: 306, y: 38  },
-            ],
-        },
-
-        // ── Room 3: STAIRCASE ────────────────────────────────────────────────
-        // Four ascending ledges; jump up-right to the exit platform near the top.
-        {
-            name: 'ROOM 3 — STAIRCASE',
-            spawn: { x: 14, y: 157 },
-            platforms: [
-                { x: 0,   y: 0,   w: 8,   h: 180, color: '#4a5570' }, // left wall
-                { x: 0,   y: 168, w: 60,  h: 12,  color: '#3a5a3a' }, // spawn floor
-                { x: 70,  y: 136, w: 50,  h: 8,   color: '#5a7a5a' }, // step 1
-                { x: 140, y: 104, w: 50,  h: 8,   color: '#5a7a5a' }, // step 2
-                { x: 210, y: 72,  w: 50,  h: 8,   color: '#5a7a5a' }, // step 3
-                { x: 275, y: 40,  w: 45,  h: 8,   color: '#5a7a5a' }, // exit ledge
-            ],
-            pitShading: [],
-            labels: [
-                { text: 'STEP 1', x: 72,  y: 130 },
-                { text: 'STEP 2', x: 142, y: 98  },
-                { text: 'STEP 3', x: 212, y: 66  },
-                { text: '→',      x: 303, y: 34  },
-            ],
-        },
-
-        // ── Room 4: CLIMB ────────────────────────────────────────────────────
-        // Two tall violet (climbable) walls. Grab (Z) and climb wall A to the
-        // top platform, then dash right across a 40-px gap to grab wall B and
-        // climb to the exit ledge.
-        {
-            name: 'ROOM 4 — CLIMB',
-            spawn: { x: 14, y: 157 },
-            platforms: [
-                { x: 0,   y: 0,   w: 8,   h: 180, color: '#4a5570' }, // left wall
-                { x: 0,   y: 168, w: 60,  h: 12,  color: '#3a5a3a' }, // spawn floor
-                { x: 80,  y: 30,  w: 8,   h: 138, color: '#7a6b8a' }, // climbable wall A
-                { x: 88,  y: 30,  w: 72,  h: 8,   color: '#5a7a5a' }, // top platform A (x=88-160)
-                { x: 200, y: 30,  w: 8,   h: 138, color: '#7a6b8a' }, // climbable wall B
-                { x: 208, y: 30,  w: 112, h: 8,   color: '#5a7a5a' }, // exit ledge (to right edge)
-            ],
-            pitShading: [
-                { x: 60, y: 168, w: 20, h: 12 }, // gap before wall A
-            ],
-            labels: [
-                { text: 'GRAB+↑', x: 52,  y: 90 },
-                { text: 'DASH→',  x: 110, y: 24 },
-                { text: 'GRAB+↑', x: 174, y: 90 },
-                { text: '→',      x: 300, y: 24 },
-            ],
-        },
-
-        // ── Room 5: SUMMIT ───────────────────────────────────────────────────
-        // Final mixed challenge: four ascending steps lead to the gold goal
-        // block at the top-right corner.
-        {
-            name: 'ROOM 5 — SUMMIT',
-            spawn: { x: 14, y: 157 },
-            platforms: [
-                { x: 0,   y: 0,   w: 8,   h: 180, color: '#4a5570' }, // left wall
-                { x: 0,   y: 168, w: 60,  h: 12,  color: '#3a5a3a' }, // spawn floor
-                { x: 80,  y: 140, w: 50,  h: 8,   color: '#5a7a5a' }, // step 1
-                { x: 150, y: 110, w: 50,  h: 8,   color: '#5a7a5a' }, // step 2
-                { x: 220, y: 80,  w: 50,  h: 8,   color: '#5a7a5a' }, // step 3
-                { x: 280, y: 50,  w: 40,  h: 8,   color: '#5a7a5a' }, // summit platform
-            ],
-            pitShading: [],
-            labels: [
-                { text: 'SUMMIT', x: 260, y: 12 },
-            ],
-        },
+    // Each room's respawn position (used when the player dies inside that room).
+    const roomSpawns = [
+        { x:   14, y: 157 }, // room 1
+        { x:  334, y: 157 }, // room 2
+        { x:  654, y: 157 }, // room 3
+        { x:  974, y: 157 }, // room 4
+        { x: 1294, y: 157 }, // room 5
     ];
 
-    // Goal lives in the last room only — drawn as a pulsing gold block.
-    const GOAL = { x: 289, y: 36, w: 12, h: 12, color: '#d4af37' };
+    const roomNames = [
+        'ROOM 1 — RUN & JUMP',
+        'ROOM 2 — CHIMNEY',
+        'ROOM 3 — PLATFORMS',
+        'ROOM 4 — CLIMB',
+        'ROOM 5 — SUMMIT',
+    ];
 
-    // ── Run state ────────────────────────────────────────────────────────────
-    let currentRoom = 0;
-    let player = new CelestePlayer(rooms[0].spawn.x, rooms[0].spawn.y);
+    // Sky gradient per room: [top, bottom]. Gets progressively darker (ascent).
+    const roomSkies = [
+        ['#2a3550', '#4a5a8a'],
+        ['#2a2850', '#3a3a7a'],
+        ['#1a2540', '#2a3a6a'],
+        ['#15203a', '#253060'],
+        ['#0a1020', '#152040'],
+    ];
+
+    // ── Platforms ─────────────────────────────────────────────────────────────
+    // Colors:  floor / ledge  #3a5a3a / #5a7a5a
+    //          boundary wall  #4a5570
+    //          chimney wall   #5a6b88
+    //          climbable      #7a6b8a
+    const platforms = [
+
+        // ── ROOM 1 (x 0–319): RUN & JUMP ─────────────────────────────────
+        // Two 40-px ground pits. Learn the running-jump cadence.
+        { x:   0, y:   0, w:   8, h: 180, color: '#4a5570' }, // left boundary
+        { x:   0, y: 168, w:  80, h:  12, color: '#3a5a3a' }, // spawn floor
+        { x: 120, y: 168, w:  80, h:  12, color: '#3a5a3a' }, // mid platform
+        { x: 240, y: 168, w:  80, h:  12, color: '#3a5a3a' }, // exit floor → room 2
+
+        // ── ROOM 2 (x 320–639): CHIMNEY ──────────────────────────────────
+        // The left chimney wall has a 14-px gap at the bottom; walk under it
+        // to enter the 24-px-wide shaft, then wall-jump to the top.
+        // Descend via two stepping stones back to ground level.
+        { x: 320, y: 168, w: 126, h:  12, color: '#3a5a3a' }, // entry floor
+        { x: 446, y:  50, w:   6, h: 104, color: '#5a6b88' }, // chimney left  (gap at bottom)
+        { x: 476, y:  50, w:   6, h: 118, color: '#5a6b88' }, // chimney right (flush to floor)
+        { x: 452, y:  44, w:  44, h:   6, color: '#5a7a5a' }, // chimney top
+        { x: 500, y:  80, w:  50, h:   8, color: '#5a7a5a' }, // descend ledge 1
+        { x: 560, y: 124, w:  50, h:   8, color: '#5a7a5a' }, // descend ledge 2
+        { x: 610, y: 168, w:  30, h:  12, color: '#3a5a3a' }, // exit floor → room 3
+
+        // ── ROOM 3 (x 640–959): PLATFORMS ────────────────────────────────
+        // Three ascending ledges. Missing any ledge is a death fall.
+        // Drop off the third ledge onto the exit floor to continue.
+        { x: 640, y: 168, w:  50, h:  12, color: '#3a5a3a' }, // entry floor
+        { x: 730, y: 148, w:  40, h:   8, color: '#5a7a5a' }, // ledge 1
+        { x: 810, y: 128, w:  40, h:   8, color: '#5a7a5a' }, // ledge 2
+        { x: 880, y: 108, w:  40, h:   8, color: '#5a7a5a' }, // ledge 3
+        { x: 920, y: 168, w:  40, h:  12, color: '#3a5a3a' }, // exit floor → room 4
+
+        // ── ROOM 4 (x 960–1279): CLIMB ───────────────────────────────────
+        // Jump the pit to reach wall A, grab (Z) and climb to the top platform.
+        // Dash (X) right 40 px to grab wall B, climb to the exit ledge.
+        // Descend via two steps back to ground level before room 5.
+        { x:  960, y: 168, w:  60, h:  12, color: '#3a5a3a' }, // entry floor
+        { x: 1040, y:  30, w:   8, h: 138, color: '#7a6b8a' }, // climbable wall A
+        { x: 1048, y:  30, w:  72, h:   8, color: '#5a7a5a' }, // top platform A (→ x 1120)
+        { x: 1160, y:  30, w:   8, h: 138, color: '#7a6b8a' }, // climbable wall B
+        { x: 1168, y:  30, w:  32, h:   8, color: '#5a7a5a' }, // top platform B (→ x 1200)
+        { x: 1200, y:  80, w:  50, h:   8, color: '#5a7a5a' }, // descend ledge 1
+        { x: 1250, y: 124, w:  30, h:   8, color: '#5a7a5a' }, // descend ledge 2
+
+        // ── ROOM 5 (x 1280–1599): SUMMIT ─────────────────────────────────
+        // Four ascending steps lead to the gold goal block. Reach it to win.
+        { x: 1280, y: 168, w:  60, h:  12, color: '#3a5a3a' }, // entry floor
+        { x: 1360, y: 140, w:  50, h:   8, color: '#5a7a5a' }, // step 1
+        { x: 1430, y: 110, w:  50, h:   8, color: '#5a7a5a' }, // step 2
+        { x: 1500, y:  80, w:  50, h:   8, color: '#5a7a5a' }, // step 3
+        { x: 1555, y:  50, w:  45, h:   8, color: '#5a7a5a' }, // summit
+        { x: 1592, y:   0, w:   8, h: 180, color: '#4a5570' }, // right boundary
+    ];
+
+    const pitShading = [
+        { x:   80, y: 168, w:  40, h: 12 }, // room 1 pit 1
+        { x:  200, y: 168, w:  40, h: 12 }, // room 1 pit 2
+        { x:  690, y: 168, w:  40, h: 12 }, // room 3 ground gap
+        { x: 1020, y: 168, w:  20, h: 12 }, // room 4 gap before wall A
+    ];
+
+    // Labels drawn in world-space.
+    const labels = [
+        { text: 'JUMP',      x:   84, y: 178 },
+        { text: 'JUMP',      x:  204, y: 178 },
+        { text: 'WALL JUMP', x:  444, y: 165 },
+        { text: 'STEP UP',   x:  732, y: 142 },
+        { text: 'STEP UP',   x:  812, y: 122 },
+        { text: 'STEP UP',   x:  882, y: 102 },
+        { text: 'GRAB+↑',   x: 1008, y:  90 },
+        { text: 'DASH→',    x: 1058, y:  24 },
+        { text: 'GRAB+↑',   x: 1128, y:  90 },
+        { text: 'SUMMIT',   x: 1546, y:  14 },
+    ];
+
+    // Goal block sits on top of the summit platform (room 5).
+    // Platform top is y=50; goal bottom is flush with it at y=50-12=38.
+    const GOAL = { x: 1566, y: 38, w: 12, h: 12, color: '#d4af37' };
+
+    // ── Run state ─────────────────────────────────────────────────────────────
+    let cameraX = 0;
+    let respawnRoom = 0;  // room index where player respawns if they die
+    let furthestRoom = 0; // furthest room reached (for progress bar)
+    const player = new CelestePlayer(roomSpawns[0].x, roomSpawns[0].y);
     let runStart = performance.now();
     let deaths = 0;
     let bestMs = null;
     let won = false;
     let winMs = 0;
 
-    function getRoom() { return rooms[currentRoom]; }
+    function getRoomIdx() {
+        return Math.max(0, Math.min(NUM_ROOMS - 1,
+            Math.floor((player.x + player.w / 2) / ROOM_W)));
+    }
 
     function respawn() {
-        const sp = getRoom().spawn;
-        player.reset(sp.x, sp.y);
+        player.reset(roomSpawns[respawnRoom].x, roomSpawns[respawnRoom].y);
         if (!won) deaths++;
     }
 
-    function advanceRoom() {
-        currentRoom++;
-        const sp = getRoom().spawn;
-        player.reset(sp.x, sp.y);
-    }
-
     function restartRun() {
-        currentRoom = 0;
-        player.reset(rooms[0].spawn.x, rooms[0].spawn.y);
+        respawnRoom = 0;
+        furthestRoom = 0;
+        player.reset(roomSpawns[0].x, roomSpawns[0].y);
         runStart = performance.now();
         deaths = 0;
         won = false;
     }
 
-    // ── Input ────────────────────────────────────────────────────────────────
+    // ── Input ─────────────────────────────────────────────────────────────────
     const keys = Object.create(null);
     const pressed = Object.create(null);
     const tracked = new Set([
@@ -211,63 +194,71 @@
             && player.y < GOAL.y + GOAL.h && player.y + player.h > GOAL.y;
     }
 
-    // ── Render ───────────────────────────────────────────────────────────────
+    // ── Render ────────────────────────────────────────────────────────────────
     function render() {
-        const room = getRoom();
+        const roomIdx = getRoomIdx();
+        const [skyTop, skyBot] = roomSkies[roomIdx];
 
-        // Sky gradient.
+        // Sky gradient (screen-space, redrawn each frame).
         const sky = ctx.createLinearGradient(0, 0, 0, H);
-        sky.addColorStop(0, '#2a3550');
-        sky.addColorStop(1, '#4a5a8a');
+        sky.addColorStop(0, skyTop);
+        sky.addColorStop(1, skyBot);
         ctx.fillStyle = sky;
         ctx.fillRect(0, 0, W, H);
 
-        // Pit warning shading.
+        // Shift canvas so world-space coords map to the current room.
+        ctx.save();
+        ctx.translate(-cameraX, 0);
+
+        // Pit shading.
         ctx.fillStyle = 'rgba(150, 40, 40, 0.25)';
-        for (const pit of room.pitShading) {
-            ctx.fillRect(pit.x, pit.y, pit.w, pit.h);
-        }
+        for (const pit of pitShading) ctx.fillRect(pit.x, pit.y, pit.w, pit.h);
 
         // Platforms.
-        for (const p of room.platforms) {
+        for (const p of platforms) {
             ctx.fillStyle = p.color;
             ctx.fillRect(p.x, p.y, p.w, p.h);
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.12)';
+            ctx.fillStyle = 'rgba(255,255,255,0.12)';
             ctx.fillRect(p.x, p.y, p.w, 1); // top-edge highlight
         }
 
-        // Pulsing goal block (room 5 only).
-        if (currentRoom === rooms.length - 1) {
-            const pulse = 0.6 + 0.4 * Math.sin(performance.now() / 250);
-            ctx.fillStyle = GOAL.color;
-            ctx.globalAlpha = pulse;
-            ctx.fillRect(GOAL.x, GOAL.y, GOAL.w, GOAL.h);
-            ctx.globalAlpha = 1;
-            ctx.fillStyle = 'rgba(0,0,0,0.35)';
-            ctx.fillRect(GOAL.x, GOAL.y, GOAL.w, 1);
+        // Faint room-boundary dividers.
+        ctx.strokeStyle = 'rgba(255,255,255,0.10)';
+        ctx.lineWidth = 1;
+        for (let r = 1; r < NUM_ROOMS; r++) {
+            ctx.beginPath();
+            ctx.moveTo(r * ROOM_W, 0);
+            ctx.lineTo(r * ROOM_W, H);
+            ctx.stroke();
         }
+
+        // Pulsing goal block.
+        const pulse = 0.6 + 0.4 * Math.sin(performance.now() / 250);
+        ctx.fillStyle = GOAL.color;
+        ctx.globalAlpha = pulse;
+        ctx.fillRect(GOAL.x, GOAL.y, GOAL.w, GOAL.h);
+        ctx.globalAlpha = 1;
 
         player.draw(ctx);
 
-        // Room name (top-left).
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.50)';
-        ctx.font = '7px monospace';
-        ctx.fillText(room.name, 10, 10);
-
-        // Progress bar: one dot per room, gold = reached.
-        for (let i = 0; i < rooms.length; i++) {
-            ctx.fillStyle = i <= currentRoom ? '#d4af37' : 'rgba(255,255,255,0.20)';
-            ctx.fillRect(10 + i * 10, 14, 7, 3);
-        }
-
         // Section labels.
-        ctx.fillStyle = 'rgba(230, 230, 230, 0.55)';
+        ctx.fillStyle = 'rgba(220,220,220,0.55)';
         ctx.font = '6px monospace';
-        for (const lbl of room.labels) {
-            ctx.fillText(lbl.text, lbl.x, lbl.y);
+        for (const lbl of labels) ctx.fillText(lbl.text, lbl.x, lbl.y);
+
+        ctx.restore(); // end world-space translation
+
+        // ── HUD (screen-space) ──────────────────────────────────────────────
+        ctx.fillStyle = 'rgba(255,255,255,0.50)';
+        ctx.font = '7px monospace';
+        ctx.fillText(roomNames[roomIdx], 10, 10);
+
+        // Progress dots — gold for reached rooms.
+        for (let i = 0; i < NUM_ROOMS; i++) {
+            ctx.fillStyle = i <= furthestRoom ? '#d4af37' : 'rgba(255,255,255,0.20)';
+            ctx.fillRect(10 + i * 12, 14, 8, 3);
         }
 
-        // Win screen.
         if (won) {
             ctx.fillStyle = 'rgba(0,0,0,0.65)';
             ctx.fillRect(55, 60, 210, 60);
@@ -282,7 +273,7 @@
         }
     }
 
-    // ── Loop ─────────────────────────────────────────────────────────────────
+    // ── Loop ──────────────────────────────────────────────────────────────────
     let last = performance.now();
     let accum = 0;
     let stepCount = 0;
@@ -290,19 +281,19 @@
     let measuredFps = 60;
 
     function step() {
-        const room = getRoom();
         const input = readInput();
-        player.update(input, room.platforms, FIXED_DT);
+        player.update(input, platforms, FIXED_DT);
 
-        // Room transition: player walks off the right edge.
-        if (!won && player.x + player.w >= W) {
-            if (currentRoom < rooms.length - 1) {
-                advanceRoom();
-            }
+        // Track current room while the player is alive (used for respawn).
+        if (player.y <= DEATH_Y) {
+            respawnRoom = getRoomIdx();
+            furthestRoom = Math.max(furthestRoom, respawnRoom);
         }
 
-        // Goal check (last room only).
-        if (!won && currentRoom === rooms.length - 1 && playerOverlapsGoal()) {
+        // Snap camera to current room (Celeste-style room-locked camera).
+        cameraX = getRoomIdx() * ROOM_W;
+
+        if (!won && playerOverlapsGoal()) {
             won = true;
             winMs = performance.now() - runStart;
             if (bestMs === null || winMs < bestMs) bestMs = winMs;
@@ -335,7 +326,7 @@
 
         const elapsed = won ? winMs : (performance.now() - runStart);
         statusEl.textContent =
-            `${rooms[currentRoom].name}  ` +
+            `${roomNames[getRoomIdx()]}  ` +
             `time=${(elapsed / 1000).toFixed(2)}s  deaths=${deaths}  ` +
             (bestMs !== null ? `best=${(bestMs / 1000).toFixed(2)}s  ` : '') +
             `${player.state}  ${measuredFps.toFixed(0)} fps`;
