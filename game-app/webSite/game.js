@@ -209,6 +209,13 @@
         return Math.max(0, Math.min(NUM_ROOMS - 1, Math.floor(player.x / ROOM_W)));
     }
     function respawn() {
+        if (aiEnabled && typeof NeuralAI !== 'undefined') {
+            NeuralAI.onDeath();
+            // AI always restarts from room 0 for consistent training episodes
+            respawnRoom = 0;
+            NeuralAI.reset(roomSpawns[0].x);
+            updateAIBtn();
+        }
         player.reset(roomSpawns[respawnRoom].x, roomSpawns[respawnRoom].y);
         if (!won) deaths++;
     }
@@ -219,142 +226,40 @@
         deaths = 0; won = false;
     }
 
-    // ── AI Player Controller ─────────────────────────────────────────────────
+    // ── AI Player Controller (neural — delegates to NeuralAI in ai-neural.js) ─
     let aiEnabled = false;
 
-    const AI = {
-        stuckFrames: 0,
-        lastX: 0,
-        jumpHold: 0,       // frames remaining to hold jump
-        chimneyTimer: 0,
-        climbTimer: 0,
-
-        // Probe any rect against current platforms
-        hits(x, y, w, h) {
-            for (const p of platforms)
-                if (x < p.x + p.w && x + w > p.x && y < p.y + p.h && y + h > p.y) return true;
-            return false;
-        },
-
-        compute() {
-            const PW = player.w, PH = player.h;
-            const px = player.x, py = player.y;
-
-            // ── Sensors ──────────────────────────────────────────────────────
-            const onGround    = this.hits(px, py + PH, PW, 2);
-            const wallRight   = this.hits(px + PW,     py + 2, 2, PH - 4);
-            const wallLeft    = this.hits(px - 2,      py + 2, 2, PH - 4);
-            const inChimney   = wallLeft && wallRight && !onGround;
-
-            // Ground continuity: check 3 distances ahead at foot level
-            const groundNear  = this.hits(px + PW + 4,  py + PH, 4, 8);
-            const groundMid   = this.hits(px + PW + 18, py + PH, 4, 8);
-            const groundFar   = this.hits(px + PW + 32, py + PH, 4, 8);
-            const gapAhead    = !groundNear && !groundMid && !groundFar;
-
-            // Platform reachable above+right (for elevated stepping stones)
-            const platformAbove = this.hits(px + PW, py - 70, 80, 70);
-
-            // Stuck detection
-            const moved = Math.abs(px - this.lastX) > 0.5;
-            this.stuckFrames = moved ? 0 : this.stuckFrames + 1;
-            this.lastX = px;
-
-            // ── Decision ─────────────────────────────────────────────────────
-            let moveX = 1, moveY = 0;
-            let jumpPressed = false, jumpHeld = false;
-            let dashPressed = false, grabHeld = false;
-
-            // Recovery: stuck for 2 seconds → dash + jump
-            if (this.stuckFrames > 120) {
-                this.stuckFrames = 0;
-                this.jumpHold = 10;
-                return { moveX: 1, moveY: -1, jumpPressed: true, jumpHeld: true, dashPressed: true, grabHeld: false };
-            }
-
-            // ── Chimney: alternating wall-jumps ───────────────────────────────
-            if (inChimney) {
-                this.chimneyTimer++;
-                this.climbTimer = 0;
-                const PHASE = 18; // frames per half-cycle
-                const phase = Math.floor(this.chimneyTimer / PHASE) % 2;
-                jumpPressed = (this.chimneyTimer % PHASE === 1);
-                return {
-                    moveX: phase === 0 ? -1 : 1,
-                    moveY: -1,
-                    jumpPressed,
-                    jumpHeld: true,
-                    dashPressed: false,
-                    grabHeld: false
-                };
-            }
-            this.chimneyTimer = 0;
-
-            // ── Wall climbing: right wall present, need to go up ──────────────
-            // Detect a tall wall: wall directly right AND platform surface above it
-            const tallWall = wallRight && this.hits(px + PW, py - 60, 4, 60);
-            if (tallWall && !onGround) {
-                this.climbTimer++;
-                // Grab the wall, move up
-                if (this.climbTimer < 80) {
-                    return { moveX: 1, moveY: -1, jumpPressed: false, jumpHeld: false, dashPressed: false, grabHeld: true };
-                }
-                // Climbed long enough — jump off to the right
-                this.climbTimer = 0;
-                this.jumpHold = 12;
-                return { moveX: 1, moveY: 0, jumpPressed: true, jumpHeld: true, dashPressed: false, grabHeld: false };
-            }
-            this.climbTimer = 0;
-
-            // ── Normal / grounded ─────────────────────────────────────────────
-            if (onGround) {
-                this.jumpHold = 0;
-
-                if (wallRight) {
-                    // Walk into a wall on the ground → jump + grab to climb
-                    this.jumpHold = 18;
-                    return { moveX: 1, moveY: -1, jumpPressed: true, jumpHeld: true, dashPressed: false, grabHeld: true };
-                }
-
-                if (gapAhead) {
-                    // Gap coming — run-jump
-                    this.jumpHold = 16;
-                    jumpPressed = true;
-                }
-
-                jumpHeld = this.jumpHold > 0;
-                if (this.jumpHold > 0) this.jumpHold--;
-
-            } else {
-                // ── Airborne ─────────────────────────────────────────────────
-                jumpHeld = this.jumpHold > 0;
-                if (this.jumpHold > 0) this.jumpHold--;
-
-                if (wallRight) {
-                    // Touching a right wall while airborne → grab + climb
-                    grabHeld = true;
-                    moveY = -1;
-                }
-
-                // Wall to the left but not right (bounced off something)
-                if (wallLeft && !wallRight) moveX = 1;
-            }
-
-            return { moveX, moveY, jumpPressed, jumpHeld, dashPressed, grabHeld };
-        }
-    };
+    function initNeuralAI() {
+        if (typeof NeuralAI === 'undefined') return;
+        NeuralAI.init(roomSpawns[0].x, GOAL.x + GOAL.w);
+    }
 
     // Toggle AI control (called from button)
     window.toggleAIControl = function () {
         aiEnabled = !aiEnabled;
-        const btn = document.getElementById('ai-control-btn');
-        if (btn) {
-            btn.textContent = aiEnabled ? '🤖 AI Control: ON' : '🎮 AI Control: OFF';
-            btn.style.background = aiEnabled ? '#1a7a1a' : '#5a2a80';
-        }
-        // Reset stuck state when enabling
-        if (aiEnabled) { AI.stuckFrames = 0; AI.jumpHold = 0; AI.chimneyTimer = 0; AI.climbTimer = 0; }
+        if (aiEnabled) initNeuralAI();
+        updateAIBtn();
     };
+
+    window.resetAI = function () {
+        if (typeof NeuralAI !== 'undefined') NeuralAI.resetWeights();
+        initNeuralAI();
+        restartRun();
+        updateAIBtn();
+    };
+
+    function updateAIBtn() {
+        const btn = document.getElementById('ai-control-btn');
+        if (!btn) return;
+        if (aiEnabled) {
+            const gen = (typeof NeuralAI !== 'undefined') ? NeuralAI.generation : 0;
+            btn.textContent = `🧠 Neural AI: ON (Gen ${gen})`;
+            btn.style.background = '#1a7a1a';
+        } else {
+            btn.textContent = '🧠 Neural AI: OFF';
+            btn.style.background = '#5a2a80';
+        }
+    }
 
     // ── Input ────────────────────────────────────────────────────────────────
     const keys    = Object.create(null);
@@ -375,7 +280,8 @@
     window.addEventListener('keyup', (e) => { if (tracked.has(e.code)) keys[e.code] = false; });
 
     function readInput() {
-        if (aiEnabled) return AI.compute();
+        if (aiEnabled && typeof NeuralAI !== 'undefined')
+            return NeuralAI.compute(player, platforms, GOAL);
         const moveX = (keys['ArrowRight'] ? 1 : 0) - (keys['ArrowLeft'] ? 1 : 0);
         const moveY = (keys['ArrowDown']  ? 1 : 0) - (keys['ArrowUp']   ? 1 : 0);
         return {
@@ -393,7 +299,7 @@
         applyLevel(buildLevel(seed), seed);
         bestMs = null;
         restartRun();
-        AI.stuckFrames = 0; AI.jumpHold = 0; AI.chimneyTimer = 0; AI.climbTimer = 0;
+        if (typeof NeuralAI !== 'undefined') NeuralAI.reset(roomSpawns[0].x);
     };
     window.loadSeed = function () {
         const input = document.getElementById('seed-input');
@@ -436,13 +342,19 @@
             ctx.globalAlpha = 1;
         }
 
-        // AI sensor overlay (debug dots when AI is on)
-        if (aiEnabled) {
-            const px = player.x, py = player.y, PW = player.w, PH = player.h;
-            ctx.fillStyle = 'rgba(0,255,0,0.5)';
-            ctx.fillRect(px + PW + 4,  py + PH, 4, 3); // ground near
-            ctx.fillRect(px + PW + 18, py + PH, 4, 3); // ground mid
-            ctx.fillRect(px + PW + 32, py + PH, 4, 3); // ground far
+        // Neural AI raycast overlay
+        if (aiEnabled && typeof NeuralAI !== 'undefined') {
+            const cx = player.x + player.w / 2;
+            const cy = player.y + player.h / 2;
+            ctx.lineWidth = 0.5;
+            for (const [dx, dy] of NeuralAI.RAY_DIRS) {
+                const len = Math.hypot(dx, dy);
+                ctx.strokeStyle = 'rgba(50,255,120,0.22)';
+                ctx.beginPath();
+                ctx.moveTo(cx, cy);
+                ctx.lineTo(cx + (dx / len) * NeuralAI.RAY_LEN, cy + (dy / len) * NeuralAI.RAY_LEN);
+                ctx.stroke();
+            }
         }
 
         player.draw(ctx);
@@ -462,9 +374,13 @@
             ctx.fillStyle = i <= furthestRoom ? '#d4af37' : 'rgba(255,255,255,0.20)';
             ctx.fillRect(10 + i * 12, 14, 8, 3);
         }
-        if (aiEnabled) {
+        if (aiEnabled && typeof NeuralAI !== 'undefined') {
+            const ai = NeuralAI;
             ctx.fillStyle = '#44ff44'; ctx.font = 'bold 7px monospace';
-            ctx.fillText('AI', W - 20, 10);
+            ctx.fillText('NEURAL AI', W - 60, 10);
+            ctx.font = '6px monospace';
+            ctx.fillText(`Gen ${ai.generation}  Run ${ai.runCount}`, W - 60, 18);
+            ctx.fillText(`Best ${(ai.globalBestFit * 100).toFixed(0)}%`, W - 60, 25);
         }
 
         if (won) {
@@ -495,8 +411,12 @@
         if (!won && playerOverlapsGoal()) {
             won = true; winMs = performance.now() - runStart;
             if (bestMs === null || winMs < bestMs) bestMs = winMs;
+            if (aiEnabled && typeof NeuralAI !== 'undefined') {
+                NeuralAI.onGoal();
+                updateAIBtn();
+            }
         }
-        if (player.y > DEATH_Y) { respawn(); if (aiEnabled) { AI.stuckFrames = 0; AI.jumpHold = 0; } }
+        if (player.y > DEATH_Y) respawn();
 
         for (const k of Object.keys(pressed)) delete pressed[k];
         stepCount++;

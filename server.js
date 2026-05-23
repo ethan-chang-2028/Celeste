@@ -100,9 +100,10 @@ const server = http.createServer(async (req, res) => {
 
         // 3. Serve static assets from webSite folder
         const webSiteAssets = {
-            '/app.js':       { file: 'app.js',       type: 'application/javascript' },
-            '/register.js':  { file: 'register.js',  type: 'application/javascript' },
-            '/style.css':    { file: 'style.css',    type: 'text/css' },
+            '/app.js':        { file: 'app.js',        type: 'application/javascript' },
+            '/register.js':   { file: 'register.js',   type: 'application/javascript' },
+            '/ai-neural.js':  { file: 'ai-neural.js',  type: 'application/javascript' },
+            '/style.css':     { file: 'style.css',     type: 'text/css' },
         };
         if (req.method === 'GET' && webSiteAssets[req.url]) {
             const { file, type } = webSiteAssets[req.url];

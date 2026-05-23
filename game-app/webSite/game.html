@@ -53,7 +53,8 @@
             <input type="number" id="seed-input" placeholder="Seed #" min="0" max="999999">
             <button onclick="loadSeed()">Load Seed</button>
             <span id="map-seed">Seed: —</span>
-            <button id="ai-control-btn" onclick="toggleAIControl()" style="background:#5a2a80;">&#127918; AI Control: OFF</button>
+            <button id="ai-control-btn" onclick="toggleAIControl()" style="background:#5a2a80;">&#129504; Neural AI: OFF</button>
+            <button onclick="resetAI()" style="background:#7a2020;" title="Wipe learned weights and start from scratch">&#128260; Reset AI</button>
         </div>
 
         <canvas id="game-canvas" width="320" height="180"></canvas>
@@ -71,6 +72,7 @@
     </main>
 
     <script src="/player.js"></script>
+    <script src="/ai-neural.js"></script>
     <script src="/game.js"></script>
 </body>
 </html>
