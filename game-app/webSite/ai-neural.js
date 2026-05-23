@@ -1,7 +1,7 @@
-// ai-neural.js
-// JavaScript port of game-app/Native/Engine/Ai/ai_learning.hpp
+// ai-neural.js  ← PRIMARY AI IMPLEMENTATION
 // Neural net: 17 inputs → 14 hidden (ReLU) → 6 outputs (sigmoid)
 // Training: neuroevolution (GA) + real-time ES weight adaptation + stuck detection
+// Architecture reference: game-app/Native/Engine/Ai/ai_learning.hpp
 
 (function (global) {
     'use strict';
