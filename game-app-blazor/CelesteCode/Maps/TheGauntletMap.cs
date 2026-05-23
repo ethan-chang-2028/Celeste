@@ -1,24 +1,19 @@
-// TheGauntletMap.cs — "The Gauntlet"
+// TheGauntletMap.cs — "The Gauntlet" split into 6 rooms (640 × 180 px each).
 //
-// A vertical climbing level (640 × 800 px) that uses every entity type
-// introduced in GameEntities.cs exactly once or more.
+// Room layout (bottom to top):
+//   Room1_EntryHall  — Spring, Spikes, DashCrystal, JumpThrough, Strawberry
+//   Room2_KeyRoom    — Key, Torches, CrumbleBlock, Bumper, EnticeBlade
+//   Room3_LockRoom   — Lock, TouchSwitches, DashBlock, FallingBlock
+//   Room4_CrushZone  — Kevin, DashSwitch, RedBooster, WallSpring
+//   Room5_FlyZone    — FlyFeather, Bumpers, CircularBlade, Strawberry
+//   Room6_Summit     — GoldenStrawberry
 //
-// ┌─────────────────────────────────────────────────────────────────┐
-// │  LAYER 6 · Summit     (y  0 – 160)   Golden Strawberry         │
-// │  LAYER 5 · Fly Zone   (y 160 – 300)  Feather + Bumpers + Blade │
-// │  LAYER 4 · Crush Zone (y 300 – 440)  Kevin + DashSwitch + Red  │
-// │  LAYER 3 · Lock Room  (y 440 – 560)  Lock + TouchSwitch + Gate │
-// │  LAYER 2 · Key Room   (y 560 – 700)  Key + Torches + Crumble   │
-// │  LAYER 1 · Ground     (y 700 – 800)  Start + Spring + Spikes   │
-// └─────────────────────────────────────────────────────────────────┘
-//
-// Activation chains
-//   "torch1"  – light both BlueTorches in Layer 2
-//               → TouchSwitchGate at Layer 2/3 border slides up
-//   "sw1"     – step on both TouchSwitches in Layer 3
-//               → TouchSwitchGate inside Layer 3 slides up
-//   "dsw1"    – dash into DashSwitch in Layer 4
-//               → TouchSwitchGate in Layer 4 slides right (reveals RedBooster)
+// Each room is exactly 640 × 180 px with:
+//   - A solid ceiling strip at y=0 (8px) — also the "door" that the player passes
+//   - A solid floor at y=172 (8px)
+//   - Left / right walls (8px each)
+//   - A RoomTransition at the top edge (y=0, full width) that loads the next room
+//     spawning the player just below the floor of that room.
 //
 using System;
 using Microsoft.Xna.Framework;
@@ -28,162 +23,235 @@ namespace Celeste
 {
     public static class TheGauntletMap
     {
-        public const int W = 640;
-        public const int H = 800;
+        public const int W  = 640;
+        public const int H  = 180;
+        public const int FL = 172;   // y of the floor platform
 
-        public static Level Build()
+        // ── Monolithic single-room build (backwards compat) ──────────────────
+        public static Level Build() => BuildRoom1();
+
+        // ── Room 1 — Entry Hall ───────────────────────────────────────────────
+        // Learn: spring, floor spikes, dash crystal, one-way shelf, strawberry.
+        // Exit: top-centre gap above the right ledge → Room2_KeyRoom
+        public static Level BuildRoom1()
         {
             return new LevelBuilder(W, H)
+                // Boundary
+                .AddPlatform(0,    0,   8,   H)       // left wall
+                .AddPlatform(W-8,  0,   8,   H)       // right wall
+                .AddPlatform(0,    0,   W,   8)       // ceiling
+                .AddPlatform(0,    FL,  W,   8)       // floor
 
-                // ── World boundaries ──────────────────────────────────────
-                .AddPlatform(0,       0,   8,   H)      // left wall
-                .AddPlatform(W - 8,   0,   8,   H)      // right wall
-                .AddPlatform(0,       0,   W,   8)      // ceiling
-
-                // ══════════════════════════════════════════════════════════
-                // LAYER 1 — Ground Floor   (y 700 – 800)
-                // Learn: spring, spikes, dash crystal, jumpthrough, strawberry
-                // ══════════════════════════════════════════════════════════
-                .AddPlatform(0, 768, W, 32)             // ground
-
-                // Floor spring — first launch upward
-                .AddSpring(56, 768, Spring.Orientations.Floor)
+                // Spring launches you off the floor
+                .AddSpring(56, FL, Spring.Orientations.Floor)
 
                 // Spike bed just past the spring
-                .AddSpike(128, 764, 64, SpikeHazard.Directions.Up)
+                .AddSpike(128, FL-4, 64, SpikeHazard.Directions.Up)
 
-                // Dash crystal — grab it before the first gap
-                .AddDashCrystal(272, 752)
+                // Dash crystal before the gap
+                .AddDashCrystal(272, FL-16)
 
-                // One-way platform shelf with a strawberry reward
-                .AddJumpThrough(360, 720, 100)
-                .AddStrawberry(410, 710)
+                // One-way shelf with a strawberry reward
+                .AddJumpThrough(360, FL-48, 100)
+                .AddStrawberry(410, FL-58)
 
-                // Raised solid ledge on the right, walled by right-facing spikes
-                .AddPlatform(480, 704, 100, 8)
-                .AddSpike(572, 704, 64, SpikeHazard.Directions.Right)
+                // Raised solid ledge on the right
+                .AddPlatform(480, FL-64, 100, 8)
+                .AddSpike(572, FL-64, 64, SpikeHazard.Directions.Right)
 
-                // Player start
-                .AddPlayer(24, 750)
+                // Player starts here
+                .AddPlayer(24, FL-20)
 
-                // ══════════════════════════════════════════════════════════
-                // LAYER 2 — Key Room   (y 560 – 700)
-                // Collect the key, light both blue torches to open the gate
-                // ══════════════════════════════════════════════════════════
-                .AddPlatform(0,   652, 240, 8)          // left shelf
-                .AddPlatform(390, 652, 242, 8)          // right shelf
+                // Transition zone at the ceiling — player must reach here
+                // (gap in the ceiling wall, 64px wide above the right ledge)
+                .AddRoomTransition(490, 0, 80, 12,
+                                   "Room2_KeyRoom", 24, FL-20)
+                .Build();
+        }
 
-                // Key sits on the left shelf
-                .AddKey(80, 644)
+        // ── Room 2 — Key Room ─────────────────────────────────────────────────
+        // Collect the key; light both blue torches to open the gate above.
+        public static Level BuildRoom2()
+        {
+            return new LevelBuilder(W, H)
+                // Boundary
+                .AddPlatform(0,    0,   8,   H)
+                .AddPlatform(W-8,  0,   8,   H)
+                .AddPlatform(0,    0,   W,   8)
+                .AddPlatform(0,    FL,  W,   8)
 
-                // Left-wall spring bounces you toward the right shelf
-                .AddSpring(8, 618, Spring.Orientations.WallLeft)
+                // Left and right shelves
+                .AddPlatform(0,   FL-48, 240, 8)
+                .AddPlatform(390, FL-48, 242, 8)
 
-                // Crumble bridge spanning the central gap
-                .AddCrumbleBlock(148, 620, 96)
+                // Key on the left shelf
+                .AddKey(80, FL-56)
 
-                // Bumper in the middle — use it to arc across the gap
-                .AddBumper(316, 638)
+                // Left-wall spring
+                .AddSpring(8, FL-80, Spring.Orientations.WallLeft)
 
-                // Entice blade patrols left-to-right across the room
-                .AddEnticeBladeLinear(120, 608, 520, 608, 75f)
+                // Crumble bridge across the gap
+                .AddCrumbleBlock(148, FL-72, 96)
 
-                // Two blue torches — light both to open the torch gate above
-                .AddBlueTorch(36,  644, "torch1")
-                .AddBlueTorch(596, 644, "torch1")
+                // Bumper in the middle
+                .AddBumper(316, FL-54)
 
-                // Torch gate: blocks the passage up until both torches are lit
-                //   (TouchSwitchGate now also listens to BlueTorch.OnAllLit)
-                .AddTouchSwitchGate(276, 564, 88, 8, "torch1",
+                // Entice blade patrols left-to-right
+                .AddEnticeBladeLinear(120, FL-100, 520, FL-100, 75f)
+
+                // Two blue torches — light both to open the torch gate
+                .AddBlueTorch(36,  FL-56, "torch1")
+                .AddBlueTorch(596, FL-56, "torch1")
+
+                // Torch gate: blocks passage upward until both torches are lit
+                .AddTouchSwitchGate(276, 56, 88, 8, "torch1",
                                     new Vector2(0, -1), 48f)
 
-                // ══════════════════════════════════════════════════════════
-                // LAYER 3 — Lock & Switch Room   (y 440 – 560)
-                // Use the key → lock opens; step on both touch switches → gate
-                // ══════════════════════════════════════════════════════════
-                .AddPlatform(0,   540, 180, 8)          // left platform
-                .AddPlatform(248, 500, 100, 8)          // centre platform
-                .AddPlatform(428, 540, 204, 8)          // right platform
+                // Transition into room 3 — only reachable once the gate opens
+                .AddRoomTransition(8, 0, W-16, 12,
+                                   "Room3_LockRoom", 24, FL-20)
+                .Build();
+        }
 
-                // Lock blocks the narrow passage between left and centre
-                .AddLock(178, 492, 12, 48)
+        // ── Room 3 — Lock Room ────────────────────────────────────────────────
+        // Use the key to open the lock; activate both touch switches to raise gate.
+        public static Level BuildRoom3()
+        {
+            return new LevelBuilder(W, H)
+                // Boundary
+                .AddPlatform(0,    0,   8,   H)
+                .AddPlatform(W-8,  0,   8,   H)
+                .AddPlatform(0,    0,   W,   8)
+                .AddPlatform(0,    FL,  W,   8)
 
-                // One-way shelf above the centre platform
-                .AddJumpThrough(296, 468, 80)
+                // Three platforms at different heights
+                .AddPlatform(0,   FL-40, 180, 8)
+                .AddPlatform(248, FL-80, 100, 8)
+                .AddPlatform(428, FL-40, 204, 8)
 
-                // Touch switches on the outer platforms
-                .AddTouchSwitch(80,  532, "sw1")
-                .AddTouchSwitch(508, 532, "sw1")
+                // Lock between left and centre platforms
+                .AddLock(178, FL-92, 12, 48)
 
-                // Gate slides up when both touch switches are activated
-                .AddTouchSwitchGate(288, 452, 60, 8, "sw1",
+                // One-way shelf above centre
+                .AddJumpThrough(296, FL-108, 80)
+
+                // Touch switches on outer platforms
+                .AddTouchSwitch(80,  FL-48, "sw1")
+                .AddTouchSwitch(508, FL-48, "sw1")
+
+                // Gate slides up when both switches activate
+                .AddTouchSwitchGate(288, 44, 60, 8, "sw1",
                                     new Vector2(0, -1), 52f)
 
-                // Dash block — break it to clear an alternate route right
-                .AddDashBlock(370, 490, 40, 32)
+                // Dash block — break it for an alternate right route
+                .AddDashBlock(370, FL-90, 40, 32)
 
                 // Falling block — step on it fast!
-                .AddFallingBlock(450, 488, 104, 12)
+                .AddFallingBlock(450, FL-92, 104, 12)
 
-                // ══════════════════════════════════════════════════════════
-                // LAYER 4 — Crush Zone   (y 300 – 440)
-                // Kevin guards the left; dash switch opens the right path
-                // ══════════════════════════════════════════════════════════
-                .AddPlatform(0,   420, 208, 8)          // left platform
-                .AddPlatform(268, 380, 100, 8)          // centre platform
-                .AddPlatform(448, 420, 184, 8)          // right platform
+                // Transition at the top
+                .AddRoomTransition(8, 0, W-16, 12,
+                                   "Room4_CrushZone", 24, FL-20)
+                .Build();
+        }
 
-                // Kevin the crush block — dash him to the right to clear path
-                .AddKevin(80, 372, 56, 16, Kevin.Axes.Horizontal)
+        // ── Room 4 — Crush Zone ───────────────────────────────────────────────
+        // Kevin guards left; hit the dash switch to open the right path.
+        public static Level BuildRoom4()
+        {
+            return new LevelBuilder(W, H)
+                // Boundary
+                .AddPlatform(0,    0,   8,   H)
+                .AddPlatform(W-8,  0,   8,   H)
+                .AddPlatform(0,    0,   W,   8)
+                .AddPlatform(0,    FL,  W,   8)
 
-                // Dash switch on the centre platform → opens the gate right
-                .AddDashSwitch(326, 372, "dsw1")
+                // Three platforms
+                .AddPlatform(0,   FL-60, 208, 8)
+                .AddPlatform(268, FL-100, 100, 8)
+                .AddPlatform(448, FL-60, 184, 8)
 
-                // Gate blocks the passage to the right platform until hit
-                .AddTouchSwitchGate(428, 380, 8, 40, "dsw1",
+                // Kevin on the left platform
+                .AddKevin(80, FL-108, 56, 16, Kevin.Axes.Horizontal)
+
+                // Dash switch on centre platform
+                .AddDashSwitch(326, FL-108, "dsw1")
+
+                // Gate blocks the passage to the right platform
+                .AddTouchSwitchGate(428, FL-100, 8, 40, "dsw1",
                                     new Vector2(1, 0), 56f)
 
-                // Red booster on the right platform — blast upward
-                .AddRedBooster(532, 408)
+                // Red booster on the right platform
+                .AddRedBooster(532, FL-68)
 
-                // Wall spring on the right wall — alternate bounce path
-                .AddSpring(632, 368, Spring.Orientations.WallRight)
+                // Wall spring on the right wall
+                .AddSpring(632, FL-100, Spring.Orientations.WallRight)
 
-                // Ceiling spikes menace the left platform
-                .AddSpike(8, 308, 200, SpikeHazard.Directions.Down)
+                // Ceiling spikes over the left platform
+                .AddSpike(8, 8, 200, SpikeHazard.Directions.Down)
 
-                // ══════════════════════════════════════════════════════════
-                // LAYER 5 — Fly Zone   (y 160 – 300)
-                // Grab the feather and fly through bumpers and the orbital blade
-                // ══════════════════════════════════════════════════════════
-                .AddPlatform(0,   280, 100, 8)          // platform A
-                .AddPlatform(180, 240, 100, 8)          // platform B
-                .AddPlatform(388, 280, 100, 8)          // platform C
-                .AddPlatform(548, 240,  84, 8)          // platform D
+                // Transition at the top
+                .AddRoomTransition(8, 0, W-16, 12,
+                                   "Room5_FlyZone", 24, FL-20)
+                .Build();
+        }
 
-                // Fly feather — star-fly state for the rest of this layer
-                .AddFlyFeather(330, 232)
+        // ── Room 5 — Fly Zone ─────────────────────────────────────────────────
+        // Grab the feather and fly through bumpers and the orbital blade.
+        public static Level BuildRoom5()
+        {
+            return new LevelBuilder(W, H)
+                // Boundary
+                .AddPlatform(0,    0,   8,   H)
+                .AddPlatform(W-8,  0,   8,   H)
+                .AddPlatform(0,    0,   W,   8)
+                .AddPlatform(0,    FL,  W,   8)
 
-                // Two bumpers flank the flight corridor
-                .AddBumper(140, 208)
-                .AddBumper(500, 208)
+                // Four landing platforms
+                .AddPlatform(0,   FL-60,  100, 8)
+                .AddPlatform(180, FL-100, 100, 8)
+                .AddPlatform(388, FL-60,  100, 8)
+                .AddPlatform(548, FL-100,  84, 8)
 
-                // Circular entice blade orbiting the centre void
-                .AddEnticeBladeCircular(320, 208, 52f, MathHelper.Pi * 0.85f)
+                // Fly feather — star-fly state
+                .AddFlyFeather(330, FL-108)
 
-                // Second strawberry — floating on platform D
-                .AddStrawberry(590, 232)
+                // Two bumpers flanking the corridor
+                .AddBumper(140, FL-130)
+                .AddBumper(500, FL-130)
 
-                // ══════════════════════════════════════════════════════════
-                // LAYER 6 — Summit   (y 0 – 160)
-                // Reach the pedestal and collect the golden strawberry
-                // ══════════════════════════════════════════════════════════
-                .AddPlatform(0,   140, W,  8)           // summit floor
-                .AddPlatform(280,  80, 80, 8)           // final pedestal
+                // Circular blade orbiting the centre
+                .AddEnticeBladeCircular(320, FL-120, 52f, MathHelper.Pi * 0.85f)
+
+                // Second strawberry on platform D
+                .AddStrawberry(590, FL-110)
+
+                // Transition at the top — fly up through the open ceiling
+                .AddRoomTransition(8, 0, W-16, 12,
+                                   "Room6_Summit", 320, FL-20)
+                .Build();
+        }
+
+        // ── Room 6 — Summit ───────────────────────────────────────────────────
+        // Reach the pedestal and collect the golden strawberry.
+        public static Level BuildRoom6()
+        {
+            return new LevelBuilder(W, H)
+                // Boundary
+                .AddPlatform(0,   0,   8,   H)
+                .AddPlatform(W-8, 0,   8,   H)
+                .AddPlatform(0,   FL,  W,   8)   // floor; no ceiling — open sky
+
+                // Summit floor step
+                .AddPlatform(0, FL-40, W, 8)
+
+                // Narrow final pedestal
+                .AddPlatform(280, FL-100, 80, 8)
 
                 // Golden strawberry — the ultimate reward
-                .AddGoldenStrawberry(320, 64)
+                .AddGoldenStrawberry(320, FL-116)
 
+                // No upward transition; the level ends here
                 .Build();
         }
     }

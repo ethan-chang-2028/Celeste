@@ -235,6 +235,16 @@ namespace Celeste
             return this;
         }
 
+        // ── Room Transitions ──────────────────────────────────────────────────
+
+        public LevelBuilder AddRoomTransition(float x, float y, float w, float h,
+                                              string targetRoom, float spawnX, float spawnY)
+        {
+            level.Add(new RoomTransition(new Vector2(x, y), w, h,
+                                         targetRoom, new Vector2(spawnX, spawnY)));
+            return this;
+        }
+
         // ── Player ────────────────────────────────────────────────────────────
 
         public LevelBuilder AddPlayer(float x, float y,
@@ -250,16 +260,54 @@ namespace Celeste
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // LEVEL MANAGER — Loads and manages the active Level
+    // LEVEL MANAGER — Loads and manages the active Level, with multi-room support
     // ══════════════════════════════════════════════════════════════════════════
     public class LevelManager
     {
         public Level Current { get; private set; }
 
+        // Room registry: name → factory function that builds the Level
+        private readonly Dictionary<string, Func<Level>> rooms =
+            new Dictionary<string, Func<Level>>(StringComparer.OrdinalIgnoreCase);
+
+        public LevelManager()
+        {
+            RoomTransition.OnTransition += TransitionToRoom;
+        }
+
+        // Register a named room so TransitionToRoom can find it.
+        public void RegisterRoom(string name, Func<Level> factory)
+        {
+            rooms[name] = factory;
+        }
+
         public void LoadLevel(Level level)
         {
-            Current    = level;
+            Current      = level;
             Engine.Scene = level;
+        }
+
+        // Load a named room, placing the player at spawnPos.
+        public void LoadRoom(string name, Vector2 spawnPos)
+        {
+            if (!rooms.TryGetValue(name, out var factory)) return;
+
+            var next = factory();
+            // Remove any auto-placed player from the factory and spawn at transition point
+            var autoPlayer = next.Tracker.GetEntity<Player>();
+            if (autoPlayer != null) next.Remove(autoPlayer);
+            var player = new Player(spawnPos);
+            next.Add(player);
+            next.Session.RespawnPoint = spawnPos;
+
+            Current      = next;
+            Engine.Scene = next;
+        }
+
+        // Called by RoomTransition entity when player enters a door zone.
+        private void TransitionToRoom(string targetRoom, Vector2 spawnPos)
+        {
+            LoadRoom(targetRoom, spawnPos);
         }
 
         // Update the current level by one frame.
@@ -288,67 +336,60 @@ namespace Celeste
         public static Level CreateSampleLevel()
         {
             return new LevelBuilder(320, 180)
-                // Ground and platforms
-                .AddPlatform(0,    168, 320, 12)   // floor
-                .AddPlatform(0,    0,   8,  180)   // left wall
-                .AddPlatform(312,  0,   8,  180)   // right wall
-                .AddPlatform(60,   130, 80, 10)    // ledge
-                .AddPlatform(200,  100, 80, 10)    // higher ledge
-                .AddJumpThrough(100, 90, 60)        // one-way platform
-
-                // Hazards
+                .AddPlatform(0,    168, 320, 12)
+                .AddPlatform(0,    0,   8,  180)
+                .AddPlatform(312,  0,   8,  180)
+                .AddPlatform(60,   130, 80, 10)
+                .AddPlatform(200,  100, 80, 10)
+                .AddJumpThrough(100, 90, 60)
                 .AddSpike(8, 165, 32, SpikeHazard.Directions.Up)
                 .AddEnticeBladeCircular(260, 140, 20, MathHelper.Pi * 0.8f)
-
-                // Interactive entities
                 .AddSpring(100, 168, Spring.Orientations.Floor)
                 .AddBumper(200, 145)
                 .AddDashCrystal(150, 120)
                 .AddFlyFeather(250, 80)
-
-                // Crumble and falling blocks
                 .AddCrumbleBlock(60, 130, 80)
                 .AddFallingBlock(200, 90, 80, 10)
-
-                // Switches and gate
                 .AddTouchSwitch(80,  50, "gate1")
                 .AddTouchSwitch(230, 50, "gate1")
-                .AddTouchSwitchGate(155, 40, 10, 40, "gate1",
-                                    new Vector2(0, -1), 48f)
-
-                // Dash switch and key/lock
+                .AddTouchSwitchGate(155, 40, 10, 40, "gate1", new Vector2(0, -1), 48f)
                 .AddDashSwitch(285, 155, "lock1")
                 .AddKey(285, 148)
                 .AddLock(140, 80, 10, 30)
-
-                // Kevin (crush block)
                 .AddKevin(160, 155, 32, 14)
-
-                // Torches
                 .AddBlueTorch(40,  148, "torch1")
                 .AddBlueTorch(280, 148, "torch1")
-
-                // Collectibles
                 .AddStrawberry(165, 20)
                 .AddGoldenStrawberry(265, 20)
                 .AddRedBooster(120, 55)
-
-                // Player
                 .AddPlayer(20, 155)
                 .Build();
         }
 
-        // "The Gauntlet" — showcase level that uses every entity type.
-        // 640 × 800 px vertical climb from ground to golden strawberry.
+        // Create a LevelManager pre-loaded with all Gauntlet rooms.
+        public static LevelManager CreateGauntletManager()
+        {
+            var mgr = new LevelManager();
+            mgr.RegisterRoom("Room1_EntryHall",  TheGauntletMap.BuildRoom1);
+            mgr.RegisterRoom("Room2_KeyRoom",    TheGauntletMap.BuildRoom2);
+            mgr.RegisterRoom("Room3_LockRoom",   TheGauntletMap.BuildRoom3);
+            mgr.RegisterRoom("Room4_CrushZone",  TheGauntletMap.BuildRoom4);
+            mgr.RegisterRoom("Room5_FlyZone",    TheGauntletMap.BuildRoom5);
+            mgr.RegisterRoom("Room6_Summit",     TheGauntletMap.BuildRoom6);
+            mgr.LoadRoom("Room1_EntryHall", new Vector2(24, 150));
+            return mgr;
+        }
+
+        // Single-room monolithic gauntlet (kept for backwards compat).
         public static Level CreateGauntletLevel() => TheGauntletMap.Build();
 
         // Minimal test room for unit-testing physics.
         public static Level CreateTestLevel()
         {
             return new LevelBuilder(320, 180)
-                .AddPlatform(0, 168, 320, 12)  // floor
-                .AddPlatform(0,   0,   8, 180)  // left wall
-                .AddPlatform(312, 0,   8, 180)  // right wall
+                .AddPlatform(0, 168, 320, 12)
+                .AddPlatform(0,   0,   8, 180)
+                .AddPlatform(312, 0,   8, 180)
                 .AddPlayer(20, 155)
                 .Build();
         }
@@ -439,6 +480,17 @@ namespace Celeste
                 case "touch_switch":   builder.AddTouchSwitch(s.X, s.Y, s.Data ?? "default"); break;
                 case "dash_switch":    builder.AddDashSwitch(s.X, s.Y, s.Data ?? "default"); break;
                 case "jumpthrough":    builder.AddJumpThrough(s.X, s.Y, s.W); break;
+                case "room_transition":
+                    // Data format: "targetRoom:spawnX:spawnY"
+                    if (s.Data != null)
+                    {
+                        var parts = s.Data.Split(':');
+                        if (parts.Length == 3
+                            && float.TryParse(parts[1], out float sx)
+                            && float.TryParse(parts[2], out float sy))
+                            builder.AddRoomTransition(s.X, s.Y, s.W, s.H, parts[0], sx, sy);
+                    }
+                    break;
                 // Unknown entity types are silently skipped
             }
         }

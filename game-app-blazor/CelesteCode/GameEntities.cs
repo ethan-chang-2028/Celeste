@@ -1147,6 +1147,40 @@ namespace Celeste
     }
 
     // ══════════════════════════════════════════════════════════════════════════
+    // ROOM TRANSITION — Trigger zone that fires when the player walks into it,
+    // signalling the LevelManager to load the named room.
+    // ══════════════════════════════════════════════════════════════════════════
+    public class RoomTransition : Entity
+    {
+        public string  TargetRoom;
+        public Vector2 SpawnPosition;
+
+        // LevelManager subscribes to this to perform the actual room swap.
+        public static event Action<string, Vector2> OnTransition;
+
+        private bool triggered;
+
+        public RoomTransition(Vector2 position, float width, float height,
+                              string targetRoom, Vector2 spawnPosition)
+        {
+            Position     = position;
+            Collider     = new Hitbox(width, height);
+            TargetRoom   = targetRoom;
+            SpawnPosition = spawnPosition;
+        }
+
+        public override void Update()
+        {
+            if (triggered) return;
+            var player = CollideFirst<Player>();
+            if (player == null || player.Dead) return;
+
+            triggered = true;
+            OnTransition?.Invoke(TargetRoom, SpawnPosition);
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
     // STRAWBERRY — Collectible berry (extends stub with follow / collect logic)
     // ══════════════════════════════════════════════════════════════════════════
     public class StrawberryPickup : Entity
