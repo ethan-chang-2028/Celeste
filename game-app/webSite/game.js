@@ -235,7 +235,8 @@
     }
 
     // ── AI Player Controller (neural — delegates to NeuralAI in ai-neural.js) ─
-    let aiEnabled = false;
+    let aiEnabled   = false;
+    let aiSpeedMult = 1;
 
     function initNeuralAI() {
         if (typeof NeuralAI === 'undefined') return;
@@ -247,6 +248,13 @@
         aiEnabled = !aiEnabled;
         if (aiEnabled) initNeuralAI();
         updateAIBtn();
+    };
+
+    window.setAISpeed = function (n) {
+        aiSpeedMult = n;
+        document.querySelectorAll('.ai-speed-btn').forEach(b => {
+            b.style.background = parseInt(b.dataset.speed) === n ? '#1a6a1a' : '#3a3a6a';
+        });
     };
 
     window.resetAI = function () {
@@ -385,10 +393,10 @@
         if (aiEnabled && typeof NeuralAI !== 'undefined') {
             const ai = NeuralAI;
             ctx.fillStyle = '#44ff44'; ctx.font = 'bold 7px monospace';
-            ctx.fillText('NEURAL AI', W - 60, 10);
+            ctx.fillText(`NEURAL AI  ${aiSpeedMult}x`, W - 72, 10);
             ctx.font = '6px monospace';
-            ctx.fillText(`Gen ${ai.generation}  Run ${ai.runCount}`, W - 60, 18);
-            ctx.fillText(`Best ${(ai.globalBestFit * 100).toFixed(0)}%`, W - 60, 25);
+            ctx.fillText(`Gen ${ai.generation}  Run ${ai.runCount}`, W - 72, 18);
+            ctx.fillText(`Best ${(ai.globalBestFit * 100).toFixed(0)}%`, W - 72, 25);
         }
 
         if (won) {
@@ -449,6 +457,10 @@
         if (accum > MAX_ACCUM) accum = MAX_ACCUM;
         let didStep = false;
         while (accum >= FIXED_DT) { step(); accum -= FIXED_DT; didStep = true; }
+        // Extra simulation ticks for AI speed multiplier (render skipped for extras)
+        if (aiEnabled && aiSpeedMult > 1) {
+            for (let i = 1; i < aiSpeedMult; i++) { step(); didStep = true; }
+        }
         if (didStep) render();
 
         if (now - fpsWindow >= 1000) {
@@ -461,7 +473,7 @@
             `time=${(elapsed/1000).toFixed(2)}s  deaths=${deaths}  ` +
             (bestMs !== null ? `best=${(bestMs/1000).toFixed(2)}s  ` : '') +
             `${player.state}  ${measuredFps.toFixed(0)} fps` +
-            (aiEnabled ? '  [AI]' : '');
+            (aiEnabled ? `  [AI ${aiSpeedMult}x]` : '');
         requestAnimationFrame(frame);
     }
     requestAnimationFrame(frame);

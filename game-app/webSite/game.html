@@ -39,6 +39,10 @@
             font-size: 0.8rem;
             color: #aaa;
         }
+        .ai-speed-btn {
+            padding: 7px 10px !important;
+            min-width: 36px;
+        }
     </style>
 </head>
 <body>
@@ -55,6 +59,11 @@
             <span id="map-seed">Seed: —</span>
             <button id="ai-control-btn" onclick="toggleAIControl()" style="background:#5a2a80;">&#129504; Neural AI: OFF</button>
             <button onclick="resetAI()" style="background:#7a2020;" title="Wipe learned weights and start from scratch">&#128260; Reset AI</button>
+            <span style="color:#aaa;font-family:monospace;font-size:0.8rem;">Speed:</span>
+            <button class="ai-speed-btn" data-speed="1"  onclick="setAISpeed(1)"  style="background:#1a6a1a;" title="1× speed">1x</button>
+            <button class="ai-speed-btn" data-speed="2"  onclick="setAISpeed(2)"  style="background:#3a3a6a;" title="2× speed">2x</button>
+            <button class="ai-speed-btn" data-speed="4"  onclick="setAISpeed(4)"  style="background:#3a3a6a;" title="4× speed">4x</button>
+            <button class="ai-speed-btn" data-speed="8"  onclick="setAISpeed(8)"  style="background:#3a3a6a;" title="8× speed">8x</button>
         </div>
 
         <canvas id="game-canvas" width="320" height="180"></canvas>
