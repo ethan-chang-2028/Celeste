@@ -3,20 +3,61 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Celeste — Game Test</title>
+    <title>Apex Platformer — Game</title>
     <link rel="stylesheet" href="/game.css">
+    <style>
+        .ai-panel {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin: 10px 0;
+            flex-wrap: wrap;
+        }
+        .ai-panel button {
+            background: #5a2a80;
+            color: #fff;
+            border: none;
+            border-radius: 5px;
+            padding: 8px 16px;
+            font-size: 0.85rem;
+            cursor: pointer;
+            font-family: monospace;
+        }
+        .ai-panel button:hover { background: #7a3aaa; }
+        .ai-panel input[type="number"] {
+            width: 90px;
+            padding: 7px 8px;
+            border: 1px solid #555;
+            border-radius: 5px;
+            background: #1a1a2a;
+            color: #ddd;
+            font-family: monospace;
+            font-size: 0.85rem;
+        }
+        #map-seed {
+            font-family: monospace;
+            font-size: 0.8rem;
+            color: #aaa;
+        }
+    </style>
 </head>
 <body>
     <header class="game-header">
-        <h1>Celeste — Test Scene</h1>
+        <h1>Apex Platformer</h1>
         <a href="/" class="back-link">&larr; Back to menu</a>
     </header>
 
     <main class="game-main">
+        <div class="ai-panel">
+            <button onclick="aiGenerateMap()">&#x2728; Generate AI Map</button>
+            <input type="number" id="seed-input" placeholder="Seed #" min="0" max="999999">
+            <button onclick="loadSeed()">Load Seed</button>
+            <span id="map-seed">Seed: —</span>
+        </div>
+
         <canvas id="game-canvas" width="320" height="180"></canvas>
+
         <div class="controls">
-            <p><strong>First Ascent</strong> — run, jump, wall-jump up the chimney,
-                dash across, climb the right wall, touch the gold block.</p>
             <p><strong>Controls:</strong>
                 Arrow keys to move &middot;
                 <kbd>C</kbd> jump &middot;
