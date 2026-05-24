@@ -655,12 +655,10 @@
         const p = [], pits = [], sp = [], nm = [], sk = [], lb = [], ents = [];
         let goal = {};
 
-        const mid = ['gaps', 'platform', 'chimney', 'climb'];
-        const chosen = [
-            'gaps',
-            mid[ri() % mid.length], mid[ri() % mid.length], mid[ri() % mid.length],
-            'stair',
-        ];
+        const allTypes = ['gaps', 'platform', 'chimney', 'climb', 'stair'];
+        const chosen   = Array.from({ length: NUM_ROOMS }, () => allTypes[ri() % allTypes.length]);
+        // Guarantee a goal exists — if no stair was rolled, force the last room to be one
+        if (!chosen.includes('stair')) chosen[NUM_ROOMS - 1] = 'stair';
 
         for (let room = 0; room < NUM_ROOMS; room++) {
             const ox   = room * ROOM_W;
