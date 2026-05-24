@@ -262,9 +262,10 @@ namespace Celeste
     // ══════════════════════════════════════════════════════════════════════════
     // LEVEL MANAGER — Loads and manages the active Level, with multi-room support
     // ══════════════════════════════════════════════════════════════════════════
-    public class LevelManager
+    public class LevelManager : IDisposable
     {
         public Level Current { get; private set; }
+        public string CurrentRoomName { get; private set; } = "";
 
         // Room registry: name → factory function that builds the Level
         private readonly Dictionary<string, Func<Level>> rooms =
@@ -273,6 +274,11 @@ namespace Celeste
         public LevelManager()
         {
             RoomTransition.OnTransition += TransitionToRoom;
+        }
+
+        public void Dispose()
+        {
+            RoomTransition.OnTransition -= TransitionToRoom;
         }
 
         // Register a named room so TransitionToRoom can find it.
@@ -300,8 +306,9 @@ namespace Celeste
             next.Add(player);
             next.Session.RespawnPoint = spawnPos;
 
-            Current      = next;
-            Engine.Scene = next;
+            CurrentRoomName = name;
+            Current         = next;
+            Engine.Scene    = next;
         }
 
         // Called by RoomTransition entity when player enters a door zone.

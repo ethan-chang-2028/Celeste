@@ -30,21 +30,181 @@
         }
       };
 
-      // Canvas renderer — pure JS, fed positions by Blazor each tick.
-      window.celesteRender = {
-        draw(state) {
-          const c = document.getElementById('celeste-canvas');
-          if (!c) return;
-          const ctx = c.getContext('2d');
-          ctx.imageSmoothingEnabled = false;
-          ctx.fillStyle = '#1a1a2a'; ctx.fillRect(0,0,c.width,c.height);
-          ctx.fillStyle = '#3a3a5a';
-          for (const s of state.solids) ctx.fillRect(s.x, s.y, s.w, s.h);
-          ctx.fillStyle = '#ac3232';
-          // Player drawn as 8×11 red rectangle for the scaffold; PlayerSprite is stubbed.
-          ctx.fillRect(state.player.x, state.player.y, 8, 11);
+      // Canvas renderer — pure JS, fed by Blazor each tick.
+      window.celesteRender = (function() {
+        // Entity colour palette
+        const COLORS = {
+          solid:           '#3d3d5c',
+          dashblock:       '#d07828',
+          crumbleblock:    '#b89050',
+          fallingblock:    '#c05830',
+          kevin:           '#7a1a1a',
+          lock:            '#6a4010',
+          gate:            '#1a5050',
+
+          spring_floor:    '#38c038',
+          spring_wallleft: '#38c038',
+          spring_wallright:'#38c038',
+          bumper:          '#d8c820',
+
+          spike_up:        '#c02828',
+          spike_down:      '#c02828',
+          spike_left:      '#c02828',
+          spike_right:     '#c02828',
+
+          dashcrystal:     '#28ccd8',
+          dashcrystal_empty:'#1a3838',
+          flyfeather:      '#8840d0',
+          strawberry:      '#d84070',
+          golden:          '#d8b800',
+          key:             '#d8c020',
+          redbooster:      '#e02828',
+          blade:           '#d028d0',
+
+          torch_unlit:     '#1a3060',
+          torch_lit:       '#3070e0',
+
+          touchswitch:     '#186060',
+          touchswitch_on:  '#38b0b0',
+          dashswitch:      '#50a828',
+          dashswitch_on:   '#90e050',
+        };
+
+        // Player colours by state
+        const PLAYER_STATE = {
+          0: '#ac3232', // Normal  — red (Madeline)
+          1: '#3232ac', // Climb   — blue
+          2: '#ac50ac', // Dash    — purple
+          3: '#888888', // Dead    — grey
+          4: '#50b8e0', // StarFly — sky blue
+          5: '#e05050', // RedDash — bright red
+          6: '#e07830', // Boost   — orange
+        };
+
+        function drawEntity(ctx, e) {
+          const col = COLORS[e.type];
+
+          if (e.type === 'transition') {
+            ctx.save();
+            ctx.strokeStyle = 'rgba(80,255,80,0.35)';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(e.x + 0.5, e.y + 0.5, e.w - 1, e.h - 1);
+            ctx.restore();
+            return;
+          }
+
+          if (!col) return;
+          ctx.fillStyle = col;
+
+          if (e.type === 'bumper' || e.type === 'blade') {
+            const r = Math.min(e.w, e.h) * 0.5;
+            ctx.beginPath();
+            ctx.arc(e.x + e.w * 0.5, e.y + e.h * 0.5, r, 0, Math.PI * 2);
+            ctx.fill();
+            if (e.type === 'bumper') {
+              ctx.fillStyle = 'rgba(255,255,255,0.25)';
+              ctx.beginPath();
+              ctx.arc(e.x + e.w * 0.5, e.y + e.h * 0.5, r * 0.55, 0, Math.PI * 2);
+              ctx.fill();
+            }
+            return;
+          }
+
+          ctx.fillRect(e.x, e.y, e.w, e.h);
+
+          // Lit torch glow
+          if (e.type === 'torch_lit') {
+            ctx.save();
+            const grd = ctx.createRadialGradient(
+              e.x + e.w*0.5, e.y + e.h*0.5, 1,
+              e.x + e.w*0.5, e.y + e.h*0.5, 18);
+            grd.addColorStop(0, 'rgba(60,120,255,0.35)');
+            grd.addColorStop(1, 'rgba(60,120,255,0)');
+            ctx.fillStyle = grd;
+            ctx.beginPath();
+            ctx.arc(e.x + e.w*0.5, e.y + e.h*0.5, 18, 0, Math.PI*2);
+            ctx.fill();
+            ctx.restore();
+          }
+
+          // Activated switch tick
+          if (e.type === 'touchswitch_on' || e.type === 'dashswitch_on') {
+            ctx.fillStyle = 'rgba(255,255,255,0.5)';
+            ctx.fillRect(e.x + e.w*0.5 - 2, e.y + e.h*0.5 - 2, 4, 4);
+          }
+
+          // Key sparkle
+          if (e.type === 'key' || e.type === 'golden') {
+            ctx.fillStyle = 'rgba(255,255,255,0.6)';
+            ctx.fillRect(e.x + e.w*0.5 - 1, e.y + e.h*0.5 - 1, 2, 2);
+          }
         }
-      };
+
+        return {
+          draw(state) {
+            const c = document.getElementById('celeste-canvas');
+            if (!c) return;
+            const ctx = c.getContext('2d');
+            ctx.imageSmoothingEnabled = false;
+
+            // Sky
+            ctx.fillStyle = '#0d0d1a';
+            ctx.fillRect(0, 0, c.width, c.height);
+
+            // Background star field (static, cosmetic)
+            ctx.fillStyle = 'rgba(200,200,255,0.25)';
+            for (let i = 0; i < 40; i++) {
+              const sx = ((i * 73 + 11) % 317) % c.width;
+              const sy = ((i * 53 + 17) % 251) % c.height;
+              ctx.fillRect(sx, sy, 1, 1);
+            }
+
+            // Solids
+            ctx.fillStyle = COLORS.solid;
+            for (const s of state.solids)
+              ctx.fillRect(s.x, s.y, s.w, s.h);
+
+            // Solid top-edge highlight
+            ctx.fillStyle = 'rgba(255,255,255,0.08)';
+            for (const s of state.solids)
+              ctx.fillRect(s.x, s.y, s.w, 1);
+
+            // Jump-throughs (thin 3px bar)
+            ctx.fillStyle = '#4a7a9a';
+            for (const j of state.jumpThrus) {
+              ctx.fillRect(j.x, j.y, j.w, 3);
+              ctx.fillStyle = 'rgba(255,255,255,0.2)';
+              ctx.fillRect(j.x, j.y, j.w, 1);
+              ctx.fillStyle = '#4a7a9a';
+            }
+
+            // All other entities
+            for (const e of state.entities)
+              drawEntity(ctx, e);
+
+            // Player
+            if (state.player) {
+              const p = state.player;
+              const col = p.dead ? '#888' : (PLAYER_STATE[p.state] || '#ac3232');
+              ctx.fillStyle = col;
+              ctx.fillRect(p.x, p.y, 8, 11);
+
+              // Facing indicator — small eye on the appropriate side
+              if (!p.dead) {
+                ctx.fillStyle = 'rgba(0,0,0,0.7)';
+                const eyeX = p.facing >= 0 ? p.x + 5 : p.x + 1;
+                ctx.fillRect(eyeX, p.y + 3, 2, 2);
+              }
+
+              // Dead flash
+              if (p.dead) {
+                ctx.fillStyle = 'rgba(255,255,255,0.4)';
+                ctx.fillRect(p.x, p.y, 8, 11);
+              }
+            }
+          }
+        };
+      })();
     </script>
 </body>
 </html>
