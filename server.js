@@ -144,21 +144,25 @@ const server = http.createServer(async (req, res) => {
             return res.end(jsContent);
         }
 
-        // 3c. Serve the game test page and its assets
-        const gameAssets = {
-            '/game':          { file: 'game.html',    type: 'text/html' },
-            '/game.html':     { file: 'game.html',    type: 'text/html' },
-            '/game.js':       { file: 'game.js',      type: 'application/javascript' },
-            '/game.css':      { file: 'game.css',     type: 'text/css' },
-            '/player.js':     { file: 'player.js',    type: 'application/javascript' },
-            '/ai-neural.js':  { file: 'ai-neural.js', type: 'application/javascript' },
+        // 3c. Serve game page by name, then serve any file from webSite/ dynamically
+        const MIME = {
+            '.html': 'text/html', '.js': 'application/javascript', '.css': 'text/css',
         };
-        if (req.method === 'GET' && gameAssets[req.url]) {
-            const { file, type } = gameAssets[req.url];
-            const filePath = path.join(__dirname, 'game-app', 'webSite', file);
-            const content = await fs.readFile(filePath, 'utf-8');
-            res.writeHead(200, { 'Content-Type': type });
+        if (req.method === 'GET' && (req.url === '/game' || req.url === '/game.html')) {
+            const content = await fs.readFile(path.join(__dirname, 'game-app', 'webSite', 'game.html'), 'utf-8');
+            res.writeHead(200, { 'Content-Type': 'text/html' });
             return res.end(content);
+        }
+        // Serve any .js/.css file directly from webSite/ — avoids manual allowlist
+        const ext = path.extname(req.url);
+        if (req.method === 'GET' && MIME[ext]) {
+            const fileName = path.basename(req.url);
+            const filePath = path.join(__dirname, 'game-app', 'webSite', fileName);
+            try {
+                const content = await fs.readFile(filePath, 'utf-8');
+                res.writeHead(200, { 'Content-Type': MIME[ext] });
+                return res.end(content);
+            } catch { /* fall through to 404 */ }
         }
 
         // 4. Handle Registration POST Request
