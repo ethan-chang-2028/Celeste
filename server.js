@@ -151,6 +151,7 @@ const server = http.createServer(async (req, res) => {
             '/game.js':       { file: 'game.js',      type: 'application/javascript' },
             '/game.css':      { file: 'game.css',     type: 'text/css' },
             '/player.js':     { file: 'player.js',    type: 'application/javascript' },
+            '/entities.js':   { file: 'entities.js',  type: 'application/javascript' },
             '/ai-neural.js':  { file: 'ai-neural.js', type: 'application/javascript' },
         };
         if (req.method === 'GET' && gameAssets[req.url]) {
