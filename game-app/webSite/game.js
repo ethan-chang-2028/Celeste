@@ -739,33 +739,61 @@
         // ── Entities ────────────────────────────────────────────────────────
         const ents = [];
 
-        // Room 1 — Entry Hall: spring on bounce ledge, spikes at pit edges, dash crystal
+        // Room 1 — Entry Hall: spring teaches the bounce mechanic, spikes guard pit edges,
+        //   dash crystal above mid-shelf teaches dashing, strawberry on exit ledge is optional reward
         ents.push(makeSpring(88, 136, 'floor'));
         ents.push(makeSpike(64, 168, 8, 'up'));
-        ents.push(makeSpike(128, 168, 8, 'up'));
-        ents.push(makeDashCrystal(240, 104));
+        ents.push(makeSpike(120, 168, 8, 'up'));
+        ents.push(makeDashCrystal(240, 100));
+        ents.push(makeStrawberry(290, 73));
 
-        // Room 2 — Key Room: blade patrolling the steps, dash crystal mid-route
-        ents.push(makeEnticeBlade({ ax: 395, ay: 121, bx: 556, by: 63, speed: 70 }));
-        ents.push(makeDashCrystal(480, 94));
+        // Room 2 — Key Room: a single diagonal blade guards ALL three steps like a sentinel,
+        //   edge spikes punish sloppy landings, dash crystal at the top is the "key" prize
+        ents.push(makeEnticeBlade({ ax: 378, ay: 128, bx: 574, by: 63, speed: 65 }));
+        ents.push(makeSpike(424, 128, 6, 'up'));
+        ents.push(makeSpike(504, 100, 6, 'up'));
+        ents.push(makeDashCrystal(556, 63));
 
-        // Room 3 — Lock Room: crumble platform inside arch, bumper near exit
-        ents.push(makeCrumbleBlock(738, 100, 62));
-        ents.push(makeBumper(915, 68));
+        // Room 3 — Lock Room: spike guards the arch entrance, crumble block inside arch forces
+        //   urgency (wall-jump out before it crumbles), blade in the pit below punishes falls,
+        //   bumper on the exit ledge launches to safety
+        ents.push(makeSpike(692, 168, 8, 'up'));
+        ents.push(makeCrumbleBlock(738, 100, 54));
+        ents.push(makeEnticeBlade({ ax: 742, ay: 150, bx: 798, by: 150, speed: 55 }));
+        ents.push(makeBumper(900, 90));
 
-        // Room 4 — Crush Zone: ceiling spikes, bumper in open space, dash crystal
-        ents.push(makeSpike(968, 8, 32, 'down'));
-        ents.push(makeBumper(1100, 90));
-        ents.push(makeDashCrystal(1155, 72));
+        // Room 4 — Crush Zone: ceiling spike clusters create a low ceiling of death,
+        //   vertical blades oscillate up and down like pistons — must time dashes between them,
+        //   dash crystal at the exit rewards surviving the gauntlet
+        ents.push(makeSpike(978,  8, 24, 'down'));
+        ents.push(makeSpike(1040, 8, 24, 'down'));
+        ents.push(makeSpike(1112, 8, 24, 'down'));
+        ents.push(makeEnticeBlade({ ax: 1036, ay: 12, bx: 1036, by: 132, speed: 65 }));
+        ents.push(makeEnticeBlade({ ax: 1110, ay: 12, bx: 1110, by: 100, speed: 80 }));
+        ents.push(makeDashCrystal(1225, 43));
 
-        // Room 5 — Fly Zone: two bumpers, circular blade, dash crystal
-        ents.push(makeBumper(1375, 95));
-        ents.push(makeBumper(1448, 65));
-        ents.push(makeEnticeBlade({ path: 'circular', cx: 1448, cy: 65, radius: 28, startAngle: 0, speed: 2 }));
-        ents.push(makeDashCrystal(1350, 113));
+        // Room 5 — Fly Zone: huge void requires chained dashes — mid-air crystals refill dash
+        //   between platforms, bumpers serve as launch pads, sweeping diagonal blade punishes hovering
+        ents.push(makeDashCrystal(1390, 95));
+        ents.push(makeDashCrystal(1462, 62));
+        ents.push(makeBumper(1344, 112));
+        ents.push(makeBumper(1422, 74));
+        ents.push(makeEnticeBlade({ ax: 1310, ay: 148, bx: 1550, by: 62, speed: 45 }));
+        ents.push(makeStrawberry(1518, 42));
 
-        // Room 6 — Summit: strawberry on the climb
-        ents.push(makeStrawberry(1800, 82));
+        // Room 6 — Summit: diagonal blade guards the entire staircase, circular blade orbits
+        //   the pedestal, crumble bridges between steps force quick movement, edge spikes punish
+        //   hesitation, mid-climb strawberry + golden strawberry at the peak are the ultimate rewards
+        ents.push(makeEnticeBlade({ ax: 1668, ay: 140, bx: 1886, by: 22, speed: 50 }));
+        ents.push(makeEnticeBlade({ path: 'circular', cx: 1858, cy: 38, radius: 22, startAngle: 0, speed: 2.2 }));
+        ents.push(makeCrumbleBlock(1692, 132, 24));
+        ents.push(makeCrumbleBlock(1752, 102, 24));
+        ents.push(makeCrumbleBlock(1812, 72, 24));
+        ents.push(makeSpike(1695, 148, 6, 'up'));
+        ents.push(makeSpike(1754, 118, 6, 'up'));
+        ents.push(makeSpike(1814, 88,  6, 'up'));
+        ents.push(makeStrawberry(1796, 80));
+        ents.push(makeGoldenStrawberry(1894, 21));
 
         const goal = { x:1882, y:12, w:12, h:12, color:'#d4af37' };
         return { platforms: p, pitShading: pits, roomSpawns: sp,
