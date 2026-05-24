@@ -142,7 +142,7 @@
                 <div class="menu-options">
                     <button class="menu-option menu-option--gold" onclick="startGame('gauntlet')">
                         <span class="menu-option__label">▶ The Gauntlet</span>
-                        <span class="menu-option__desc">6-room hand-crafted challenge — Entry Hall → Key Room → Lock Room → Crush Zone → Fly Zone → Summit</span>
+                        <span class="menu-option__desc">6-room hand-crafted challenge — Entry Hall → Pillar Hall → Lock Room → Crush Zone → Fly Zone → Summit</span>
                     </button>
                     <button class="menu-option" onclick="startGame('random')">
                         <span class="menu-option__label">▶ Random Level</span>
@@ -152,6 +152,14 @@
                         <span class="menu-option__label">▶ Random AI Map</span>
                         <span class="menu-option__desc">Procedurally generated · seed-replayable · neural AI playable</span>
                     </button>
+                    <button class="menu-option" onclick="startGame('custom')">
+                        <span class="menu-option__label">▶ Custom Level</span>
+                        <span class="menu-option__desc">Play the map you built in the editor</span>
+                    </button>
+                    <a class="menu-option" href="/editor.html" style="text-decoration:none;">
+                        <span class="menu-option__label" style="color:#7aa2ff;">🔧 Map Editor</span>
+                        <span class="menu-option__desc">Draw platforms · place entities · save and play your own levels</span>
+                    </a>
                 </div>
                 <p class="menu-keys">
                     Arrows = move &nbsp;·&nbsp;
@@ -203,5 +211,12 @@
     <script src="/player.js"></script>
     <script src="/ai-neural.js"></script>
     <script src="/game.js"></script>
+    <script>
+        // Auto-start if arriving from the editor via ?mode=custom
+        (function () {
+            const m = new URLSearchParams(window.location.search).get('mode');
+            if (m) window.startGame(m);
+        })();
+    </script>
 </body>
 </html>

@@ -661,6 +661,56 @@
                  roomNames: nm, roomSkies: sk, roomLabels: lb, goal, entities: ents };
     }
 
+    // ── Custom level (built in the map editor, stored in localStorage) ───────
+    function buildCustomLevel(data) {
+        const ents = (data.entities || []).map(e => {
+            switch (e.type) {
+                case 'spring':     return makeSpring(e.x, e.y, e.orientation || 'floor');
+                case 'bumper':     return makeBumper(e.x, e.y);
+                case 'crystal':    return makeDashCrystal(e.x, e.y);
+                case 'spike':      return makeSpike(e.x, e.y, e.size || 8, e.dir || 'up');
+                case 'blade_h':    return makeEnticeBlade({ ax:e.ax, ay:e.ay, bx:e.bx, by:e.by, speed:e.speed||60 });
+                case 'blade_c':    return makeEnticeBlade({ path:'circular', cx:e.cx, cy:e.cy,
+                                       radius:e.radius||18, startAngle:e.startAngle||0, speed:e.speed||1.5 });
+                case 'strawberry': return makeStrawberry(e.x, e.y);
+                case 'crumble':    return makeCrumbleBlock(e.x, e.y, e.w || 32);
+                case 'falling':    return makeFallingBlock(e.x, e.y, e.w || 32, e.h || 8);
+                case 'golden':     return makeGoldenStrawberry(e.x, e.y);
+                default: return null;
+            }
+        }).filter(Boolean);
+
+        const n = data.numRooms || (data.spawns ? data.spawns.length : 3);
+
+        // Auto-generate spawn if the stored one is missing or unsafe
+        const spawns = Array.from({ length: n }, (_, i) => {
+            if (data.spawns && data.spawns[i]) return data.spawns[i];
+            const ox = i * ROOM_W;
+            const cands = (data.platforms || []).filter(p =>
+                p.x < ox + ROOM_W && p.x + p.w > ox && p.y >= 80 && p.y <= FLOOR_Y && p.h <= FLOOR_H
+            ).sort((a, b) => a.x - b.x);
+            if (cands.length) {
+                const pl = cands[0];
+                return { x: Math.max(pl.x, ox) + 14, y: pl.y - 13 };
+            }
+            return { x: ox + 14, y: FLOOR_Y - 13 };
+        });
+
+        const names = data.names  || Array.from({ length: n }, (_, i) => `ROOM ${i + 1}`);
+        const skies  = data.skies || Array.from({ length: n }, () => ['#1a2a4a','#3a5a8a']);
+
+        return {
+            platforms:  data.platforms || [],
+            pitShading: [],
+            roomSpawns: spawns,
+            roomNames:  names,
+            roomSkies:  skies,
+            roomLabels: [],
+            goal:       data.goal || null,
+            entities:   ents,
+        };
+    }
+
     // ── Level-select API (called from game.html buttons) ─────────────────────
     window.startGame = function (mode) {
         currentMode = mode;
@@ -679,6 +729,15 @@
             const seed = Math.floor(Math.random() * 999999);
             applyLevel(buildRandomLevel(seed), seed);
             document.querySelectorAll('.random-only').forEach(el => el.style.display = '');
+        } else if (mode === 'custom') {
+            const stored = localStorage.getItem('celeste_custom_level');
+            if (!stored) {
+                alert('No custom level found — build one in the Map Editor first!');
+                return;
+            }
+            const data = JSON.parse(stored);
+            NUM_ROOMS = data.numRooms || 3;
+            applyLevel(buildCustomLevel(data), -1);
         } else {
             NUM_ROOMS = AI_ROOMS;
             const seed = Math.floor(Math.random() * 999999);
