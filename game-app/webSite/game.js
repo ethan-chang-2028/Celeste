@@ -655,100 +655,66 @@
         const p = [], pits = [], sp = [], nm = [], sk = [], lb = [];
         let goal = {};
 
-        // ── Pass 1: Room geometry only (no entity logic) ──────────────────
-        const allTypes = ['gaps', 'platform', 'chimney', 'climb', 'stair'];
-        const chosen   = Array.from({ length: NUM_ROOMS }, () => allTypes[ri() % allTypes.length]);
-        if (!chosen.includes('stair')) chosen[NUM_ROOMS - 1] = 'stair';
+        // ── Pass 1: Freeform stepping-stone geometry ──────────────────────
+        const ROOM_NAMES = ['VALLEY','RIDGE','CAVERN','PEAK','GORGE','LEDGE',
+            'ASCENT','DESCENT','VAULT','CLIFF','HOLLOW','SPIRE'];
 
         for (let room = 0; room < NUM_ROOMS; room++) {
-            const ox   = room * ROOM_W;
-            const type = chosen[room];
+            const ox = room * ROOM_W;
             sk.push(PALETTES[(ri() + room) % PALETTES.length]);
-            nm.push(`ROOM ${room + 1} — ${TYPE_LABEL[type]}`);
+            nm.push(`ROOM ${room + 1} — ${ROOM_NAMES[ri() % ROOM_NAMES.length]}`);
             sp.push({ x: ox + 14, y: FLOOR_Y - 12 });
 
             if (room === 0)             p.push({ x: ox,               y: 0, w: 8, h: 180, color: '#4a5570' });
             if (room === NUM_ROOMS - 1) p.push({ x: ox + ROOM_W - 8, y: 0, w: 8, h: 180, color: '#4a5570' });
 
-            if (type === 'gaps') {
-                const numGaps = 1 + (ri() % 2);
-                const gapW    = 32 + (ri() % 20);
-                const seg     = splitFloor(ox, FLOOR_Y, ROOM_W, numGaps, gapW, rng);
-                for (const s of seg.floors) p.push({ x: s.x, y: FLOOR_Y, w: s.w, h: FLOOR_H, color: '#3a5a3a' });
-                for (const g of seg.gaps) {
-                    pits.push({ x: g.x, y: FLOOR_Y, w: g.w, h: FLOOR_H });
-                    lb.push({ text: 'JUMP', x: g.x + 4, y: FLOOR_Y + 10 });
-                }
+            const entryW = 28 + (ri() % 32);
+            const exitW  = 28 + (ri() % 32);
+            p.push({ x: ox,                  y: FLOOR_Y, w: entryW, h: FLOOR_H, color: '#3a5a3a' });
+            p.push({ x: ox + ROOM_W - exitW, y: FLOOR_Y, w: exitW,  h: FLOOR_H, color: '#3a5a3a' });
+            pits.push({ x: ox + entryW, y: FLOOR_Y, w: ROOM_W - entryW - exitW, h: FLOOR_H });
 
-            } else if (type === 'platform') {
-                const entryW = 50 + (ri() % 30), exitW = 40 + (ri() % 30);
-                p.push({ x: ox,                  y: FLOOR_Y, w: entryW, h: FLOOR_H, color: '#3a5a3a' });
-                p.push({ x: ox + ROOM_W - exitW, y: FLOOR_Y, w: exitW,  h: FLOOR_H, color: '#3a5a3a' });
-                pits.push({ x: ox + entryW, y: FLOOR_Y, w: ROOM_W - entryW - exitW, h: FLOOR_H });
-                const asc = rng() > 0.5;
-                const gap = (ROOM_W - entryW - exitW) / 3;
-                for (let i = 0; i < 3; i++) {
-                    const fx = ox + entryW + Math.floor(i * gap) + (ri() % 10);
-                    const fy = asc ? Math.max(25, FLOOR_Y - 45 - i * 28) : Math.max(25, FLOOR_Y - 110 + i * 28);
-                    const fw = 42 + (ri() % 28);
-                    p.push({ x: fx, y: fy, w: fw, h: 8, color: '#5a7a5a' });
-                    lb.push({ text: 'STEP', x: fx + 4, y: fy - 2 });
-                }
+            const numStones = 2 + (ri() % 3);
+            let cx = ox + entryW;
+            let cy = FLOOR_Y;
+            const stones = [];
 
-            } else if (type === 'chimney') {
-                const entryW   = 70 + (ri() % 50);
-                const shaftX   = ox + entryW + 10 + (ri() % 20);
-                const shaftW   = 22 + (ri() % 10);
-                const shaftTop = 28 + (ri() % 35);
-                const gapBot   = 16;
-                p.push({ x: ox, y: FLOOR_Y, w: entryW, h: FLOOR_H, color: '#3a5a3a' });
-                p.push({ x: shaftX,          y: shaftTop, w: 6, h: FLOOR_Y - shaftTop - gapBot, color: '#5a6b88' });
-                p.push({ x: shaftX + shaftW, y: shaftTop, w: 6, h: FLOOR_Y - shaftTop,           color: '#5a6b88' });
-                p.push({ x: shaftX, y: shaftTop, w: shaftW + 12, h: 6, color: '#5a7a5a' });
-                lb.push({ text: 'WALL JUMP', x: shaftX - 8, y: FLOOR_Y - 4 });
-                const l1x = shaftX + shaftW + 18 + (ri() % 15);
-                const l1y = 72 + (ri() % 35);
-                const l2x = l1x + 48 + (ri() % 20);
-                const l2y = 118 + (ri() % 24);
-                p.push({ x: l1x, y: l1y, w: 50, h: 8, color: '#5a7a5a' });
-                p.push({ x: l2x, y: l2y, w: 50, h: 8, color: '#5a7a5a' });
-                const exitX = Math.min(ox + ROOM_W - 10, l2x + 40);
-                if (exitX < ox + ROOM_W) p.push({ x: exitX, y: FLOOR_Y, w: ox + ROOM_W - exitX, h: FLOOR_H, color: '#3a5a3a' });
+            for (let s = 0; s < numStones; s++) {
+                const sw     = 26 + (ri() % 36);
+                const rawGap = 10 + (ri() % 56);
+                const goUp   = rng() > 0.38;
+                const dy     = goUp ? -(14 + ri() % 52) : (8 + ri() % 42);
+                const newY   = Math.max(18, Math.min(FLOOR_Y - 18, cy + dy));
+                const rise   = cy - newY;
+                const maxGap = rise > 42 ? 46 : rise > 14 ? 60 : 76;
+                const gap    = Math.min(rawGap, maxGap);
+                let sx = cx + gap;
+                sx = Math.max(ox + entryW + 4, Math.min(ox + ROOM_W - exitW - sw - 4, sx));
+                if (sx <= cx) sx = cx + 8;
+                p.push({ x: sx, y: newY, w: sw, h: 8, color: '#5a7a5a' });
+                stones.push({ x: sx, y: newY, w: sw });
+                cx = sx + sw;
+                cy = newY;
+            }
 
-            } else if (type === 'climb') {
-                const entryW = 50 + (ri() % 30);
-                p.push({ x: ox, y: FLOOR_Y, w: entryW, h: FLOOR_H, color: '#3a5a3a' });
-                const wallH   = 120 + (ri() % 40);
-                const wallTop = FLOOR_Y - wallH;
-                const wallAX  = ox + entryW + 20 + (ri() % 20);
-                p.push({ x: wallAX,     y: wallTop, w: 8,  h: wallH, color: '#7a6b8a' });
-                p.push({ x: wallAX + 8, y: wallTop, w: 62, h: 8,     color: '#5a7a5a' });
-                lb.push({ text: 'GRAB+UP', x: wallAX - 32, y: FLOOR_Y - 28 });
-                lb.push({ text: 'DASH->',  x: wallAX + 14, y: wallTop - 4 });
-                const wallBX = wallAX + 8 + 62 + 20 + (ri() % 20);
-                p.push({ x: wallBX,     y: wallTop, w: 8,  h: wallH, color: '#7a6b8a' });
-                p.push({ x: wallBX + 8, y: wallTop, w: 40, h: 8,     color: '#5a7a5a' });
-                lb.push({ text: 'GRAB+UP', x: wallBX - 32, y: FLOOR_Y - 28 });
-                const d1x = wallBX + 50, d2x = d1x + 50;
-                p.push({ x: d1x, y: wallTop + 55, w: 50, h: 8, color: '#5a7a5a' });
-                p.push({ x: d2x, y: wallTop + 105, w: 40, h: 8, color: '#5a7a5a' });
-                const exitX = Math.min(ox + ROOM_W - 10, d2x + 32);
-                if (exitX < ox + ROOM_W) p.push({ x: exitX, y: FLOOR_Y, w: ox + ROOM_W - exitX, h: FLOOR_H, color: '#3a5a3a' });
+            const exitStart = ox + ROOM_W - exitW;
+            let safety = 0;
+            while (exitStart - cx > 75 && safety++ < 4) {
+                const bw   = 26 + (ri() % 22);
+                const bGap = 10 + (ri() % Math.max(1, Math.min(55, exitStart - cx - bw - 5)));
+                const bx   = Math.min(cx + bGap, exitStart - bw - 4);
+                if (bx <= cx) break;
+                const by = Math.max(18, Math.min(FLOOR_Y - 18, cy + (ri() % 40) - 20));
+                p.push({ x: bx, y: by, w: bw, h: 8, color: '#5a7a5a' });
+                stones.push({ x: bx, y: by, w: bw });
+                cx = bx + bw;
+                cy = by;
+            }
 
-            } else if (type === 'stair') {
-                p.push({ x: ox, y: FLOOR_Y, w: 55, h: FLOOR_H, color: '#3a5a3a' });
-                const steps   = 4 + (ri() % 2);
-                const spacing = (ROOM_W - 80) / steps;
-                for (let s = 0; s < steps; s++) {
-                    const sx = ox + 55 + Math.floor(s * spacing);
-                    const sy = FLOOR_Y - 32 - s * 30;
-                    const sw = 48 + (ri() % 18);
-                    p.push({ x: sx, y: sy, w: sw, h: 8, color: '#5a7a5a' });
-                    if (s === steps - 1) {
-                        goal = { x: sx + sw - 18, y: sy - 14, w: 12, h: 12, color: '#d4af37' };
-                        lb.push({ text: 'SUMMIT', x: sx + 4, y: sy - 4 });
-                    }
-                }
+            if (room === NUM_ROOMS - 1 && stones.length > 0) {
+                const top = stones.reduce((a, b) => a.y < b.y ? a : b);
+                goal = { x: top.x + top.w - 18, y: top.y - 14, w: 12, h: 12, color: '#d4af37' };
+                lb.push({ text: 'GOAL', x: top.x + 4, y: top.y - 4 });
             }
         }
 
