@@ -505,6 +505,8 @@
         entities = data.entities || [];
         const el = document.getElementById('map-seed');
         if (el) el.textContent = `Seed: ${seed}`;
+        const el2 = document.getElementById('random-map-seed');
+        if (el2) el2.textContent = `Seed: ${seed}`;
     }
 
     // roomBanners generated dynamically in render() based on current NUM_ROOMS
@@ -644,6 +646,183 @@
         const input = document.getElementById('seed-input');
         const val   = parseInt(input ? input.value : '', 10);
         if (!isNaN(val)) window.aiGenerateMap(val);
+    };
+
+    // ── Random level with entities (guaranteed clearable) ────────────────────
+    function buildRandomLevel(seed) {
+        const rng = mkRng(seed);
+        const ri  = () => Math.floor(rng() * 1000);
+        const p = [], pits = [], sp = [], nm = [], sk = [], lb = [], ents = [];
+        let goal = {};
+
+        const mid = ['gaps', 'platform', 'chimney', 'climb'];
+        const chosen = [
+            'gaps',
+            mid[ri() % mid.length], mid[ri() % mid.length], mid[ri() % mid.length],
+            'stair',
+        ];
+
+        for (let room = 0; room < NUM_ROOMS; room++) {
+            const ox   = room * ROOM_W;
+            const type = chosen[room];
+            sk.push(PALETTES[(ri() + room) % PALETTES.length]);
+            nm.push(`ROOM ${room + 1} — ${TYPE_LABEL[type]}`);
+            sp.push({ x: ox + 14, y: FLOOR_Y - 12 });
+
+            if (room === 0)             p.push({ x: ox,               y: 0, w: 8, h: 180, color: '#4a5570' });
+            if (room === NUM_ROOMS - 1) p.push({ x: ox + ROOM_W - 8, y: 0, w: 8, h: 180, color: '#4a5570' });
+
+            if (type === 'gaps') {
+                const numGaps = 1 + (ri() % 2);
+                const gapW    = 32 + (ri() % 20);
+                const seg     = splitFloor(ox, FLOOR_Y, ROOM_W, numGaps, gapW, rng);
+                for (const s of seg.floors) p.push({ x: s.x, y: FLOOR_Y, w: s.w, h: FLOOR_H, color: '#3a5a3a' });
+                for (const g of seg.gaps) {
+                    pits.push({ x: g.x, y: FLOOR_Y, w: g.w, h: FLOOR_H });
+                    lb.push({ text: 'JUMP', x: g.x + 4, y: FLOOR_Y + 10 });
+                    // Dash crystal floating above gap — helps chain across
+                    if (rng() > 0.5) ents.push(makeDashCrystal(g.x + Math.floor(g.w / 2), FLOOR_Y - 45));
+                }
+                // Spring on a random floor segment — always safe/helpful
+                if (seg.floors.length > 0 && rng() > 0.4) {
+                    const flr = seg.floors[ri() % seg.floors.length];
+                    ents.push(makeSpring(flr.x + Math.floor(flr.w / 2), FLOOR_Y, 'floor'));
+                }
+
+            } else if (type === 'platform') {
+                const entryW = 50 + (ri() % 30), exitW = 40 + (ri() % 30);
+                p.push({ x: ox,                  y: FLOOR_Y, w: entryW, h: FLOOR_H, color: '#3a5a3a' });
+                p.push({ x: ox + ROOM_W - exitW, y: FLOOR_Y, w: exitW,  h: FLOOR_H, color: '#3a5a3a' });
+                pits.push({ x: ox + entryW, y: FLOOR_Y, w: ROOM_W - entryW - exitW, h: FLOOR_H });
+                const asc = rng() > 0.5;
+                const gap = (ROOM_W - entryW - exitW) / 3;
+                const floatPlats = [];
+                for (let i = 0; i < 3; i++) {
+                    const fx = ox + entryW + Math.floor(i * gap) + (ri() % 10);
+                    const fy = asc ? Math.max(25, FLOOR_Y - 45 - i * 28) : Math.max(25, FLOOR_Y - 110 + i * 28);
+                    const fw = 42 + (ri() % 28);
+                    p.push({ x: fx, y: fy, w: fw, h: 8, color: '#5a7a5a' });
+                    lb.push({ text: 'STEP', x: fx + 4, y: fy - 2 });
+                    floatPlats.push({ x: fx, y: fy, w: fw });
+                    // Dash crystal 12 px above platform — helpful refill
+                    if (rng() > 0.55) ents.push(makeDashCrystal(fx + Math.floor(fw / 2), fy - 12));
+                    // Right-edge spike — punishes slipping off, not blocking the landing zone
+                    if (rng() > 0.6 && fw > 32) ents.push(makeSpike(fx + fw - 6, fy, 6, 'up'));
+                }
+                // Vertical blade in the HORIZONTAL gap between two adjacent platforms.
+                // It oscillates top-to-bottom, so the player always has a safe timing window.
+                if (floatPlats.length >= 2 && rng() > 0.4) {
+                    const pi = ri() % (floatPlats.length - 1);
+                    const a  = floatPlats[pi], b = floatPlats[pi + 1];
+                    const bx = a.x + a.w + Math.floor((b.x - (a.x + a.w)) / 2);
+                    const topY = Math.min(a.y, b.y) - 20;
+                    const botY = Math.min(Math.max(a.y, b.y) + 55, FLOOR_Y - 8);
+                    if (botY - topY > 30 && bx > a.x + a.w && bx < b.x) {
+                        ents.push(makeEnticeBlade({ ax: bx, ay: topY, bx, by: botY, speed: 50 + (ri() % 25) }));
+                    }
+                }
+
+            } else if (type === 'chimney') {
+                const entryW   = 70 + (ri() % 50);
+                const shaftX   = ox + entryW + 10 + (ri() % 20);
+                const shaftW   = 22 + (ri() % 10);
+                const shaftTop = 28 + (ri() % 35);
+                const gapBot   = 16;
+                p.push({ x: ox, y: FLOOR_Y, w: entryW, h: FLOOR_H, color: '#3a5a3a' });
+                p.push({ x: shaftX,           y: shaftTop, w: 6, h: FLOOR_Y - shaftTop - gapBot, color: '#5a6b88' });
+                p.push({ x: shaftX + shaftW,  y: shaftTop, w: 6, h: FLOOR_Y - shaftTop,           color: '#5a6b88' });
+                p.push({ x: shaftX, y: shaftTop, w: shaftW + 12, h: 6, color: '#5a7a5a' });
+                lb.push({ text: 'WALL JUMP', x: shaftX - 8, y: FLOOR_Y - 4 });
+                const l1x = shaftX + shaftW + 18 + (ri() % 15);
+                const l1y = 72 + (ri() % 35);
+                const l2x = l1x + 48 + (ri() % 20);
+                const l2y = 118 + (ri() % 24);
+                p.push({ x: l1x, y: l1y, w: 50, h: 8, color: '#5a7a5a' });
+                p.push({ x: l2x, y: l2y, w: 50, h: 8, color: '#5a7a5a' });
+                const exitX = Math.min(ox + ROOM_W - 10, l2x + 40);
+                if (exitX < ox + ROOM_W) p.push({ x: exitX, y: FLOOR_Y, w: ox + ROOM_W - exitX, h: FLOOR_H, color: '#3a5a3a' });
+                // Spike at the floor's right edge before the shaft — punishes walking past
+                if (rng() > 0.45) ents.push(makeSpike(ox + entryW - 8, FLOOR_Y, 8, 'up'));
+                // Dash crystal inside shaft at mid-height — helps the wall-jump section
+                if (rng() > 0.45) {
+                    const cryX = shaftX + Math.floor((shaftW + 6) / 2);
+                    const cryY = Math.floor((shaftTop + FLOOR_Y - gapBot) / 2);
+                    ents.push(makeDashCrystal(cryX, cryY));
+                }
+
+            } else if (type === 'climb') {
+                const entryW = 50 + (ri() % 30);
+                p.push({ x: ox, y: FLOOR_Y, w: entryW, h: FLOOR_H, color: '#3a5a3a' });
+                const wallH   = 120 + (ri() % 40);
+                const wallTop = FLOOR_Y - wallH;
+                const wallAX  = ox + entryW + 20 + (ri() % 20);
+                p.push({ x: wallAX,     y: wallTop, w: 8,  h: wallH, color: '#7a6b8a' });
+                p.push({ x: wallAX + 8, y: wallTop, w: 62, h: 8,     color: '#5a7a5a' });
+                lb.push({ text: 'GRAB+UP', x: wallAX - 32, y: FLOOR_Y - 28 });
+                lb.push({ text: 'DASH->',  x: wallAX + 14, y: wallTop - 4 });
+                const wallBX = wallAX + 8 + 62 + 20 + (ri() % 20);
+                p.push({ x: wallBX,     y: wallTop, w: 8,  h: wallH, color: '#7a6b8a' });
+                p.push({ x: wallBX + 8, y: wallTop, w: 40, h: 8,     color: '#5a7a5a' });
+                lb.push({ text: 'GRAB+UP', x: wallBX - 32, y: FLOOR_Y - 28 });
+                const d1x = wallBX + 50, d2x = d1x + 50;
+                p.push({ x: d1x, y: wallTop + 55, w: 50, h: 8, color: '#5a7a5a' });
+                p.push({ x: d2x, y: wallTop + 105, w: 40, h: 8, color: '#5a7a5a' });
+                const exitX = Math.min(ox + ROOM_W - 10, d2x + 32);
+                if (exitX < ox + ROOM_W) p.push({ x: exitX, y: FLOOR_Y, w: ox + ROOM_W - exitX, h: FLOOR_H, color: '#3a5a3a' });
+                // Spikes at wall bases — punish missing the grab
+                if (rng() > 0.4) ents.push(makeSpike(wallAX, FLOOR_Y, 8, 'up'));
+                if (rng() > 0.4) ents.push(makeSpike(wallBX, FLOOR_Y, 8, 'up'));
+                // Dash crystal reward at the top of wall A
+                if (rng() > 0.35) ents.push(makeDashCrystal(wallAX + 8 + 31, wallTop - 12));
+
+            } else if (type === 'stair') {
+                p.push({ x: ox, y: FLOOR_Y, w: 55, h: FLOOR_H, color: '#3a5a3a' });
+                const steps   = 4 + (ri() % 2);
+                const spacing = (ROOM_W - 80) / steps;
+                const stairPl = [];
+                for (let s = 0; s < steps; s++) {
+                    const sx = ox + 55 + Math.floor(s * spacing);
+                    const sy = FLOOR_Y - 32 - s * 30;
+                    const sw = 48 + (ri() % 18);
+                    p.push({ x: sx, y: sy, w: sw, h: 8, color: '#5a7a5a' });
+                    stairPl.push({ x: sx, y: sy, w: sw });
+                    if (s === steps - 1) {
+                        goal = { x: sx + sw - 18, y: sy - 14, w: 12, h: 12, color: '#d4af37' };
+                        lb.push({ text: 'SUMMIT', x: sx + 4, y: sy - 4 });
+                        ents.push(makeGoldenStrawberry(sx + Math.floor(sw / 2), sy - 16));
+                    } else if (s === Math.floor(steps / 2)) {
+                        ents.push(makeStrawberry(sx + Math.floor(sw / 2), sy - 12));
+                    }
+                    // Right-edge spike — tight but avoidable (player takes off left of spike)
+                    if (rng() > 0.5 && sw > 30) ents.push(makeSpike(sx + sw - 6, sy, 6, 'up'));
+                }
+                // Diagonal blade that sweeps the lower portion of the staircase.
+                // It oscillates between first and second-to-last step so the goal platform
+                // is always in a safe zone, guaranteeing the level is clearable.
+                if (stairPl.length >= 3 && rng() > 0.35) {
+                    const first = stairPl[0], last = stairPl[stairPl.length - 2];
+                    ents.push(makeEnticeBlade({
+                        ax: first.x + 10, ay: first.y - 8,
+                        bx: last.x  + 10, by: last.y  - 8,
+                        speed: 42 + (ri() % 18),
+                    }));
+                }
+            }
+        }
+
+        return { platforms: p, pitShading: pits, roomSpawns: sp, roomNames: nm, roomSkies: sk, roomLabels: lb, goal, entities: ents };
+    }
+
+    window.randomGenerateMap = function (seedOverride) {
+        const seed = (seedOverride !== undefined) ? (seedOverride | 0) : Math.floor(Math.random() * 999999);
+        applyLevel(buildRandomLevel(seed), seed);
+        bestMs = null;
+        restartRun();
+    };
+    window.loadRandomSeed = function () {
+        const input = document.getElementById('random-seed-input');
+        const val   = parseInt(input ? input.value : '', 10);
+        if (!isNaN(val)) window.randomGenerateMap(val);
     };
 
     // ── Gauntlet level (hand-crafted, 6 rooms × 320 px) ─────────────────────
@@ -806,11 +985,18 @@
         aiEnabled   = false;
         updateAIBtn();
 
+        // Hide all mode-specific controls, then reveal the right set
+        document.querySelectorAll('.ai-only').forEach(el => el.style.display = 'none');
+        document.querySelectorAll('.random-only').forEach(el => el.style.display = 'none');
+
         if (mode === 'gauntlet') {
             NUM_ROOMS = 6;
             applyLevel(buildGauntletLevel(), -1);
-            // Hide AI-only controls
-            document.querySelectorAll('.ai-only').forEach(el => el.style.display = 'none');
+        } else if (mode === 'random') {
+            NUM_ROOMS = AI_ROOMS;
+            const seed = Math.floor(Math.random() * 999999);
+            applyLevel(buildRandomLevel(seed), seed);
+            document.querySelectorAll('.random-only').forEach(el => el.style.display = '');
         } else {
             NUM_ROOMS = AI_ROOMS;
             const seed = Math.floor(Math.random() * 999999);
