@@ -56,9 +56,22 @@
             },
             draw(ctx) {
                 ctx.fillStyle = '#38c038'; ctx.fillRect(this.x, this.y, this.w, this.h);
-                ctx.fillStyle = '#60e060';
-                if (isFloor) ctx.fillRect(this.x + 2, this.y, this.w - 4, 2);
-                else { const tipX = orientation === 'wallLeft' ? this.x + this.w - 2 : this.x; ctx.fillRect(tipX, this.y + 2, 2, this.h - 4); }
+                // Top plate / tip
+                ctx.fillStyle = '#80f080';
+                if (isFloor) {
+                    ctx.fillRect(this.x + 1, this.y, this.w - 2, 2);
+                    // Coil zigzag
+                    ctx.strokeStyle = '#50d050'; ctx.lineWidth = 0.5;
+                    ctx.beginPath();
+                    ctx.moveTo(this.x + 2, this.y + 5);
+                    ctx.lineTo(this.x + 6, this.y + 2);
+                    ctx.lineTo(this.x + 10, this.y + 5);
+                    ctx.lineTo(this.x + 14, this.y + 2);
+                    ctx.stroke();
+                } else {
+                    const tipX = orientation === 'wallLeft' ? this.x + this.w - 2 : this.x;
+                    ctx.fillRect(tipX, this.y + 1, 2, this.h - 2);
+                }
             }
         };
         return ent;
@@ -81,8 +94,12 @@
                 player.Dashes = player.MaxDashes; this._cooldown = 0.5;
             },
             draw(ctx) {
+                const pulse = Math.sin(performance.now() / 400) * 2;
+                ctx.strokeStyle = 'rgba(255,220,40,0.35)'; ctx.lineWidth = 1.5;
+                ctx.beginPath(); ctx.arc(this.cx, this.cy, this.r + 4 + pulse, 0, Math.PI * 2); ctx.stroke();
                 ctx.fillStyle = '#d8c820'; ctx.beginPath(); ctx.arc(this.cx, this.cy, this.r, 0, Math.PI * 2); ctx.fill();
-                ctx.fillStyle = 'rgba(255,255,255,0.25)'; ctx.beginPath(); ctx.arc(this.cx, this.cy, this.r * 0.5, 0, Math.PI * 2); ctx.fill();
+                ctx.fillStyle = 'rgba(255,255,255,0.30)'; ctx.beginPath(); ctx.arc(this.cx, this.cy, this.r * 0.5, 0, Math.PI * 2); ctx.fill();
+                ctx.fillStyle = 'rgba(255,240,80,0.15)'; ctx.beginPath(); ctx.arc(this.cx, this.cy, this.r + 4 + pulse, 0, Math.PI * 2); ctx.fill();
             }
         };
     }
@@ -100,9 +117,18 @@
             draw(ctx) {
                 if (!this._active) return;
                 const cx = this.x + 5, cy = this.y + 5, r = 5;
+                const pulse = Math.sin(performance.now() / 500) * 1.5;
+                // Glow halo
+                ctx.fillStyle = 'rgba(40,204,216,0.18)';
+                ctx.beginPath(); ctx.arc(cx, cy, r + 4 + pulse, 0, Math.PI * 2); ctx.fill();
+                // Diamond
                 ctx.fillStyle = '#28ccd8';
                 ctx.beginPath(); ctx.moveTo(cx, cy - r); ctx.lineTo(cx + r, cy); ctx.lineTo(cx, cy + r); ctx.lineTo(cx - r, cy); ctx.closePath(); ctx.fill();
-                ctx.fillStyle = 'rgba(255,255,255,0.65)'; ctx.beginPath(); ctx.arc(cx, cy, 2, 0, Math.PI * 2); ctx.fill();
+                // Bright inner ring
+                ctx.strokeStyle = 'rgba(160,255,255,0.7)'; ctx.lineWidth = 0.5;
+                ctx.beginPath(); ctx.moveTo(cx, cy - r + 1); ctx.lineTo(cx + r - 1, cy); ctx.lineTo(cx, cy + r - 1); ctx.lineTo(cx - r + 1, cy); ctx.closePath(); ctx.stroke();
+                // Center dot
+                ctx.fillStyle = 'rgba(255,255,255,0.80)'; ctx.beginPath(); ctx.arc(cx, cy, 1.5, 0, Math.PI * 2); ctx.fill();
             }
         };
     }
@@ -128,6 +154,9 @@
                 return 'kill';
             },
             draw(ctx) {
+                // Danger glow
+                ctx.fillStyle = 'rgba(200,30,30,0.20)';
+                ctx.fillRect(this.x - 2, this.y - 2, this.w + 4, this.h + 4);
                 ctx.fillStyle = '#c02828'; ctx.fillRect(this.x, this.y, this.w, this.h);
                 const n = Math.max(1, Math.round((isVert ? w : h) / 8));
                 ctx.fillStyle = '#e04040';
@@ -183,8 +212,20 @@
             };
         }
         ent.draw = function (ctx) {
-            ctx.fillStyle = '#d028d0'; ctx.beginPath(); ctx.arc(this.x + 6, this.y + 6, 6, 0, Math.PI * 2); ctx.fill();
-            ctx.fillStyle = '#f060f0'; ctx.beginPath(); ctx.arc(this.x + 6, this.y + 6, 2, 0, Math.PI * 2); ctx.fill();
+            const cx = this.x + 6, cy = this.y + 6;
+            // Glow
+            ctx.fillStyle = 'rgba(200,0,200,0.20)';
+            ctx.beginPath(); ctx.arc(cx, cy, 10, 0, Math.PI * 2); ctx.fill();
+            // Spinning cross marks
+            const angle = performance.now() / 180;
+            ctx.strokeStyle = 'rgba(240,80,240,0.6)'; ctx.lineWidth = 1;
+            for (let i = 0; i < 4; i++) {
+                const a = angle + i * Math.PI / 2;
+                ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + Math.cos(a) * 7, cy + Math.sin(a) * 7); ctx.stroke();
+            }
+            // Core
+            ctx.fillStyle = '#d028d0'; ctx.beginPath(); ctx.arc(cx, cy, 5, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = '#f080f0'; ctx.beginPath(); ctx.arc(cx, cy, 2, 0, Math.PI * 2); ctx.fill();
         };
         return ent;
     }
@@ -781,12 +822,29 @@
 
         ctx.save(); ctx.translate(-cameraX, 0);
 
-        ctx.fillStyle = 'rgba(150,40,40,0.25)';
-        for (const pit of pitShading) ctx.fillRect(pit.x, pit.y, pit.w, pit.h);
+        // Starfield (parallax at 25% camera speed)
+        ctx.save();
+        ctx.translate(cameraX * 0.75, 0); // undo 75% of translate so stars scroll slowly
+        ctx.fillStyle = 'rgba(200,215,255,0.45)';
+        for (let i = 0; i < 48; i++) {
+            const sx = ((i * 137 + 29) * 1699) % (ROOM_W * 6);
+            const sy = ((i * 97  + 11) * 1301) % H;
+            ctx.fillRect(sx - cameraX * 0.75, sy, i % 4 === 0 ? 1.5 : 0.5, i % 4 === 0 ? 1.5 : 0.5);
+        }
+        ctx.restore();
+
+        // Pit voids
+        for (const pit of pitShading) {
+            ctx.fillStyle = 'rgba(0,0,0,0.55)';
+            ctx.fillRect(pit.x, pit.y, pit.w, pit.h);
+            ctx.fillStyle = 'rgba(200,30,30,0.35)';
+            ctx.fillRect(pit.x, pit.y, pit.w, 2);
+        }
 
         for (const pl of platforms) {
             ctx.fillStyle = pl.color; ctx.fillRect(pl.x, pl.y, pl.w, pl.h);
-            ctx.fillStyle = 'rgba(255,255,255,0.12)'; ctx.fillRect(pl.x, pl.y, pl.w, 1);
+            ctx.fillStyle = 'rgba(255,255,255,0.18)'; ctx.fillRect(pl.x, pl.y, pl.w, 1);      // top highlight
+            ctx.fillStyle = 'rgba(0,0,0,0.30)';       ctx.fillRect(pl.x, pl.y + pl.h - 1, pl.w, 1); // bottom shadow
         }
 
         ctx.strokeStyle = 'rgba(255,255,255,0.10)'; ctx.lineWidth = 1;
@@ -801,8 +859,8 @@
             ctx.globalAlpha = 1;
         }
 
-        // Entities
-        for (const ent of entities) ent.draw(ctx);
+        // Entities — each isolated with save/restore so state can't bleed
+        for (const ent of entities) { ctx.save(); ent.draw(ctx); ctx.restore(); }
 
         // Neural AI raycast overlay
         if (aiEnabled && typeof NeuralAI !== 'undefined') {
