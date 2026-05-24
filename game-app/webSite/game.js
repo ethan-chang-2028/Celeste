@@ -500,149 +500,160 @@
     function buildGauntletLevel() {
         const p = [], pits = [], sp = [], nm = [], sk = [], lb = [];
 
-        // Room 1 — Entry Hall (x 0–319)
+        // ── Room 1 — Entry Hall (x 0–319) ───────────────────────────────────
+        // Tiny spawn ledge → 4 ascending stepping stones → high exit ledge.
+        // No long floor — the void is immediate.
         p.push({x:0,   y:0,   w:8,   h:180, color:'#4a5570'}); // left wall
-        p.push({x:0,   y:168, w:64,  h:12,  color:'#3a5a3a'}); // floor-L
-        p.push({x:128, y:168, w:192, h:12,  color:'#3a5a3a'}); // floor-R
-        pits.push({x:64,  y:168, w:64,  h:12});
-        p.push({x:64,  y:136, w:48,  h:8,   color:'#5a7a5a'}); // bounce ledge
-        p.push({x:200, y:110, w:80,  h:8,   color:'#5a7a5a'}); // mid shelf
-        p.push({x:270, y:80,  w:50,  h:8,   color:'#5a7a5a'}); // exit ledge
-        sp.push({x:14, y:155});
+        p.push({x:0,   y:168, w:38,  h:12,  color:'#3a5a3a'}); // spawn ledge
+        pits.push({x:38, y:168, w:282, h:12});                  // wide pit
+        p.push({x:46,  y:148, w:38,  h:8,   color:'#5a7a5a'}); // stone 1
+        p.push({x:100, y:124, w:42,  h:8,   color:'#5a7a5a'}); // stone 2
+        p.push({x:158, y:100, w:46,  h:8,   color:'#5a7a5a'}); // stone 3
+        p.push({x:220, y:76,  w:50,  h:8,   color:'#5a7a5a'}); // stone 4
+        p.push({x:270, y:52,  w:50,  h:8,   color:'#7a9a7a'}); // exit ledge
+        sp.push({x:10, y:155});
         nm.push('ROOM 1 — ENTRY HALL');
         sk.push(['#1a2a4a','#3a5a8a']);
-        lb.push({text:'JUMP',   x:68,  y:178});
-        lb.push({text:'SPRING', x:66,  y:133});
-        lb.push({text:'CLIMB',  x:204, y:107});
+        lb.push({text:'JUMP',  x:42,  y:175});
+        lb.push({text:'↑ UP',  x:162, y:97});
 
-        // Room 2 — Key Room (x 320–639)
-        p.push({x:320, y:168, w:70,  h:12,  color:'#3a5a3a'}); // floor-L
-        p.push({x:580, y:168, w:60,  h:12,  color:'#3a5a3a'}); // floor-R
-        pits.push({x:390, y:168, w:190, h:12});
-        p.push({x:370, y:128, w:60,  h:8,   color:'#5a7a5a'}); // step 1
-        p.push({x:450, y:100, w:60,  h:8,   color:'#5a7a5a'}); // step 2
-        p.push({x:530, y:70,  w:60,  h:8,   color:'#5a7a5a'}); // step 3
-        sp.push({x:334, y:155});
-        nm.push('ROOM 2 — KEY ROOM');
-        sk.push(['#1a1040','#3a2870']);
-        lb.push({text:'STEP UP', x:374, y:125});
-        lb.push({text:'STEP UP', x:454, y:97});
+        // ── Room 2 — Pillar Hall (x 320–639) ────────────────────────────────
+        // Three ceiling pillars with floating shelves between them.
+        // Player enters at y≈52 from room 1 and lands on the first shelf.
+        pits.push({x:320, y:168, w:320, h:12});                 // full-room void
+        p.push({x:320, y:60,  w:80,  h:8,   color:'#5a6b7a'}); // shelf 0 (landing)
+        p.push({x:400, y:0,   w:8,   h:80,  color:'#4a5570'}); // pillar A
+        p.push({x:408, y:80,  w:72,  h:8,   color:'#5a6b7a'}); // shelf A
+        p.push({x:480, y:0,   w:8,   h:66,  color:'#4a5570'}); // pillar B
+        p.push({x:488, y:58,  w:72,  h:8,   color:'#5a7a5a'}); // shelf B
+        p.push({x:560, y:0,   w:8,   h:52,  color:'#4a5570'}); // pillar C
+        p.push({x:568, y:44,  w:72,  h:8,   color:'#7a9a7a'}); // exit shelf
+        sp.push({x:334, y:47});
+        nm.push('ROOM 2 — PILLAR HALL');
+        sk.push(['#180a30','#2a1050']);
+        lb.push({text:'WALL JUMP', x:325, y:162});
+        lb.push({text:'↗ UP',      x:494, y:55});
 
-        // Room 3 — Lock Room (x 640–959)
-        p.push({x:640, y:168, w:60,  h:12,  color:'#3a5a3a'}); // floor-L
+        // ── Room 3 — Lock Room (x 640–959) ──────────────────────────────────
+        // Walled arch in the center — wall-jump up and dash out.
+        // Player enters from room 2's exit shelf (y≈44) and can drop to the left floor.
+        p.push({x:640, y:168, w:56,  h:12,  color:'#3a5a3a'}); // floor-L (spawn area)
         p.push({x:900, y:168, w:60,  h:12,  color:'#3a5a3a'}); // floor-R
-        pits.push({x:700, y:168, w:200, h:12});
-        p.push({x:730, y:60,  w:8,   h:108, color:'#7a6b8a'}); // wall A
-        p.push({x:800, y:60,  w:8,   h:108, color:'#7a6b8a'}); // wall B
-        p.push({x:730, y:60,  w:80,  h:8,   color:'#5a7a5a'}); // roof
-        p.push({x:810, y:110, w:60,  h:8,   color:'#5a7a5a'}); // exit step
-        p.push({x:870, y:80,  w:90,  h:8,   color:'#5a7a5a'}); // exit ledge
+        pits.push({x:696, y:168, w:204, h:12});
+        p.push({x:726, y:56,  w:8,   h:112, color:'#7a6b8a'}); // wall A
+        p.push({x:800, y:56,  w:8,   h:112, color:'#7a6b8a'}); // wall B
+        p.push({x:726, y:56,  w:82,  h:8,   color:'#5a7a5a'}); // arch roof
+        p.push({x:808, y:108, w:62,  h:8,   color:'#5a7a5a'}); // exit step
+        p.push({x:862, y:76,  w:98,  h:8,   color:'#7a9a7a'}); // exit ledge
         sp.push({x:654, y:155});
         nm.push('ROOM 3 — LOCK ROOM');
-        sk.push(['#0a2010','#1a4a28']);
-        lb.push({text:'WALL JUMP', x:736, y:175});
-        lb.push({text:'DASH ->', x:742,  y:57});
+        sk.push(['#0a2010','#1a4028']);
+        lb.push({text:'WALL JUMP', x:732, y:175});
+        lb.push({text:'DASH →',    x:736, y:53});
 
-        // Room 4 — Crush Zone (x 960–1279)
-        p.push({x:960,  y:0,   w:200, h:8,   color:'#4a3030'}); // danger ceiling
-        p.push({x:960,  y:168, w:50,  h:12,  color:'#3a5a3a'}); // floor-L
-        p.push({x:1230, y:168, w:50,  h:12,  color:'#3a5a3a'}); // floor-R
-        pits.push({x:1010, y:168, w:220, h:12});
-        p.push({x:1010, y:140, w:52,  h:8,   color:'#8a3030'}); // Kevin step
-        p.push({x:1082, y:110, w:50,  h:8,   color:'#5a7a5a'});
-        p.push({x:1152, y:80,  w:50,  h:8,   color:'#5a7a5a'});
-        p.push({x:1190, y:50,  w:90,  h:8,   color:'#5a7a5a'}); // exit ledge
+        // ── Room 4 — Crush Zone (x 960–1279) ────────────────────────────────
+        // Danger ceiling slab + three ascending steps + long upper platform.
+        // Ceiling spikes punish jumping too high; vertical blades act as pistons.
+        p.push({x:960,  y:0,   w:210, h:8,   color:'#4a2828'}); // danger ceiling
+        p.push({x:960,  y:168, w:52,  h:12,  color:'#3a5a3a'}); // floor-L
+        p.push({x:1228, y:168, w:52,  h:12,  color:'#3a5a3a'}); // floor-R
+        pits.push({x:1012, y:168, w:216, h:12});
+        p.push({x:1012, y:136, w:52,  h:8,   color:'#8a3030'}); // step A
+        p.push({x:1084, y:106, w:52,  h:8,   color:'#5a7a5a'}); // step B
+        p.push({x:1156, y:76,  w:52,  h:8,   color:'#5a7a5a'}); // step C
+        p.push({x:1008, y:30,  w:264, h:8,   color:'#4a4a70'}); // long upper platform
         sp.push({x:974, y:155});
         nm.push('ROOM 4 — CRUSH ZONE');
-        sk.push(['#3a0a00','#6a2010']);
-        lb.push({text:'DANGER', x:963, y:18});
-        lb.push({text:'CRUSH',  x:1014, y:137});
-        lb.push({text:'DASH UP',x:1086, y:107});
+        sk.push(['#3a0a00','#6a1808']);
+        lb.push({text:'DANGER',  x:963, y:19});
+        lb.push({text:'CRUSH',   x:1016, y:133});
+        lb.push({text:'DASH UP', x:1088, y:103});
 
-        // Room 5 — Fly Zone (x 1280–1599)
-        p.push({x:1280, y:168, w:44,  h:12,  color:'#3a5a3a'});
-        p.push({x:1556, y:168, w:44,  h:12,  color:'#3a5a3a'});
-        pits.push({x:1324, y:168, w:232, h:12});
-        p.push({x:1324, y:120, w:52,  h:8,   color:'#5a7a8a'});
-        p.push({x:1404, y:82,  w:52,  h:8,   color:'#5a7a8a'});
-        p.push({x:1484, y:50,  w:72,  h:8,   color:'#5a7a8a'});
+        // ── Room 5 — Fly Zone (x 1280–1599) ─────────────────────────────────
+        // Huge void — chained air-dashes required. Crystals refill mid-flight.
+        p.push({x:1280, y:168, w:46,  h:12,  color:'#3a5a3a'});
+        p.push({x:1554, y:168, w:46,  h:12,  color:'#3a5a3a'});
+        pits.push({x:1326, y:168, w:228, h:12});
+        p.push({x:1338, y:118, w:54,  h:8,   color:'#5a7a8a'}); // platform 1
+        p.push({x:1416, y:82,  w:54,  h:8,   color:'#5a7a8a'}); // platform 2
+        p.push({x:1494, y:50,  w:60,  h:8,   color:'#5a7a8a'}); // platform 3
         sp.push({x:1294, y:155});
         nm.push('ROOM 5 — FLY ZONE');
         sk.push(['#001a3a','#003870']);
-        lb.push({text:'DASH!', x:1328, y:117});
-        lb.push({text:'DASH!', x:1408, y:79});
-        lb.push({text:'DASH!', x:1488, y:47});
+        lb.push({text:'DASH!', x:1342, y:115});
+        lb.push({text:'DASH!', x:1420, y:79});
+        lb.push({text:'DASH!', x:1498, y:47});
 
-        // Room 6 — Summit (x 1600–1919)
+        // ── Room 6 — Summit (x 1600–1919) ───────────────────────────────────
+        // Classic ascending staircase to the pedestal. Hardest entities here.
         p.push({x:1912, y:0,   w:8,   h:180, color:'#4a5570'}); // right wall
-        p.push({x:1600, y:168, w:50,  h:12,  color:'#3a5a3a'});
-        p.push({x:1660, y:148, w:40,  h:8,   color:'#5a7a5a'});
-        p.push({x:1720, y:118, w:40,  h:8,   color:'#5a7a5a'});
-        p.push({x:1780, y:88,  w:40,  h:8,   color:'#5a7a5a'});
-        p.push({x:1840, y:58,  w:50,  h:8,   color:'#7a9a7a'});
+        p.push({x:1600, y:168, w:52,  h:12,  color:'#3a5a3a'}); // base floor
+        p.push({x:1658, y:148, w:42,  h:8,   color:'#5a7a5a'}); // step 1
+        p.push({x:1718, y:118, w:42,  h:8,   color:'#5a7a5a'}); // step 2
+        p.push({x:1778, y:88,  w:42,  h:8,   color:'#5a7a5a'}); // step 3
+        p.push({x:1838, y:58,  w:52,  h:8,   color:'#7a9a7a'}); // step 4
         p.push({x:1876, y:28,  w:36,  h:8,   color:'#9aba9a'}); // pedestal
         sp.push({x:1614, y:155});
         nm.push('ROOM 6 — SUMMIT');
-        sk.push(['#0a0a18','#202840']);
-        lb.push({text:'SUMMIT', x:1844, y:55});
+        sk.push(['#0a0a18','#1c2438']);
+        lb.push({text:'SUMMIT', x:1842, y:55});
 
-        // ── Entities ────────────────────────────────────────────────────────
+        // ── Entities ─────────────────────────────────────────────────────────
         const ents = [];
 
-        // Room 1 — Entry Hall: spring teaches the bounce mechanic, spikes guard pit edges,
-        //   dash crystal above mid-shelf teaches dashing, strawberry on exit ledge is optional reward
-        ents.push(makeSpring(88, 136, 'floor'));
-        ents.push(makeSpike(64, 168, 8, 'up'));
-        ents.push(makeSpike(120, 168, 8, 'up'));
-        ents.push(makeDashCrystal(240, 100));
-        ents.push(makeStrawberry(290, 73));
+        // Room 1: Spring on stone 1 teaches bounce; spike guards the ledge edge;
+        // dash crystal on stone 4 teaches dashing; strawberry on exit ledge is optional.
+        ents.push(makeSpring(65, 148, 'floor'));
+        ents.push(makeSpike(38, 168, 8, 'up'));
+        ents.push(makeDashCrystal(245, 66));
+        ents.push(makeStrawberry(295, 44));
 
-        // Room 2 — Key Room: a single diagonal blade guards ALL three steps like a sentinel,
-        //   edge spikes punish sloppy landings, dash crystal at the top is the "key" prize
-        ents.push(makeEnticeBlade({ ax: 378, ay: 128, bx: 574, by: 63, speed: 65 }));
-        ents.push(makeSpike(424, 128, 6, 'up'));
-        ents.push(makeSpike(504, 100, 6, 'up'));
-        ents.push(makeDashCrystal(556, 63));
+        // Room 2: Horizontal blades patrol each gap between pillars — the player
+        // must time their wall-jumps and dashes to slip past.
+        ents.push(makeEnticeBlade({ ax: 328, ay: 40, bx: 396, by: 40, speed: 52 }));
+        ents.push(makeEnticeBlade({ ax: 416, ay: 56, bx: 476, by: 56, speed: 64 }));
+        ents.push(makeSpike(328, 60, 8, 'up'));
+        ents.push(makeDashCrystal(504, 48));
 
-        // Room 3 — Lock Room: spike guards the arch entrance, crumble block inside arch forces
-        //   urgency (wall-jump out before it crumbles), blade in the pit below punishes falls,
-        //   bumper on the exit ledge launches to safety
-        ents.push(makeSpike(692, 168, 8, 'up'));
-        ents.push(makeCrumbleBlock(738, 100, 54));
-        ents.push(makeEnticeBlade({ ax: 742, ay: 150, bx: 798, by: 150, speed: 55 }));
-        ents.push(makeBumper(900, 90));
+        // Room 3: Spike guards the arch entrance; crumble block inside the arch
+        // creates urgency (wall-jump out before it breaks); horizontal blade patrols
+        // the pit below; bumper on exit ledge launches to safety.
+        ents.push(makeSpike(696, 168, 8, 'up'));
+        ents.push(makeCrumbleBlock(734, 96, 58));
+        ents.push(makeEnticeBlade({ ax: 740, ay: 148, bx: 796, by: 148, speed: 55 }));
+        ents.push(makeBumper(908, 88));
 
-        // Room 4 — Crush Zone: ceiling spike clusters create a low ceiling of death,
-        //   vertical blades oscillate up and down like pistons — must time dashes between them,
-        //   dash crystal at the exit rewards surviving the gauntlet
-        ents.push(makeSpike(978,  8, 24, 'down'));
-        ents.push(makeSpike(1040, 8, 24, 'down'));
-        ents.push(makeSpike(1112, 8, 24, 'down'));
-        ents.push(makeEnticeBlade({ ax: 1036, ay: 12, bx: 1036, by: 132, speed: 65 }));
-        ents.push(makeEnticeBlade({ ax: 1110, ay: 12, bx: 1110, by: 100, speed: 80 }));
-        ents.push(makeDashCrystal(1225, 43));
+        // Room 4: Ceiling spike clusters create a low ceiling of death; two vertical
+        // blades oscillate like pistons and must be timed; dash crystal at the far end
+        // rewards reaching the long upper platform.
+        ents.push(makeSpike(980,  8, 24, 'down'));
+        ents.push(makeSpike(1044, 8, 24, 'down'));
+        ents.push(makeSpike(1116, 8, 24, 'down'));
+        ents.push(makeEnticeBlade({ ax: 1040, ay: 14, bx: 1040, by: 126, speed: 68 }));
+        ents.push(makeEnticeBlade({ ax: 1116, ay: 14, bx: 1116, by: 96,  speed: 82 }));
+        ents.push(makeDashCrystal(1232, 20));
 
-        // Room 5 — Fly Zone: huge void requires chained dashes — mid-air crystals refill dash
-        //   between platforms, bumpers serve as launch pads, sweeping diagonal blade punishes hovering
-        ents.push(makeDashCrystal(1390, 95));
-        ents.push(makeDashCrystal(1462, 62));
-        ents.push(makeBumper(1344, 112));
-        ents.push(makeBumper(1422, 74));
-        ents.push(makeEnticeBlade({ ax: 1310, ay: 148, bx: 1550, by: 62, speed: 45 }));
-        ents.push(makeStrawberry(1518, 42));
+        // Room 5: Crystals are essential for the aerial crossing; bumpers serve as
+        // launch pads between platforms; sweeping diagonal blade punishes hovering.
+        ents.push(makeDashCrystal(1392, 98));
+        ents.push(makeDashCrystal(1464, 62));
+        ents.push(makeBumper(1350, 108));
+        ents.push(makeBumper(1426, 72));
+        ents.push(makeEnticeBlade({ ax: 1312, ay: 148, bx: 1556, by: 40, speed: 44 }));
+        ents.push(makeStrawberry(1520, 42));
 
-        // Room 6 — Summit: diagonal blade guards the entire staircase, circular blade orbits
-        //   the pedestal, crumble bridges between steps force quick movement, edge spikes punish
-        //   hesitation, mid-climb strawberry + golden strawberry at the peak are the ultimate rewards
-        ents.push(makeEnticeBlade({ ax: 1668, ay: 140, bx: 1886, by: 22, speed: 50 }));
+        // Room 6: Diagonal blade guards the entire staircase; circular blade orbits
+        // the pedestal; crumble bridges between steps force quick movement; edge spikes
+        // punish hesitation; golden strawberry at the peak is the ultimate reward.
+        ents.push(makeEnticeBlade({ ax: 1666, ay: 142, bx: 1886, by: 22, speed: 50 }));
         ents.push(makeEnticeBlade({ path: 'circular', cx: 1858, cy: 38, radius: 22, startAngle: 0, speed: 2.2 }));
-        ents.push(makeCrumbleBlock(1692, 132, 24));
-        ents.push(makeCrumbleBlock(1752, 102, 24));
-        ents.push(makeCrumbleBlock(1812, 72, 24));
-        ents.push(makeSpike(1695, 148, 6, 'up'));
-        ents.push(makeSpike(1754, 118, 6, 'up'));
-        ents.push(makeSpike(1814, 88,  6, 'up'));
-        ents.push(makeStrawberry(1796, 80));
+        ents.push(makeCrumbleBlock(1690, 132, 26));
+        ents.push(makeCrumbleBlock(1750, 102, 26));
+        ents.push(makeCrumbleBlock(1810, 72,  26));
+        ents.push(makeSpike(1693, 148, 6, 'up'));
+        ents.push(makeSpike(1753, 118, 6, 'up'));
+        ents.push(makeSpike(1813, 88,  6, 'up'));
+        ents.push(makeStrawberry(1794, 80));
         ents.push(makeGoldenStrawberry(1894, 21));
 
         const goal = { x:1882, y:12, w:12, h:12, color:'#d4af37' };
