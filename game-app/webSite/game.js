@@ -12,7 +12,8 @@
     const MAX_ACCUM = 0.25;
     const DEATH_Y   = H + 20;
     const ROOM_W    = W;
-    const NUM_ROOMS = 5;
+    const AI_ROOMS  = 5;         // rooms used by the procedural AI maps
+    let   NUM_ROOMS = AI_ROOMS;  // current room count — changes per level
     const FLOOR_Y   = 168;
     const FLOOR_H   = 12;
 
@@ -36,6 +37,7 @@
     let roomLabels  = [];
     let GOAL        = { x: 0, y: 0, w: 12, h: 12, color: '#d4af37' };
     let currentSeed = 0;
+    let entities    = [];
 
     const PALETTES = [
         ['#1a2a4a','#3a5a8a'], ['#2a1040','#5a2a80'],
@@ -182,20 +184,20 @@
         roomSpawns = data.roomSpawns; roomNames   = data.roomNames;
         roomSkies  = data.roomSkies;  roomLabels  = data.roomLabels;
         GOAL = data.goal; currentSeed = seed;
+        entities = data.entities || [];
         const el = document.getElementById('map-seed');
         if (el) el.textContent = `Seed: ${seed}`;
     }
 
-    const roomBanners = [
-        { text: '1', x: 148 }, { text: '2', x: 468 },
-        { text: '3', x: 788 }, { text: '4', x: 1108 }, { text: '5', x: 1428 },
-    ];
+    // roomBanners generated dynamically in render() based on current NUM_ROOMS
 
     const initSeed = Math.floor(Math.random() * 999999);
     applyLevel(buildLevel(initSeed), initSeed);
 
     // ── Run state ────────────────────────────────────────────────────────────
-    let cameraX     = 0;
+    let gameActive   = false;   // true only after the user picks a level
+    let currentMode  = 'ai';    // 'gauntlet' | 'ai'
+    let cameraX      = 0;
     let respawnRoom  = 0;
     let furthestRoom = 0;
     const player = new CelestePlayer(roomSpawns[0].x, roomSpawns[0].y);
@@ -232,6 +234,7 @@
         player.reset(roomSpawns[0].x, roomSpawns[0].y);
         runStart = performance.now();
         deaths = 0; won = false;
+        for (const e of entities) e.reset();
     }
 
     // ── AI Player Controller (neural — delegates to NeuralAI in ai-neural.js) ─
@@ -323,6 +326,170 @@
         if (!isNaN(val)) window.aiGenerateMap(val);
     };
 
+    // ── Gauntlet level (hand-crafted, 6 rooms × 320 px) ─────────────────────
+    function buildGauntletLevel() {
+        const p = [], pits = [], sp = [], nm = [], sk = [], lb = [];
+
+        // Room 1 — Entry Hall (x 0–319)
+        p.push({x:0,   y:0,   w:8,   h:180, color:'#4a5570'}); // left wall
+        p.push({x:0,   y:168, w:64,  h:12,  color:'#3a5a3a'}); // floor-L
+        p.push({x:128, y:168, w:192, h:12,  color:'#3a5a3a'}); // floor-R
+        pits.push({x:64,  y:168, w:64,  h:12});
+        p.push({x:64,  y:136, w:48,  h:8,   color:'#5a7a5a'}); // bounce ledge
+        p.push({x:200, y:110, w:80,  h:8,   color:'#5a7a5a'}); // mid shelf
+        p.push({x:270, y:80,  w:50,  h:8,   color:'#5a7a5a'}); // exit ledge
+        sp.push({x:14, y:155});
+        nm.push('ROOM 1 — ENTRY HALL');
+        sk.push(['#1a2a4a','#3a5a8a']);
+        lb.push({text:'JUMP',   x:68,  y:178});
+        lb.push({text:'SPRING', x:66,  y:133});
+        lb.push({text:'CLIMB',  x:204, y:107});
+
+        // Room 2 — Key Room (x 320–639)
+        p.push({x:320, y:168, w:70,  h:12,  color:'#3a5a3a'}); // floor-L
+        p.push({x:580, y:168, w:60,  h:12,  color:'#3a5a3a'}); // floor-R
+        pits.push({x:390, y:168, w:190, h:12});
+        p.push({x:370, y:128, w:60,  h:8,   color:'#5a7a5a'}); // step 1
+        p.push({x:450, y:100, w:60,  h:8,   color:'#5a7a5a'}); // step 2
+        p.push({x:530, y:70,  w:60,  h:8,   color:'#5a7a5a'}); // step 3
+        sp.push({x:334, y:155});
+        nm.push('ROOM 2 — KEY ROOM');
+        sk.push(['#1a1040','#3a2870']);
+        lb.push({text:'STEP UP', x:374, y:125});
+        lb.push({text:'STEP UP', x:454, y:97});
+
+        // Room 3 — Lock Room (x 640–959)
+        p.push({x:640, y:168, w:60,  h:12,  color:'#3a5a3a'}); // floor-L
+        p.push({x:900, y:168, w:60,  h:12,  color:'#3a5a3a'}); // floor-R
+        pits.push({x:700, y:168, w:200, h:12});
+        p.push({x:730, y:60,  w:8,   h:108, color:'#7a6b8a'}); // wall A
+        p.push({x:800, y:60,  w:8,   h:108, color:'#7a6b8a'}); // wall B
+        p.push({x:730, y:60,  w:80,  h:8,   color:'#5a7a5a'}); // roof
+        p.push({x:810, y:110, w:60,  h:8,   color:'#5a7a5a'}); // exit step
+        p.push({x:870, y:80,  w:90,  h:8,   color:'#5a7a5a'}); // exit ledge
+        sp.push({x:654, y:155});
+        nm.push('ROOM 3 — LOCK ROOM');
+        sk.push(['#0a2010','#1a4a28']);
+        lb.push({text:'WALL JUMP', x:736, y:175});
+        lb.push({text:'DASH ->', x:742,  y:57});
+
+        // Room 4 — Crush Zone (x 960–1279)
+        p.push({x:960,  y:0,   w:200, h:8,   color:'#4a3030'}); // danger ceiling
+        p.push({x:960,  y:168, w:50,  h:12,  color:'#3a5a3a'}); // floor-L
+        p.push({x:1230, y:168, w:50,  h:12,  color:'#3a5a3a'}); // floor-R
+        pits.push({x:1010, y:168, w:220, h:12});
+        p.push({x:1010, y:140, w:52,  h:8,   color:'#8a3030'}); // Kevin step
+        p.push({x:1082, y:110, w:50,  h:8,   color:'#5a7a5a'});
+        p.push({x:1152, y:80,  w:50,  h:8,   color:'#5a7a5a'});
+        p.push({x:1190, y:50,  w:90,  h:8,   color:'#5a7a5a'}); // exit ledge
+        sp.push({x:974, y:155});
+        nm.push('ROOM 4 — CRUSH ZONE');
+        sk.push(['#3a0a00','#6a2010']);
+        lb.push({text:'DANGER', x:963, y:18});
+        lb.push({text:'CRUSH',  x:1014, y:137});
+        lb.push({text:'DASH UP',x:1086, y:107});
+
+        // Room 5 — Fly Zone (x 1280–1599)
+        p.push({x:1280, y:168, w:44,  h:12,  color:'#3a5a3a'});
+        p.push({x:1556, y:168, w:44,  h:12,  color:'#3a5a3a'});
+        pits.push({x:1324, y:168, w:232, h:12});
+        p.push({x:1324, y:120, w:52,  h:8,   color:'#5a7a8a'});
+        p.push({x:1404, y:82,  w:52,  h:8,   color:'#5a7a8a'});
+        p.push({x:1484, y:50,  w:72,  h:8,   color:'#5a7a8a'});
+        sp.push({x:1294, y:155});
+        nm.push('ROOM 5 — FLY ZONE');
+        sk.push(['#001a3a','#003870']);
+        lb.push({text:'DASH!', x:1328, y:117});
+        lb.push({text:'DASH!', x:1408, y:79});
+        lb.push({text:'DASH!', x:1488, y:47});
+
+        // Room 6 — Summit (x 1600–1919)
+        p.push({x:1912, y:0,   w:8,   h:180, color:'#4a5570'}); // right wall
+        p.push({x:1600, y:168, w:50,  h:12,  color:'#3a5a3a'});
+        p.push({x:1660, y:148, w:40,  h:8,   color:'#5a7a5a'});
+        p.push({x:1720, y:118, w:40,  h:8,   color:'#5a7a5a'});
+        p.push({x:1780, y:88,  w:40,  h:8,   color:'#5a7a5a'});
+        p.push({x:1840, y:58,  w:50,  h:8,   color:'#7a9a7a'});
+        p.push({x:1876, y:28,  w:36,  h:8,   color:'#9aba9a'}); // pedestal
+        sp.push({x:1614, y:155});
+        nm.push('ROOM 6 — SUMMIT');
+        sk.push(['#0a0a18','#202840']);
+        lb.push({text:'SUMMIT', x:1844, y:55});
+
+        // ── Entities ────────────────────────────────────────────────────────
+        const ents = [];
+        if (typeof Entities !== 'undefined') {
+            const E = Entities;
+
+            // Room 1 — Entry Hall: spring on bounce ledge, spikes at pit edges, dash crystal
+            ents.push(E.makeSpring(88, 136, 'floor'));
+            ents.push(E.makeSpike(64, 168, 8, 'up'));
+            ents.push(E.makeSpike(128, 168, 8, 'up'));
+            ents.push(E.makeDashCrystal(240, 104));
+
+            // Room 2 — Key Room: blade patrolling the steps, dash crystal mid-route
+            ents.push(E.makeEnticeBlade({ ax: 395, ay: 121, bx: 556, by: 63, speed: 70 }));
+            ents.push(E.makeDashCrystal(480, 94));
+
+            // Room 3 — Lock Room: crumble platform inside arch, bumper near exit
+            ents.push(E.makeCrumbleBlock(738, 100, 62));
+            ents.push(E.makeBumper(915, 68));
+
+            // Room 4 — Crush Zone: ceiling spikes, bumper in open space, dash crystal
+            ents.push(E.makeSpike(968, 8, 32, 'down'));
+            ents.push(E.makeBumper(1100, 90));
+            ents.push(E.makeDashCrystal(1155, 72));
+
+            // Room 5 — Fly Zone: two bumpers, circular blade, dash crystal
+            ents.push(E.makeBumper(1375, 95));
+            ents.push(E.makeBumper(1448, 65));
+            ents.push(E.makeEnticeBlade({ path: 'circular', cx: 1448, cy: 65, radius: 28, startAngle: 0, speed: 2 }));
+            ents.push(E.makeDashCrystal(1350, 113));
+
+            // Room 6 — Summit: strawberry on the climb
+            ents.push(E.makeStrawberry(1800, 82));
+        }
+
+        const goal = { x:1882, y:12, w:12, h:12, color:'#d4af37' };
+        return { platforms: p, pitShading: pits, roomSpawns: sp,
+                 roomNames: nm, roomSkies: sk, roomLabels: lb, goal, entities: ents };
+    }
+
+    // ── Level-select API (called from game.html buttons) ─────────────────────
+    window.startGame = function (mode) {
+        currentMode = mode;
+        aiEnabled   = false;
+        updateAIBtn();
+
+        if (mode === 'gauntlet') {
+            NUM_ROOMS = 6;
+            applyLevel(buildGauntletLevel(), -1);
+            // Hide AI-only controls
+            document.querySelectorAll('.ai-only').forEach(el => el.style.display = 'none');
+        } else {
+            NUM_ROOMS = AI_ROOMS;
+            const seed = Math.floor(Math.random() * 999999);
+            applyLevel(buildLevel(seed), seed);
+            document.querySelectorAll('.ai-only').forEach(el => el.style.display = '');
+        }
+
+        bestMs = null;
+        restartRun();
+        if (typeof NeuralAI !== 'undefined') NeuralAI.reset(roomSpawns[0].x);
+
+        document.getElementById('level-menu').style.display = 'none';
+        document.getElementById('game-ui').style.display    = 'flex';
+        gameActive = true;
+    };
+
+    window.showLevelMenu = function () {
+        gameActive = false;
+        aiEnabled  = false;
+        updateAIBtn();
+        document.getElementById('game-ui').style.display    = 'none';
+        document.getElementById('level-menu').style.display = '';
+    };
+
     // ── Render ────────────────────────────────────────────────────────────────
     function playerOverlapsGoal() {
         return GOAL && player.x < GOAL.x + GOAL.w && player.x + player.w > GOAL.x
@@ -358,6 +525,9 @@
             ctx.globalAlpha = 1;
         }
 
+        // Entities
+        for (const ent of entities) ent.draw(ctx);
+
         // Neural AI raycast overlay
         if (aiEnabled && typeof NeuralAI !== 'undefined') {
             const cx = player.x + player.w / 2;
@@ -376,7 +546,7 @@
         player.draw(ctx);
 
         ctx.fillStyle = 'rgba(255,255,255,0.08)'; ctx.font = 'bold 80px monospace';
-        for (const b of roomBanners) ctx.fillText(b.text, b.x, 120);
+        for (let r = 0; r < NUM_ROOMS; r++) ctx.fillText(String(r + 1), r * ROOM_W + 148, 120);
 
         ctx.fillStyle = 'rgba(220,220,220,0.55)'; ctx.font = '6px monospace';
         for (const lbl of roomLabels) ctx.fillText(lbl.text, lbl.x, lbl.y);
@@ -419,7 +589,12 @@
 
     function step() {
         const input = readInput();
-        player.update(input, platforms, FIXED_DT);
+        const dynPlat = entities.filter(e => e.isSolid)
+            .map(e => ({ x: e.x, y: e.y, w: e.w, h: e.h, color: e.color || '#888' }));
+        player.update(input, dynPlat.length ? platforms.concat(dynPlat) : platforms, FIXED_DT);
+        for (const ent of entities) {
+            if (ent.update(player, FIXED_DT) === 'kill') { player.y = DEATH_Y + 1; break; }
+        }
 
         if (player.y <= DEATH_Y) {
             respawnRoom  = getRoomIdx();
@@ -456,6 +631,7 @@
     }
 
     function frame(now) {
+        if (!gameActive) { last = now; requestAnimationFrame(frame); return; }
         accum += (now - last) / 1000; last = now;
         if (accum > MAX_ACCUM) accum = MAX_ACCUM;
         let didStep = false;

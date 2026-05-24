@@ -6,6 +6,7 @@
     <title>Apex Platformer — Game</title>
     <link rel="stylesheet" href="/game.css">
     <style>
+        /* ── AI panel ── */
         .ai-panel {
             display: flex;
             align-items: center;
@@ -43,6 +44,86 @@
             padding: 7px 10px !important;
             min-width: 36px;
         }
+
+        /* ── Level-select menu ── */
+        #level-menu {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 420px;
+            width: 100%;
+            padding: 2rem 1rem;
+        }
+        .menu-card {
+            background: #11131c;
+            border: 1px solid #2a2f42;
+            border-radius: 10px;
+            padding: 2.5rem 2.5rem 2rem;
+            max-width: 560px;
+            width: 100%;
+            text-align: center;
+        }
+        .menu-title {
+            margin: 0 0 6px;
+            font-size: 2.2rem;
+            letter-spacing: 0.25em;
+            color: #e8c87a;
+            font-family: monospace;
+        }
+        .menu-sub {
+            margin: 0 0 1.8rem;
+            color: #7aa2ff;
+            font-size: 0.9rem;
+        }
+        .menu-options {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+            margin-bottom: 1.75rem;
+        }
+        .menu-option {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 5px;
+            padding: 1rem 1.25rem;
+            background: #1a1d29;
+            border: 1px solid #3a4258;
+            border-radius: 6px;
+            cursor: pointer;
+            text-align: left;
+            font-family: monospace;
+            transition: border-color 0.15s, background 0.15s;
+        }
+        .menu-option:hover { background: #1e2233; border-color: #5a6288; }
+        .menu-option--gold { border-color: #7a6030; }
+        .menu-option--gold:hover { border-color: #d4af37; }
+        .menu-option__label {
+            font-size: 1rem;
+            color: #e6e8ef;
+            font-weight: bold;
+        }
+        .menu-option--gold .menu-option__label { color: #e8c87a; }
+        .menu-option__desc {
+            font-size: 0.75rem;
+            color: #7aa2ff;
+            font-family: sans-serif;
+            line-height: 1.4;
+        }
+        .menu-keys {
+            font-size: 0.78rem;
+            color: #555;
+            font-family: monospace;
+            margin: 0;
+        }
+        /* game-ui is a flex column; display toggled by JS */
+        #game-ui {
+            flex-direction: column;
+            align-items: center;
+            gap: 1rem;
+            width: 100%;
+        }
     </style>
 </head>
 <body>
@@ -52,35 +133,67 @@
     </header>
 
     <main class="game-main">
-        <div class="ai-panel">
-            <button onclick="aiGenerateMap()">&#x2728; Generate AI Map</button>
-            <input type="number" id="seed-input" placeholder="Seed #" min="0" max="999999">
-            <button onclick="loadSeed()">Load Seed</button>
-            <span id="map-seed">Seed: —</span>
-            <button id="ai-control-btn" onclick="toggleAIControl()" style="background:#5a2a80;">&#129504; Neural AI: OFF</button>
-            <button onclick="resetAI()" style="background:#7a2020;" title="Wipe learned weights and start from scratch">&#128260; Reset AI</button>
-            <span style="color:#aaa;font-family:monospace;font-size:0.8rem;">Speed:</span>
-            <button class="ai-speed-btn" data-speed="1"  onclick="setAISpeed(1)"  style="background:#1a6a1a;" title="1× speed">1x</button>
-            <button class="ai-speed-btn" data-speed="2"  onclick="setAISpeed(2)"  style="background:#3a3a6a;" title="2× speed">2x</button>
-            <button class="ai-speed-btn" data-speed="4"  onclick="setAISpeed(4)"  style="background:#3a3a6a;" title="4× speed">4x</button>
-            <button class="ai-speed-btn" data-speed="8"  onclick="setAISpeed(8)"  style="background:#3a3a6a;" title="8× speed">8x</button>
+
+        <!-- ── Level-select menu (shown on load) ──────────────────────── -->
+        <div id="level-menu">
+            <div class="menu-card">
+                <h2 class="menu-title">CELESTE</h2>
+                <p class="menu-sub">Select a level to play</p>
+                <div class="menu-options">
+                    <button class="menu-option menu-option--gold" onclick="startGame('gauntlet')">
+                        <span class="menu-option__label">▶ The Gauntlet</span>
+                        <span class="menu-option__desc">6-room hand-crafted challenge — Entry Hall → Key Room → Lock Room → Crush Zone → Fly Zone → Summit</span>
+                    </button>
+                    <button class="menu-option" onclick="startGame('ai')">
+                        <span class="menu-option__label">▶ Random AI Map</span>
+                        <span class="menu-option__desc">Procedurally generated · seed-replayable · neural AI playable</span>
+                    </button>
+                </div>
+                <p class="menu-keys">
+                    Arrows = move &nbsp;·&nbsp;
+                    <kbd>C</kbd> jump &nbsp;·&nbsp;
+                    <kbd>X</kbd> dash &nbsp;·&nbsp;
+                    <kbd>Z</kbd>/<kbd>Shift</kbd> grab &nbsp;·&nbsp;
+                    <kbd>R</kbd> reset
+                </p>
+            </div>
         </div>
 
-        <canvas id="game-canvas" width="320" height="180"></canvas>
+        <!-- ── Game UI (hidden until a level is chosen) ───────────────── -->
+        <div id="game-ui" style="display:none;">
+            <div class="ai-panel">
+                <button onclick="showLevelMenu()" style="background:#1a3060;" title="Return to level select">☰ Levels</button>
+                <button class="ai-only" onclick="aiGenerateMap()">&#x2728; Generate AI Map</button>
+                <input class="ai-only" type="number" id="seed-input" placeholder="Seed #" min="0" max="999999">
+                <button class="ai-only" onclick="loadSeed()">Load Seed</button>
+                <span class="ai-only" id="map-seed">Seed: —</span>
+                <button id="ai-control-btn" class="ai-only" onclick="toggleAIControl()" style="background:#5a2a80;">&#129504; Neural AI: OFF</button>
+                <button class="ai-only" onclick="resetAI()" style="background:#7a2020;" title="Wipe learned weights and start from scratch">&#128260; Reset AI</button>
+                <span class="ai-only" style="color:#aaa;font-family:monospace;font-size:0.8rem;">Speed:</span>
+                <button class="ai-only ai-speed-btn" data-speed="1"  onclick="setAISpeed(1)"  style="background:#1a6a1a;" title="1× speed">1x</button>
+                <button class="ai-only ai-speed-btn" data-speed="2"  onclick="setAISpeed(2)"  style="background:#3a3a6a;" title="2× speed">2x</button>
+                <button class="ai-only ai-speed-btn" data-speed="4"  onclick="setAISpeed(4)"  style="background:#3a3a6a;" title="4× speed">4x</button>
+                <button class="ai-only ai-speed-btn" data-speed="8"  onclick="setAISpeed(8)"  style="background:#3a3a6a;" title="8× speed">8x</button>
+            </div>
 
-        <div class="controls">
-            <p><strong>Controls:</strong>
-                Arrow keys to move &middot;
-                <kbd>C</kbd> jump &middot;
-                <kbd>X</kbd> dash (8-directional) &middot;
-                <kbd>Z</kbd> / <kbd>Shift</kbd> grab walls &middot;
-                <kbd>R</kbd> reset
-            </p>
-            <p id="status">Ready.</p>
+            <canvas id="game-canvas" width="320" height="180"></canvas>
+
+            <div class="controls">
+                <p><strong>Controls:</strong>
+                    Arrow keys to move &middot;
+                    <kbd>C</kbd> jump &middot;
+                    <kbd>X</kbd> dash (8-directional) &middot;
+                    <kbd>Z</kbd> / <kbd>Shift</kbd> grab walls &middot;
+                    <kbd>R</kbd> reset
+                </p>
+                <p id="status">Ready.</p>
+            </div>
         </div>
+
     </main>
 
     <script src="/player.js"></script>
+    <script src="/entities.js"></script>
     <script src="/ai-neural.js"></script>
     <script src="/game.js"></script>
 </body>
