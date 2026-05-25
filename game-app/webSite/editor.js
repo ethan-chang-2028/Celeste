@@ -27,6 +27,7 @@
     // All platform/entity coords are LOCAL (0..GW, 0..GH).
     // Game world = col*GW + localX, row*GH + localY.
 
+    // mkRoom uses lv only when called after lv is initialized (edAddRoomDir, edNew, etc.)
     function mkRoom(col, row) {
         return {
             col, row,
@@ -41,12 +42,19 @@
     }
 
     function createEmpty() {
-        lv = { rooms: [], goal: null, startRoom: 0 };
-        const r = mkRoom(0, 0);
-        r.platforms.push({ x: 0,      y: 0, w: 8,  h: GH, color: '#4a5570' });
-        r.platforms.push({ x: GW - 8, y: 0, w: 8,  h: GH, color: '#4a5570' });
-        lv.rooms.push(r);
-        return lv;
+        // Build without touching global lv to avoid TDZ crash on first init
+        const room = {
+            col: 0, row: 0, name: 'ROOM 1',
+            sky: ['#1a2a4a', '#3a5a8a'],
+            spawn: { x: 14, y: FLOOR_Y - 13 },
+            platforms: [
+                { x: 0,      y: FLOOR_Y, w: GW, h: FLOOR_H, color: '#3a5a3a' },
+                { x: 0,      y: 0,       w: 8,  h: GH,      color: '#4a5570' },
+                { x: GW - 8, y: 0,       w: 8,  h: GH,      color: '#4a5570' },
+            ],
+            entities: [],
+        };
+        return { rooms: [room], goal: null, startRoom: 0 };
     }
 
     function findRoom(col, row) {
