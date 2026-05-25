@@ -190,13 +190,22 @@
     }
 
     function makeStrawberry(x, y) {
+        const _ox = x - 6, _oy = y - 6;
         return {
-            type: 'strawberry', x: x - 6, y: y - 6, w: 12, h: 12,
-            isSolid: false, _collected: false,
-            reset() { this._collected = false; },
+            type: 'strawberry', x: _ox, y: _oy, w: 12, h: 12,
+            isSolid: false, _collected: false, _grabbed: false,
+            reset() { this._collected = false; this._grabbed = false; this.x = _ox; this.y = _oy; },
             update(player, dt) {
                 if (this._collected) return;
-                if (rectsOverlap(player, this)) this._collected = true;
+                if (!this._grabbed) {
+                    if (rectsOverlap(player, this)) this._grabbed = true;
+                    return;
+                }
+                // Float above player's head while carried
+                this.x += (player.x + player.w / 2 - 6 - this.x) * 0.25;
+                this.y += (player.y - 16 - this.y) * 0.25;
+                // Lock in when player safely lands
+                if (player.onGround) this._collected = true;
             },
             draw(ctx) {
                 if (this._collected) return;
@@ -825,6 +834,8 @@
             { type:'crystal', x:160, y:50  },
             { type:'spike',   x:104, y:168, size:8, dir:'up' },
             { type:'spike',   x:208, y:168, size:8, dir:'up' },
+            { type:'spike',   x:236, y:168, size:8, dir:'up' },
+            { type:'spike',   x:270, y:168, size:8, dir:'up' },
         ]);
         roomSpawnsOut.push({ x:1*RW+14, y:0*RH+FLOOR_Y-13 });
         roomNamesOut.push('MIRRORED NEXUS');
@@ -846,6 +857,8 @@
             { type:'blade_h', ax:36, ay:148, bx:118, by:148, speed:55 },
             { type:'crystal',  x:180, y:106 },
             { type:'spike',    x:200, y:8,   size:8, dir:'down' },
+            { type:'spike',    x:44,  y:168, size:8, dir:'up' },
+            { type:'spike',    x:248, y:168, size:8, dir:'up' },
         ]);
 
         // ── Room C (col 2, row -1) — Crystal Cavern (dead end) ───────────────
@@ -880,7 +893,9 @@
             { type:'blade_h', ax:28,  ay:148, bx:158, by:148, speed:68 },
             { type:'blade_h', ax:152, ay:78,  bx:298, by:78,  speed:74 },
             { type:'crystal',  x:160, y:86  },
+            { type:'spike',    x:80,  y:168, size:8, dir:'up' },
             { type:'spike',    x:158, y:168, size:8, dir:'up' },
+            { type:'spike',    x:232, y:168, size:8, dir:'up' },
         ]);
         roomSpawnsOut.push({ x:2*RW+14, y:0*RH+FLOOR_Y-13 });
         roomNamesOut.push('BLADE CORRIDOR');
@@ -891,7 +906,9 @@
             { x:0,   y:0,   w:100, h:8,   color:WALL }, // ceiling left (gap 100-220 ↑ D)
             { x:220, y:0,   w:100, h:8,   color:WALL }, // ceiling right
             { x:0,   y:0,   w:8,   h:180, color:WALL }, // left wall
+            { x:0,   y:74,  w:22,  h:8,   color:WALL }, // left anti-climb shelf
             { x:312, y:0,   w:8,   h:180, color:WALL }, // right wall
+            { x:298, y:74,  w:22,  h:8,   color:WALL }, // right anti-climb shelf
             { x:0,   y:168, w:320, h:12,  color:ICE2 }, // floor
             { x:110, y:134, w:100, h:8,   color:ICE3 }, // step 1 — reachable from floor
             { x:100, y:100, w:80,  h:8,   color:ICE3 }, // step 2 — reachable from step 1
