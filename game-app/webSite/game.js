@@ -314,6 +314,11 @@
             reset() { this.x = sx - r; this.y = sy - r; this._vx = vx; this._vy = vy; this._pulse = 0; },
             update(player, dt) {
                 this._pulse = (this._pulse + dt * 8) % (Math.PI * 2);
+                // In mountain ice state: fireballs freeze in place
+                if (mountainMode && coreState === 'ice') {
+                    if (rectsOverlap(player, this)) return 'kill';
+                    return;
+                }
                 this.x += this._vx * dt;
                 this.y += this._vy * dt;
                 if (this._vx !== 0) {
@@ -324,6 +329,16 @@
             },
             draw(ctx) {
                 const cx = this.x + r, cy = this.y + r;
+                if (mountainMode && coreState === 'ice') {
+                    // Frozen fireball: blue-white crystal
+                    ctx.fillStyle = 'rgba(100,200,255,0.20)';
+                    ctx.beginPath(); ctx.arc(cx, cy, r + 5, 0, Math.PI * 2); ctx.fill();
+                    ctx.fillStyle = '#55aaff';
+                    ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
+                    ctx.fillStyle = '#cceeff';
+                    ctx.beginPath(); ctx.arc(cx, cy, r * 0.45, 0, Math.PI * 2); ctx.fill();
+                    return;
+                }
                 const glow = r + 4 + 2 * Math.sin(this._pulse);
                 ctx.fillStyle = 'rgba(255,100,0,0.22)';
                 ctx.beginPath(); ctx.arc(cx, cy, glow, 0, Math.PI * 2); ctx.fill();
@@ -333,6 +348,93 @@
                 ctx.beginPath(); ctx.arc(cx, cy, r * 0.5, 0, Math.PI * 2); ctx.fill();
                 ctx.fillStyle = 'rgba(255,230,120,0.9)';
                 ctx.beginPath(); ctx.arc(cx, cy, 2, 0, Math.PI * 2); ctx.fill();
+            }
+        };
+    }
+
+    function makeCoreSwitch(x, y) {
+        return {
+            type: 'coreSwitch', x: x - 8, y: y - 8, w: 16, h: 16, isSolid: false,
+            _cooldown: 0, _flash: 0,
+            reset() { this._cooldown = 0; this._flash = 0; },
+            update(player, dt) {
+                this._cooldown = Math.max(0, this._cooldown - dt);
+                this._flash    = Math.max(0, this._flash    - dt);
+                if (this._cooldown > 0 || !rectsOverlap(player, this)) return;
+                coreState = coreState === 'fire' ? 'ice' : 'fire';
+                this._cooldown = 0.9;
+                this._flash    = 0.5;
+            },
+            draw(ctx) {
+                const cx = this.x + 8, cy = this.y + 8;
+                const fire = coreState === 'fire';
+                const flashAlpha = this._flash > 0 ? 0.7 : 0.30;
+                // Outer glow
+                ctx.fillStyle = fire ? `rgba(255,100,0,${flashAlpha})` : `rgba(80,180,255,${flashAlpha})`;
+                ctx.beginPath(); ctx.arc(cx, cy, 14, 0, Math.PI * 2); ctx.fill();
+                // Body
+                ctx.fillStyle = fire ? '#882200' : '#003388';
+                ctx.fillRect(this.x, this.y, this.w, this.h);
+                ctx.fillStyle = 'rgba(255,255,255,0.15)';
+                ctx.fillRect(this.x + 1, this.y + 1, this.w - 2, 2);
+                // Symbol
+                ctx.fillStyle = fire ? '#ffcc44' : '#88ddff';
+                if (fire) {
+                    // Flame triangle
+                    ctx.beginPath(); ctx.moveTo(cx, cy - 5); ctx.lineTo(cx + 4, cy + 4); ctx.lineTo(cx - 4, cy + 4); ctx.closePath(); ctx.fill();
+                } else {
+                    // Snowflake cross
+                    ctx.fillRect(cx - 1, cy - 5, 2, 10);
+                    ctx.fillRect(cx - 5, cy - 1, 10, 2);
+                }
+            }
+        };
+    }
+
+    function makeKevinBlock(x, y, w, h) {
+        h = h || 16;
+        w = w || 22;
+        const startX = x;
+        return {
+            type: 'kevinBlock', x, y, w, h, isSolid: true,
+            _state: 'idle', _vx: 0,
+            reset() { this.x = startX; this._state = 'idle'; this._vx = 0; this.isSolid = true; },
+            update(player, dt) {
+                if (this._state === 'idle') {
+                    // Trigger on horizontal dash contact
+                    const probe = { x: this.x - 3, y: this.y + 2, w: this.w + 6, h: this.h - 4 };
+                    if (isDashing(player) && player.DashDir.X !== 0 && rectsOverlap(player, probe)) {
+                        this._vx = Math.sign(player.DashDir.X) * 220;
+                        this._state = 'moving';
+                        this.isSolid = false;
+                    }
+                } else {
+                    this.x += this._vx * dt;
+                    const col  = Math.floor((this.x + this.w / 2) / ROOM_W);
+                    const wallL = col * ROOM_W + 8;
+                    const wallR = (col + 1) * ROOM_W - 8;
+                    if (this.x < wallL) {
+                        this.x = wallL; this._vx = 0; this._state = 'idle'; this.isSolid = true;
+                    } else if (this.x + this.w > wallR) {
+                        this.x = wallR - this.w; this._vx = 0; this._state = 'idle'; this.isSolid = true;
+                    }
+                    if (rectsOverlap(player, this)) return 'kill';
+                }
+            },
+            draw(ctx) {
+                const fire = !mountainMode || coreState === 'fire';
+                const moving = this._state === 'moving';
+                ctx.fillStyle = moving ? (fire ? '#ff6622' : '#44aaff') : (fire ? '#882200' : '#1144aa');
+                ctx.fillRect(this.x, this.y, this.w, this.h);
+                ctx.fillStyle = 'rgba(255,255,255,0.18)';
+                ctx.fillRect(this.x + 1, this.y + 1, this.w - 2, 2);
+                // Face
+                const cx = this.x + this.w / 2, cy = this.y + this.h / 2 - 1;
+                ctx.fillStyle = 'rgba(255,255,255,0.75)';
+                ctx.fillRect(cx - 5, cy - 2, 3, 3);  // left eye
+                ctx.fillRect(cx + 2, cy - 2, 3, 3);  // right eye
+                ctx.fillStyle = moving ? 'rgba(255,0,0,0.7)' : 'rgba(255,255,255,0.5)';
+                ctx.fillRect(cx - 3, cy + 2, 6, moving ? 2 : 1); // mouth
             }
         };
     }
@@ -532,6 +634,7 @@
     let mazeRoomNameMap = {};
     let transitionFlash = 0;
     let mountainMode    = false;   // true only during the Heart of the Mountain level
+    let coreState       = 'fire';  // 'fire' | 'ice' — toggled by core switch in mountain mode
     const RoomTrans = {
         active: false,
         timer: 0,
@@ -586,6 +689,7 @@
         player.reset(roomSpawns[0].x, roomSpawns[0].y);
         runStart = performance.now();
         deaths = 0; won = false;
+        if (mountainMode) coreState = 'fire';
         for (const e of entities) e.reset();
         if (currentMode === 'maze' && roomSpawns[0]) {
             RoomTrans.active = false; RoomTrans.timer = 0;
@@ -1332,13 +1436,13 @@
             { x:55,  y:80,  w:55,  h:8,   color:ROCK2 },  // step 3
             { x:145, y:46,  w:90,  h:8,   color:ICE_P, isIcy:true }, // launchpad (ice, below gap)
         ], [
-            { type:'fireball', x:160, y:96,  vx:55  },   // intro fireball
-            { type:'crystal',  x:205, y:32  },            // crystal above launchpad — teach refill
-            { type:'spike',    x:8,   y:168, size:8,  dir:'up' },
-            { type:'spike',    x:95,  y:168, size:8,  dir:'up' },
-            { type:'spike',    x:215, y:168, size:8,  dir:'up' },
+            { type:'fireball',   x:160, y:96,  vx:55  },
+            { type:'crystal',    x:205, y:32  },           // teach: crystals refill dash
+            { type:'coreSwitch', x:80,  y:156 },           // switch on the floor — intro to mechanic
+            { type:'spike',      x:95,  y:168, size:8, dir:'up' },
+            { type:'spike',      x:215, y:168, size:8, dir:'up' },
         ]);
-        roomSpawnsOut.push({ x:0*RW+14, y:4*RH+155 });  // bottom room spawn
+        roomSpawnsOut.push({ x:0*RW+30, y:4*RH+155 });   // spawn clear of left wall
         roomNamesOut.push('HEART OF THE MOUNTAIN');
         roomSkiesOut.push(['#1a0800', '#2a1000']); // warm bottom
 
@@ -1355,13 +1459,14 @@
             { x:40,  y:76,  w:58,  h:8,   color:ICE2P, isIcy:true }, // step 3 (ice)
             // launchpad near exit is a crumble block (entity only, no static platform here)
         ], [
-            { type:'fireball', x:160, y:90,  vx:70  },
-            { type:'fireball', x:80,  y:130, vx:-52 },
-            { type:'crumble',  x:150, y:42,  w:82   },   // crumble launchpad
-            { type:'crystal',  x:220, y:28  },
-            { type:'spike',    x:8,   y:168, size:8,  dir:'up' },
-            { type:'spike',    x:103, y:168, size:8,  dir:'up' },
-            { type:'spike',    x:215, y:168, size:8,  dir:'up' },
+            { type:'fireball',   x:160, y:90,  vx:70  },
+            { type:'fireball',   x:80,  y:130, vx:-52 },
+            { type:'crumble',    x:150, y:42,  w:82   },
+            { type:'crystal',    x:220, y:28  },
+            { type:'kevinBlock', x:195, y:98,  w:22, h:8 }, // sitting on step 2 at y=106
+            { type:'spike',      x:8,   y:168, size:8,  dir:'up' },
+            { type:'spike',      x:103, y:168, size:8,  dir:'up' },
+            { type:'spike',      x:215, y:168, size:8,  dir:'up' },
         ]);
         // no additional spawn or name: roomIdx always 0, roomNameMap handles it
         roomSkiesOut.push(['#200c00', '#381400']); // slightly lighter
@@ -1379,12 +1484,15 @@
             { x:40,  y:80,  w:60,  h:8,   color:ROCK2 },
             { x:170, y:46,  w:80,  h:8,   color:ICE3P, isIcy:true }, // near exit gap
         ], [
-            { type:'fireball', x:155, y:88,  vx:85  },
-            { type:'fireball', x:140, y:138, vx:-70 },
-            { type:'fireball', x:200, y:58,  vx:60  },
-            { type:'crystal',  x:100, y:124 },
-            { type:'spike',    x:8,   y:168, size:8,  dir:'up' },
-            { type:'spike',    x:215, y:168, size:8,  dir:'up' },
+            { type:'fireball',   x:155, y:88,  vx:85  },
+            { type:'fireball',   x:140, y:138, vx:-70 },
+            { type:'fireball',   x:200, y:58,  vx:60  },
+            { type:'crystal',    x:100, y:124 },
+            { type:'coreSwitch', x:250, y:156 },           // switch on the right floor section
+            { type:'kevinBlock', x:65,  y:72,  w:22, h:8 }, // on step 1 at y=80
+            { type:'kevinBlock', x:175, y:38,  w:22, h:8 }, // on exit platform at y=46
+            { type:'spike',      x:8,   y:168, size:8,  dir:'up' },
+            { type:'spike',      x:215, y:168, size:8,  dir:'up' },
         ]);
         roomSkiesOut.push(['#0a1828', '#142a40']); // cooler mid
 
@@ -1403,11 +1511,12 @@
         ], [
             { type:'fireball', x:155, y:90,  vx:90  },
             { type:'fireball', x:80,  y:138, vx:75  },
-            { type:'fireball', x:250, y:62,  vx:-80 },
-            { type:'crumble',  x:175, y:40,  w:80   },   // crumble before final push
-            { type:'crystal',  x:158, y:24  },
-            { type:'spike',    x:8,   y:168, size:8,  dir:'up' },
-            { type:'spike',    x:235, y:168, size:8,  dir:'up' },
+            { type:'fireball',   x:250, y:62,  vx:-80 },
+            { type:'crumble',    x:175, y:40,  w:80   },
+            { type:'kevinBlock', x:85,  y:64,  w:22, h:8 }, // on step at y=72
+            { type:'crystal',    x:158, y:24  },
+            { type:'spike',      x:8,   y:168, size:8,  dir:'up' },
+            { type:'spike',      x:235, y:168, size:8,  dir:'up' },
         ]);
         roomSkiesOut.push(['#060c1a', '#0c1830']); // dark storm
 
@@ -1473,7 +1582,9 @@
             case 'golden':     return makeGoldenStrawberry(e.x + ox, e.y + oy);
             case 'key':        return makeKey(e.x + ox, e.y + oy);
             case 'keyDoor':    return makeKeyDoor(e.x + ox, e.y + oy, e.w || 8, e.h || 40);
-            case 'fireball':   return makeFireball(e.x + ox, e.y + oy, e.vx || 60, e.vy || 0);
+            case 'fireball':    return makeFireball(e.x + ox, e.y + oy, e.vx || 60, e.vy || 0);
+            case 'coreSwitch':  return makeCoreSwitch(e.x + ox, e.y + oy);
+            case 'kevinBlock':  return makeKevinBlock(e.x + ox, e.y + oy, e.w || 22, e.h || 16);
             default: return null;
         }
     }
@@ -1576,6 +1687,7 @@
             cameraY     = worldMinY + 4 * H;        // start camera at bottom room
             mazeRoomNameMap = built._roomNameMap || {};
             mountainMode = true;
+            coreState    = 'fire';
             currentMode  = 'maze';                  // reuse all maze camera/room/transition logic
             applyLevel(built, -1);
             player.noDashRefill = true;             // Core mechanic: no dash refill on landing
@@ -1655,16 +1767,23 @@
 
         ctx.save(); ctx.translate(-cameraX, -cameraY);
 
-        // Background particles: maze=purple crystals, mountain=ember sparks, other=starfield
+        // Background particles: mountain=embers(fire)/ice crystals, maze=purple, other=stars
         if (mountainMode) {
             const t = performance.now() / 800;
+            const ice = coreState === 'ice';
             for (let i = 0; i < 48; i++) {
                 const px = ((i * 137 + 29) * 1699) % ROOM_W;
                 const py = worldMinY + ((i * 97 + 11) * 1301) % (worldH + H);
                 const flicker = 0.1 + 0.4 * Math.abs(Math.sin(t + i * 1.3));
-                ctx.fillStyle = i % 3 === 0 ? `rgba(255,160,40,${flicker.toFixed(2)})`
-                              : i % 3 === 1 ? `rgba(255,80,0,${(flicker*0.6).toFixed(2)})`
-                              :               `rgba(255,220,100,${(flicker*0.3).toFixed(2)})`;
+                if (ice) {
+                    ctx.fillStyle = i % 3 === 0 ? `rgba(80,180,255,${flicker.toFixed(2)})`
+                                  : i % 3 === 1 ? `rgba(160,230,255,${(flicker*0.6).toFixed(2)})`
+                                  :               `rgba(220,245,255,${(flicker*0.3).toFixed(2)})`;
+                } else {
+                    ctx.fillStyle = i % 3 === 0 ? `rgba(255,160,40,${flicker.toFixed(2)})`
+                                  : i % 3 === 1 ? `rgba(255,80,0,${(flicker*0.6).toFixed(2)})`
+                                  :               `rgba(255,220,100,${(flicker*0.3).toFixed(2)})`;
+                }
                 ctx.fillRect(px, py, 0.8, 0.8);
             }
         } else if (isMaze) {
@@ -1802,14 +1921,25 @@
             ctx.fillStyle = vg; ctx.fillRect(0, 0, W, H);
         }
 
-        // Dash HUD (mountain mode — show remaining dashes since they don't refill)
+        // Dash + Core state HUD (mountain mode)
         if (mountainMode) {
             const dashColor = player.Dashes > 0 ? '#ff8820' : '#664422';
             ctx.fillStyle = dashColor; ctx.font = '7px monospace';
             ctx.fillText(`DASH: ${player.Dashes}/${player.MaxDashes}`, W - 58, 10);
             if (player.Dashes === 0) {
-                ctx.fillStyle = 'rgba(255,100,0,0.45)';
-                ctx.fillText('use crystal!', W - 74, 19);
+                ctx.fillStyle = 'rgba(255,100,0,0.45)'; ctx.font = '6px monospace';
+                ctx.fillText('use crystal!', W - 72, 18);
+            }
+            // Core state icon
+            const fire = coreState === 'fire';
+            const ix = W - 13, iy = 22;
+            ctx.fillStyle = fire ? 'rgba(255,80,0,0.5)' : 'rgba(60,160,255,0.5)';
+            ctx.fillRect(ix - 1, iy - 1, 10, 10);
+            ctx.fillStyle = fire ? '#ffcc44' : '#88ddff';
+            if (fire) {
+                ctx.beginPath(); ctx.moveTo(ix+4, iy); ctx.lineTo(ix+8, iy+8); ctx.lineTo(ix, iy+8); ctx.closePath(); ctx.fill();
+            } else {
+                ctx.fillRect(ix+3, iy, 2, 8); ctx.fillRect(ix, iy+3, 8, 2);
             }
         }
 
