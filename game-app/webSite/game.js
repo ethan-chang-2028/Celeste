@@ -1169,20 +1169,20 @@
             { type:'crystal',    x:160, y:85 },
         ]);
 
-        // ── Room G (col 3, row 0) — Mirror Summit (GOAL) ─────────────────────
+        // ── Room G (col 3, row 0) — Mirror Summit (descent into Core) ────────
         addR(3, 0, [
             { x:0,   y:0,   w:8,   h:80,  color:WALL }, // left top    (gap 80-120 ← E)
             { x:0,   y:120, w:8,   h:60,  color:WALL }, // left bottom
             { x:312, y:0,   w:8,   h:180, color:WALL }, // right wall (sealed)
             { x:0,   y:0,   w:320, h:8,   color:WALL }, // ceiling
-            { x:0,   y:168, w:320, h:12,  color:ICE  }, // floor
+            { x:0,   y:168, w:100, h:12,  color:ICE  }, // floor left  (gap 100-220 ↓ CORE)
+            { x:220, y:168, w:100, h:12,  color:ICE  }, // floor right
             { x:20,  y:140, w:55,  h:8,   color:ICE3 }, // step 1
             { x:100, y:110, w:55,  h:8,   color:ICE3 }, // step 2
             { x:178, y:80,  w:55,  h:8,   color:ICE3 }, // step 3
             { x:256, y:48,  w:50,  h:8,   color:ICE  }, // pedestal
         ], [
             { type:'blade_c', cx:160, cy:90, radius:36, startAngle:0.5, speed:1.4 },
-            { type:'golden',  x:266, y:32 },
             { type:'crystal',  x:124, y:96 },
             { type:'spike',   x:50,  y:8,  size:8, dir:'down' },
             { type:'spike',   x:110, y:8,  size:8, dir:'down' },
@@ -1191,8 +1191,39 @@
         roomNamesOut.push('MIRROR SUMMIT');
         roomSkiesOut.push(['#050210', '#0b0420']);
 
-        // Goal flag in G, local (270, 32) → world (3*320+270, 32)
-        const goal = { x:3*RW+270, y:32, w:12, h:12, color:'#d4af37' };
+        // ── Room CORE (col 3, row 1) — The Core (final descent, GOAL) ────────
+        const COREW = '#3a0808', COREL = '#7a1a08', CORE2 = '#5a1410', CORE3 = '#a0381a';
+        addR(3, 1, [
+            { x:0,   y:0,   w:100, h:8,   color:COREW }, // ceiling left (gap 100-220 ↑ G)
+            { x:220, y:0,   w:100, h:8,   color:COREW }, // ceiling right
+            { x:0,   y:0,   w:8,   h:180, color:COREW }, // left wall
+            { x:312, y:0,   w:8,   h:180, color:COREW }, // right wall
+            { x:0,   y:168, w:230, h:12,  color:COREL }, // lava floor (deadly with spikes)
+            { x:230, y:140, w:90,  h:40,  color:CORE3 }, // safe goal pedestal (right side)
+            { x:30,  y:50,  w:55,  h:8,   color:CORE3 }, // descent step 1
+            { x:160, y:80,  w:55,  h:8,   color:CORE3 }, // descent step 2
+            { x:60,  y:108, w:55,  h:8,   color:CORE3 }, // descent step 3
+            { x:160, y:130, w:60,  h:8,   color:CORE2 }, // approach platform
+        ], [
+            // Lava floor — every tile deadly except the goal pedestal at x>=230
+            { type:'spike', x:8,   y:168, size:8, dir:'up' },
+            { type:'spike', x:28,  y:168, size:8, dir:'up' },
+            { type:'spike', x:48,  y:168, size:8, dir:'up' },
+            { type:'spike', x:68,  y:168, size:8, dir:'up' },
+            { type:'spike', x:88,  y:168, size:8, dir:'up' },
+            { type:'spike', x:108, y:168, size:8, dir:'up' },
+            { type:'spike', x:128, y:168, size:8, dir:'up' },
+            { type:'spike', x:148, y:168, size:8, dir:'up' },
+            { type:'spike', x:168, y:168, size:8, dir:'up' },
+            { type:'spike', x:188, y:168, size:8, dir:'up' },
+            { type:'spike', x:208, y:168, size:8, dir:'up' },
+            { type:'crystal', x:140, y:30 },  // dash refill near top
+            { type:'golden',  x:270, y:124 }, // golden strawberry on pedestal
+        ]);
+        roomSkiesOut.push(['#1a0404', '#3a0a08']);
+
+        // Goal flag in CORE pedestal, local (276, 122) → world (3*320+276, 180+122)
+        const goal = { x:3*RW+276, y:1*RH+122, w:12, h:12, color:'#ff8030' };
 
         return {
             platforms:  allP,
@@ -1216,6 +1247,7 @@
                 '2,1': 'BLADE CORRIDOR',
                 '1,2': 'SPIKE DESCENT',
                 '3,1': 'MIRROR SUMMIT',
+                '3,2': 'THE CORE',
             },
         };
     }
