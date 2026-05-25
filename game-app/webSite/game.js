@@ -826,9 +826,20 @@
     });
     window.addEventListener('keyup', (e) => { if (tracked.has(e.code)) keys[e.code] = false; });
 
+    function getHazardRects() {
+        const rects = [];
+        for (const e of entities) {
+            if (e.type === 'spike' || e.type === 'blade' ||
+                e.type === 'fireball' || e.type === 'blade_h' || e.type === 'blade_c') {
+                rects.push({ x: e.x, y: e.y, w: e.w, h: e.h });
+            }
+        }
+        return rects;
+    }
+
     function readInput() {
         if (aiEnabled && typeof NeuralAI !== 'undefined')
-            return NeuralAI.compute(player, platforms, GOAL);
+            return NeuralAI.compute(player, platforms, GOAL, getHazardRects());
         const moveX = (keys['ArrowRight'] ? 1 : 0) - (keys['ArrowLeft'] ? 1 : 0);
         const moveY = (keys['ArrowDown']  ? 1 : 0) - (keys['ArrowUp']   ? 1 : 0);
         return {
@@ -2152,8 +2163,9 @@
         // Ghost agents: parallel training
         if (aiEnabled && aiGhosts.length > 0) {
             const allPlats = dynPlat.length ? platforms.concat(dynPlat) : platforms;
+            const hazardRects = getHazardRects();
             for (const gh of aiGhosts) {
-                const inp2 = NeuralAI.computeAgent(gh.idx, gh.p, platforms, GOAL);
+                const inp2 = NeuralAI.computeAgent(gh.idx, gh.p, platforms, GOAL, hazardRects);
                 if (!inp2) continue;
                 gh.p.update(inp2, allPlats, FIXED_DT);
                 // Mountain: dash refill on room change
