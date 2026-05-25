@@ -144,10 +144,26 @@
                         <span class="menu-option__label">▶ The Gauntlet</span>
                         <span class="menu-option__desc">6-room hand-crafted challenge — Entry Hall → Key Room → Lock Room → Crush Zone → Fly Zone → Summit</span>
                     </button>
+                    <button class="menu-option menu-option--gold" onclick="startGame('maze')">
+                        <span class="menu-option__label">🪞 Mirror Temple</span>
+                        <span class="menu-option__desc">8-room ice maze — explore 4 columns × 3 rows · dead ends · hidden strawberries · find the summit</span>
+                    </button>
+                    <button class="menu-option" onclick="startGame('random')">
+                        <span class="menu-option__label">▶ Random Level</span>
+                        <span class="menu-option__desc">Fully random rooms with entities — springs · blades · crystals · spikes · always clearable · seed-replayable</span>
+                    </button>
                     <button class="menu-option" onclick="startGame('ai')">
                         <span class="menu-option__label">▶ Random AI Map</span>
                         <span class="menu-option__desc">Procedurally generated · seed-replayable · neural AI playable</span>
                     </button>
+                    <button class="menu-option" onclick="startGame('custom')">
+                        <span class="menu-option__label">▶ Custom Level</span>
+                        <span class="menu-option__desc">Play the map you built in the editor</span>
+                    </button>
+                    <a class="menu-option" href="/editor.html" style="text-decoration:none;">
+                        <span class="menu-option__label" style="color:#7aa2ff;">🔧 Map Editor</span>
+                        <span class="menu-option__desc">Draw platforms · place entities · save and play your own levels</span>
+                    </a>
                 </div>
                 <p class="menu-keys">
                     Arrows = move &nbsp;·&nbsp;
@@ -174,6 +190,10 @@
                 <button class="ai-only ai-speed-btn" data-speed="2"  onclick="setAISpeed(2)"  style="background:#3a3a6a;" title="2× speed">2x</button>
                 <button class="ai-only ai-speed-btn" data-speed="4"  onclick="setAISpeed(4)"  style="background:#3a3a6a;" title="4× speed">4x</button>
                 <button class="ai-only ai-speed-btn" data-speed="8"  onclick="setAISpeed(8)"  style="background:#3a3a6a;" title="8× speed">8x</button>
+                <button class="random-only" style="display:none;background:#1a5a30;" onclick="randomGenerateMap()">&#127922; New Map</button>
+                <input  class="random-only" style="display:none;" type="number" id="random-seed-input" placeholder="Seed #" min="0" max="999999">
+                <button class="random-only" style="display:none;" onclick="loadRandomSeed()">Load Seed</button>
+                <span   class="random-only" style="display:none;font-family:monospace;font-size:0.8rem;color:#aaa;" id="random-map-seed">Seed: —</span>
             </div>
 
             <canvas id="game-canvas" width="320" height="180"></canvas>
@@ -195,5 +215,12 @@
     <script src="/player.js"></script>
     <script src="/ai-neural.js"></script>
     <script src="/game.js"></script>
+    <script>
+        // Auto-start if arriving from the editor via ?mode=custom
+        (function () {
+            const m = new URLSearchParams(window.location.search).get('mode');
+            if (m) window.startGame(m);
+        })();
+    </script>
 </body>
 </html>

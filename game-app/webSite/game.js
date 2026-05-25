@@ -729,17 +729,353 @@
                  roomNames: nm, roomSkies: sk, roomLabels: lb, goal, entities: ents };
     }
 
+    // ── Mirror Temple: 8-room ice maze (Chapter-5-style) ────────────────────
+    function buildMazeLevel() {
+        const RW = ROOM_W, RH = H;
+        // Colour palette — dark ice aesthetic
+        const ICE  = '#2a4a6a', ICE2 = '#1a3050', ICE3 = '#3a608a', WALL = '#0c1520';
+
+        const allP = [], allE = [], roomSpawnsOut = [], roomNamesOut = [], roomSkiesOut = [];
+
+        // Rooms added in any order; offsets applied here.
+        // Entities are spec objects converted via buildEntityFromSpec(spec, 0, 0)
+        // after world offsets have already been baked in.
+        function addR(col, row, plats, entSpecs) {
+            const ox = col * RW, oy = row * RH;
+            for (const pl of plats)
+                allP.push({ ...pl, x: pl.x + ox, y: pl.y + oy });
+            for (const e of entSpecs) {
+                const n = { ...e };
+                if (n.type === 'blade_h') {
+                    n.ax += ox; n.bx += ox; n.ay += oy; n.by += oy;
+                } else if (n.type === 'blade_c') {
+                    n.cx += ox; n.cy += oy;
+                } else {
+                    if (n.x != null) n.x += ox;
+                    if (n.y != null) n.y += oy;
+                }
+                const built = buildEntityFromSpec(n, 0, 0);
+                if (built) allE.push(built);
+            }
+        }
+
+        /* Grid layout (col, row):
+         *  col:  0         1         2         3
+         *  row-1:[H dead]  [B]       [C dead]
+         *  row 0:[A start] [D cross] [E blade] [G goal]
+         *  row+1:          [F dead]
+         *
+         * Horizontal door gaps: y 80–120 in local coords (right/left walls)
+         * Vertical   door gaps: x 100–220 in local coords (ceiling/floor)
+         */
+
+        // ── Room A (col 0, row 0) — Mirror Entrance ─────────────────────────
+        addR(0, 0, [
+            { x:0,   y:0,   w:8,   h:180, color:WALL }, // left boundary
+            { x:312, y:0,   w:8,   h:80,  color:WALL }, // right top   (gap 80-120 → D)
+            { x:312, y:120, w:8,   h:60,  color:WALL }, // right bottom
+            { x:0,   y:0,   w:120, h:8,   color:WALL }, // ceiling left (gap 120-200 ↑ H)
+            { x:200, y:0,   w:120, h:8,   color:WALL }, // ceiling right
+            { x:0,   y:168, w:320, h:12,  color:ICE  }, // floor
+            { x:118, y:24,  w:6,   h:110, color:ICE2 }, // chimney shaft L
+            { x:196, y:24,  w:6,   h:110, color:ICE2 }, // chimney shaft R
+            { x:20,  y:140, w:60,  h:8,   color:ICE3 }, // step 1
+            { x:90,  y:108, w:50,  h:8,   color:ICE3 }, // step 2
+            { x:150, y:76,  w:46,  h:8,   color:ICE3 }, // step 3 (inside shaft)
+        ], [
+            { type:'crystal', x:50,  y:127 },
+            { type:'spring',  x:240, y:168, orientation:'floor' },
+        ]);
+        roomSpawnsOut.push({ x:0*RW+14, y:0*RH+FLOOR_Y-13 });
+        roomNamesOut.push('MIRROR ENTRANCE');
+        roomSkiesOut.push(['#04050f', '#07091a']);
+
+        // ── Room H (col 0, row -1) — Hollow Heights (dead end above A) ───────
+        addR(0, -1, [
+            { x:0,   y:0,   w:8,   h:180, color:WALL }, // left wall
+            { x:312, y:0,   w:8,   h:180, color:WALL }, // right wall (sealed)
+            { x:0,   y:0,   w:320, h:8,   color:WALL }, // ceiling (sealed)
+            { x:0,   y:168, w:120, h:12,  color:ICE  }, // floor left  (gap 120-200 ↓ A)
+            { x:200, y:168, w:120, h:12,  color:ICE  }, // floor right
+            { x:40,  y:130, w:70,  h:8,   color:ICE3 },
+            { x:180, y:90,  w:70,  h:8,   color:ICE3 },
+            { x:100, y:48,  w:80,  h:8,   color:ICE  }, // top platform
+        ], [
+            { type:'strawberry', x:138, y:33 },
+            { type:'blade_c', cx:160, cy:68, radius:24, startAngle:0,   speed:1.8 },
+            { type:'crystal',  x:60,  y:116 },
+        ]);
+
+        // ── Room D (col 1, row 0) — Mirrored Nexus (crossroads) ──────────────
+        addR(1, 0, [
+            { x:0,   y:0,   w:8,   h:80,  color:WALL }, // left top    (gap 80-120 ← A)
+            { x:0,   y:120, w:8,   h:60,  color:WALL }, // left bottom
+            { x:312, y:0,   w:8,   h:80,  color:WALL }, // right top   (gap 80-120 → E)
+            { x:312, y:120, w:8,   h:60,  color:WALL }, // right bottom
+            { x:0,   y:0,   w:100, h:8,   color:WALL }, // ceiling left (gap 100-220 ↑ B)
+            { x:220, y:0,   w:100, h:8,   color:WALL }, // ceiling right
+            { x:0,   y:168, w:100, h:12,  color:ICE  }, // floor left  (gap 100-220 ↓ F)
+            { x:220, y:168, w:100, h:12,  color:ICE  }, // floor right
+            { x:50,  y:140, w:60,  h:8,   color:ICE3 }, // platform L
+            { x:210, y:140, w:60,  h:8,   color:ICE3 }, // platform R
+            { x:130, y:100, w:60,  h:8,   color:ICE  }, // centre platform
+        ], [
+            { type:'crystal', x:158, y:86  },
+            { type:'spike',   x:104, y:168, size:8, dir:'up' },
+            { type:'spike',   x:208, y:168, size:8, dir:'up' },
+        ]);
+        roomSpawnsOut.push({ x:1*RW+14, y:0*RH+FLOOR_Y-13 });
+        roomNamesOut.push('MIRRORED NEXUS');
+        roomSkiesOut.push(['#030408', '#060810']);
+
+        // ── Room B (col 1, row -1) — Ice Gallery (above D, exits right to C) ─
+        addR(1, -1, [
+            { x:0,   y:0,   w:8,   h:180, color:WALL }, // left wall (sealed)
+            { x:312, y:0,   w:8,   h:80,  color:WALL }, // right top   (gap 80-120 → C)
+            { x:312, y:120, w:8,   h:60,  color:WALL }, // right bottom
+            { x:0,   y:0,   w:320, h:8,   color:WALL }, // ceiling (sealed)
+            { x:0,   y:168, w:100, h:12,  color:ICE  }, // floor left  (gap 100-220 ↓ D)
+            { x:220, y:168, w:100, h:12,  color:ICE  }, // floor right
+            { x:30,  y:140, w:50,  h:8,   color:ICE3 },
+            { x:130, y:118, w:50,  h:8,   color:ICE3 },
+            { x:100, y:80,  w:60,  h:8,   color:ICE  },
+            { x:220, y:100, w:52,  h:8,   color:ICE3 },
+        ], [
+            { type:'blade_h', ax:36, ay:148, bx:118, by:148, speed:55 },
+            { type:'crystal',  x:180, y:106 },
+            { type:'spike',    x:200, y:8,   size:8, dir:'down' },
+        ]);
+
+        // ── Room C (col 2, row -1) — Crystal Cavern (dead end) ───────────────
+        addR(2, -1, [
+            { x:0,   y:0,   w:8,   h:80,  color:WALL }, // left top    (gap 80-120 ← B)
+            { x:0,   y:120, w:8,   h:60,  color:WALL }, // left bottom
+            { x:312, y:0,   w:8,   h:180, color:WALL }, // right wall (sealed)
+            { x:0,   y:0,   w:320, h:8,   color:WALL }, // ceiling (sealed)
+            { x:0,   y:168, w:320, h:12,  color:ICE  }, // floor
+            { x:40,  y:140, w:60,  h:8,   color:ICE3 },
+            { x:160, y:110, w:60,  h:8,   color:ICE3 },
+            { x:215, y:68,  w:60,  h:8,   color:ICE  }, // top platform
+        ], [
+            { type:'strawberry', x:245, y:53 },
+            { type:'blade_c', cx:160, cy:100, radius:30, startAngle:1.0, speed:1.6 },
+            { type:'spike',   x:130, y:8,    size:8, dir:'down' },
+            { type:'spike',   x:196, y:8,    size:8, dir:'down' },
+        ]);
+
+        // ── Room E (col 2, row 0) — Blade Corridor ────────────────────────────
+        addR(2, 0, [
+            { x:0,   y:0,   w:8,   h:80,  color:WALL }, // left top    (gap 80-120 ← D)
+            { x:0,   y:120, w:8,   h:60,  color:WALL }, // left bottom
+            { x:312, y:0,   w:8,   h:80,  color:WALL }, // right top   (gap 80-120 → G)
+            { x:312, y:120, w:8,   h:60,  color:WALL }, // right bottom
+            { x:0,   y:0,   w:320, h:8,   color:WALL }, // ceiling
+            { x:0,   y:168, w:320, h:12,  color:ICE  }, // floor
+            { x:20,  y:130, w:50,  h:8,   color:ICE3 }, // entry ledge
+            { x:135, y:100, w:50,  h:8,   color:ICE3 }, // mid ledge
+            { x:250, y:130, w:50,  h:8,   color:ICE3 }, // exit ledge
+        ], [
+            { type:'blade_h', ax:28,  ay:148, bx:158, by:148, speed:68 },
+            { type:'blade_h', ax:152, ay:78,  bx:298, by:78,  speed:74 },
+            { type:'crystal',  x:160, y:86  },
+            { type:'spike',    x:158, y:168, size:8, dir:'up' },
+        ]);
+        roomSpawnsOut.push({ x:2*RW+14, y:0*RH+FLOOR_Y-13 });
+        roomNamesOut.push('BLADE CORRIDOR');
+        roomSkiesOut.push(['#050408', '#090810']);
+
+        // ── Room F (col 1, row 1) — Spike Descent (dead end below D) ─────────
+        addR(1, 1, [
+            { x:0,   y:0,   w:100, h:8,   color:WALL }, // ceiling left (gap 100-220 ↑ D)
+            { x:220, y:0,   w:100, h:8,   color:WALL }, // ceiling right
+            { x:0,   y:0,   w:8,   h:180, color:WALL }, // left wall
+            { x:312, y:0,   w:8,   h:180, color:WALL }, // right wall
+            { x:0,   y:168, w:320, h:12,  color:ICE2 }, // floor
+            { x:50,  y:120, w:40,  h:8,   color:ICE3 },
+            { x:200, y:90,  w:40,  h:8,   color:ICE3 },
+        ], [
+            { type:'spike', x:104, y:168, size:8, dir:'up' },
+            { type:'spike', x:130, y:168, size:8, dir:'up' },
+            { type:'spike', x:156, y:168, size:8, dir:'up' },
+            { type:'spike', x:182, y:168, size:8, dir:'up' },
+            { type:'blade_h', ax:28, ay:148, bx:280, by:148, speed:56 },
+            { type:'strawberry', x:160, y:58 },
+            { type:'crystal',    x:80,  y:106 },
+        ]);
+
+        // ── Room G (col 3, row 0) — Mirror Summit (GOAL) ─────────────────────
+        addR(3, 0, [
+            { x:0,   y:0,   w:8,   h:80,  color:WALL }, // left top    (gap 80-120 ← E)
+            { x:0,   y:120, w:8,   h:60,  color:WALL }, // left bottom
+            { x:312, y:0,   w:8,   h:180, color:WALL }, // right wall (sealed)
+            { x:0,   y:0,   w:320, h:8,   color:WALL }, // ceiling
+            { x:0,   y:168, w:320, h:12,  color:ICE  }, // floor
+            { x:20,  y:140, w:55,  h:8,   color:ICE3 }, // step 1
+            { x:100, y:110, w:55,  h:8,   color:ICE3 }, // step 2
+            { x:178, y:80,  w:55,  h:8,   color:ICE3 }, // step 3
+            { x:256, y:48,  w:50,  h:8,   color:ICE  }, // pedestal
+        ], [
+            { type:'blade_c', cx:160, cy:90, radius:36, startAngle:0.5, speed:1.4 },
+            { type:'golden',  x:266, y:32 },
+            { type:'crystal',  x:124, y:96 },
+            { type:'spike',   x:50,  y:8,  size:8, dir:'down' },
+            { type:'spike',   x:110, y:8,  size:8, dir:'down' },
+        ]);
+        roomSpawnsOut.push({ x:3*RW+14, y:0*RH+FLOOR_Y-13 });
+        roomNamesOut.push('MIRROR SUMMIT');
+        roomSkiesOut.push(['#030308', '#06060f']);
+
+        // Goal flag in G, local (270, 32) → world (3*320+270, 32)
+        const goal = { x:3*RW+270, y:32, w:12, h:12, color:'#d4af37' };
+
+        return {
+            platforms:  allP,
+            pitShading: [],
+            roomSpawns: roomSpawnsOut,   // 4 entries — one per column
+            roomNames:  roomNamesOut,
+            roomSkies:  roomSkiesOut,
+            roomLabels: [],
+            goal,
+            entities:   allE,
+            _numCols:   4,
+            _worldMinY: -RH,   // row -1 = worldY -180
+            _worldH:    3 * RH, // rows -1, 0, +1 = 540 px tall
+        };
+    }
+
+    // ── Custom level (built in the map editor, stored in localStorage) ───────
+    function buildEntityFromSpec(e, ox, oy) {
+        ox = ox || 0; oy = oy || 0;
+        switch (e.type) {
+            case 'spring':     return makeSpring(e.x + ox, e.y + oy, e.orientation || 'floor');
+            case 'bumper':     return makeBumper(e.x + ox, e.y + oy);
+            case 'crystal':    return makeDashCrystal(e.x + ox, e.y + oy);
+            case 'spike':      return makeSpike(e.x + ox, e.y + oy, e.size || 8, e.dir || 'up');
+            case 'blade_h':    return makeEnticeBlade({ ax:e.ax+ox, ay:e.ay+oy, bx:e.bx+ox, by:e.by+oy, speed:e.speed||60 });
+            case 'blade_c':    return makeEnticeBlade({ path:'circular', cx:e.cx+ox, cy:e.cy+oy,
+                                   radius:e.radius||18, startAngle:e.startAngle||0, speed:e.speed||1.5 });
+            case 'strawberry': return makeStrawberry(e.x + ox, e.y + oy);
+            case 'crumble':    return makeCrumbleBlock(e.x + ox, e.y + oy, e.w || 32);
+            case 'falling':    return makeFallingBlock(e.x + ox, e.y + oy, e.w || 32, e.h || 8);
+            case 'golden':     return makeGoldenStrawberry(e.x + ox, e.y + oy);
+            default: return null;
+        }
+    }
+
+    function buildCustomLevel(data) {
+        // v2 format: { rooms:[{col,row,name,sky,spawn,platforms[],entities[]}], goal, startRoom }
+        if (data.rooms) {
+            const allPlatforms = [], allEntities = [], spawns = [], names = [], skies = [];
+            let minRow = Infinity, maxRow = -Infinity;
+            let minCol = Infinity, maxCol = -Infinity;
+
+            for (const room of data.rooms) {
+                const ox = room.col * ROOM_W, oy = room.row * H;
+                minRow = Math.min(minRow, room.row); maxRow = Math.max(maxRow, room.row);
+                minCol = Math.min(minCol, room.col); maxCol = Math.max(maxCol, room.col);
+                for (const pl of (room.platforms || []))
+                    allPlatforms.push({ ...pl, x: pl.x + ox, y: pl.y + oy });
+                for (const e of (room.entities || [])) {
+                    const built = buildEntityFromSpec(e, ox, oy);
+                    if (built) allEntities.push(built);
+                }
+                spawns.push({ x: ox + (room.spawn ? room.spawn.x : 14), y: oy + (room.spawn ? room.spawn.y : FLOOR_Y - 13) });
+                names.push(room.name || `ROOM ${spawns.length}`);
+                skies.push(room.sky || ['#1a2a4a', '#3a5a8a']);
+            }
+
+            const totalCols  = maxCol - minCol + 1;
+            const wMinY      = minRow * H;          // can be negative (rooms above row 0)
+            const wH         = (maxRow - minRow + 1) * H;
+            const goal = data.goal ? {
+                x: data.goal.x + data.goal.col * ROOM_W,
+                y: data.goal.y + data.goal.row * H,
+                w: data.goal.w || 12, h: data.goal.h || 12, color: data.goal.color || '#d4af37',
+            } : null;
+
+            return {
+                platforms:  allPlatforms,
+                pitShading: [],
+                roomSpawns: spawns,
+                roomNames:  names,
+                roomSkies:  skies,
+                roomLabels: [],
+                goal,
+                entities:   allEntities,
+                _numCols:   totalCols,
+                _worldMinY: wMinY,
+                _worldH:    wH,
+            };
+        }
+
+        // v1 fallback: flat { platforms, entities, spawns, goal, numRooms }
+        const ents = (data.entities || []).map(e => buildEntityFromSpec(e, 0, 0)).filter(Boolean);
+        const n = data.numRooms || (data.spawns ? data.spawns.length : 3);
+        const spawns = Array.from({ length: n }, (_, i) => {
+            if (data.spawns && data.spawns[i]) return data.spawns[i];
+            const ox = i * ROOM_W;
+            const cands = (data.platforms || []).filter(p =>
+                p.x < ox + ROOM_W && p.x + p.w > ox && p.y >= 80 && p.y <= FLOOR_Y && p.h <= FLOOR_H
+            ).sort((a, b) => a.x - b.x);
+            if (cands.length) { const pl = cands[0]; return { x: Math.max(pl.x, ox) + 14, y: pl.y - 13 }; }
+            return { x: ox + 14, y: FLOOR_Y - 13 };
+        });
+        return {
+            platforms:  data.platforms || [],
+            pitShading: [],
+            roomSpawns: spawns,
+            roomNames:  data.names  || Array.from({ length: n }, (_, i) => `ROOM ${i + 1}`),
+            roomSkies:  data.skies  || Array.from({ length: n }, () => ['#1a2a4a', '#3a5a8a']),
+            roomLabels: [],
+            goal:       data.goal || null,
+            entities:   ents,
+        };
+    }
+
     // ── Level-select API (called from game.html buttons) ─────────────────────
     window.startGame = function (mode) {
         currentMode = mode;
         aiEnabled   = false;
         updateAIBtn();
 
+        // Hide all mode-specific controls, then reveal the right set
+        document.querySelectorAll('.ai-only').forEach(el => el.style.display = 'none');
+        document.querySelectorAll('.random-only').forEach(el => el.style.display = 'none');
+
+        // Reset 2D world size for non-custom modes
+        worldH = H; worldMinY = 0; DEATH_Y = H + 20; cameraY = 0;
+
         if (mode === 'gauntlet') {
             NUM_ROOMS = 6;
             applyLevel(buildGauntletLevel(), -1);
-            // Hide AI-only controls
-            document.querySelectorAll('.ai-only').forEach(el => el.style.display = 'none');
+        } else if (mode === 'random') {
+            NUM_ROOMS = AI_ROOMS;
+            const seed = Math.floor(Math.random() * 999999);
+            applyLevel(buildRandomLevel(seed), seed);
+            document.querySelectorAll('.random-only').forEach(el => el.style.display = '');
+        } else if (mode === 'maze') {
+            const built = buildMazeLevel();
+            NUM_ROOMS = built._numCols;           // 4
+            worldMinY = built._worldMinY;         // -180
+            worldH    = built._worldH;            // 540
+            DEATH_Y   = worldMinY + worldH + 20;  // 380
+            cameraY   = 0;                        // player starts in row 0
+            applyLevel(built, -1);
+        } else if (mode === 'custom') {
+            const stored = localStorage.getItem('celeste_custom_level');
+            if (!stored) {
+                alert('No custom level found — build one in the Map Editor first!');
+                return;
+            }
+            const data = JSON.parse(stored);
+            const built = buildCustomLevel(data);
+            NUM_ROOMS = built.roomSpawns.length;
+            worldMinY = built._worldMinY || 0;
+            worldH    = built._worldH    || H;
+            DEATH_Y   = worldMinY + worldH + 20;
+            cameraY   = worldMinY;
+            if (built._numCols) NUM_ROOMS = built._numCols;
+            applyLevel(built, -1);
         } else {
             NUM_ROOMS = AI_ROOMS;
             const seed = Math.floor(Math.random() * 999999);
