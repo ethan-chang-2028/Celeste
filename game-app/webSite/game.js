@@ -301,6 +301,42 @@
         };
     }
 
+    function makeFireball(x, y, vx, vy) {
+        const r = 6;
+        const col  = Math.floor(x / ROOM_W);
+        const wallL = col * ROOM_W + 8;
+        const wallR = (col + 1) * ROOM_W - 8;
+        let _vx = vx, _vy = vy, _pulse = 0;
+        const sx = x, sy = y;
+        return {
+            type: 'fireball', x: x - r, y: y - r, w: r * 2, h: r * 2, isSolid: false,
+            _vx, _vy, _pulse,
+            reset() { this.x = sx - r; this.y = sy - r; this._vx = vx; this._vy = vy; this._pulse = 0; },
+            update(player, dt) {
+                this._pulse = (this._pulse + dt * 8) % (Math.PI * 2);
+                this.x += this._vx * dt;
+                this.y += this._vy * dt;
+                if (this._vx !== 0) {
+                    if (this.x < wallL)              { this.x = wallL;          this._vx =  Math.abs(this._vx); }
+                    if (this.x + this.w > wallR)     { this.x = wallR - this.w; this._vx = -Math.abs(this._vx); }
+                }
+                if (rectsOverlap(player, this)) return 'kill';
+            },
+            draw(ctx) {
+                const cx = this.x + r, cy = this.y + r;
+                const glow = r + 4 + 2 * Math.sin(this._pulse);
+                ctx.fillStyle = 'rgba(255,100,0,0.22)';
+                ctx.beginPath(); ctx.arc(cx, cy, glow, 0, Math.PI * 2); ctx.fill();
+                ctx.fillStyle = '#ff5500';
+                ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
+                ctx.fillStyle = '#ffaa00';
+                ctx.beginPath(); ctx.arc(cx, cy, r * 0.5, 0, Math.PI * 2); ctx.fill();
+                ctx.fillStyle = 'rgba(255,230,120,0.9)';
+                ctx.beginPath(); ctx.arc(cx, cy, 2, 0, Math.PI * 2); ctx.fill();
+            }
+        };
+    }
+
     // ── Seeded PRNG ──────────────────────────────────────────────────────────
     function mkRng(seed) {
         let s = seed | 0;
@@ -495,6 +531,7 @@
     let mazeRoomRow  = 1;
     let mazeRoomNameMap = {};
     let transitionFlash = 0;
+    let mountainMode    = false;   // true only during the Heart of the Mountain level
     const RoomTrans = {
         active: false,
         timer: 0,
@@ -529,7 +566,10 @@
         player.reset(roomSpawns[respawnRoom].x, roomSpawns[respawnRoom].y);
         // player.reset() clears keysHeld; also reset key/door entity states
         if (currentMode === 'maze') {
-            for (const e of entities) { if (e.type === 'key' || e.type === 'keyDoor') e.reset(); }
+            for (const e of entities) {
+                if (e.type === 'key' || e.type === 'keyDoor') e.reset();
+                if (mountainMode && (e.type === 'crumbleBlock' || e.type === 'fallingBlock')) e.reset();
+            }
             const sp = roomSpawns[respawnRoom];
             mazeRoomCol = Math.max(0, Math.floor(sp.x / ROOM_W));
             mazeRoomRow = Math.max(0, Math.floor((sp.y - worldMinY) / H));
@@ -1252,6 +1292,170 @@
         };
     }
 
+    // ── Heart of the Mountain: 1-column, 5-room vertical ascent ─────────────
+    function buildMountainLevel() {
+        const RW = ROOM_W, RH = H;
+        const ROCK  = '#2a1a0a', ROCK2 = '#4a2c14', ROCK3 = '#6a3a1a';
+        const ICE_P = '#1a4a6a', ICE2P = '#2a6a9a', ICE3P = '#3a8abf';
+        const LWALL = '#1a0e06', LCEIL = '#1a0e06';
+
+        const allP = [], allE = [], roomSpawnsOut = [], roomNamesOut = [],
+              roomSkiesOut = [], allPitShading = [];
+
+        function addR(col, row, plats, entSpecs) {
+            const ox = col * RW, oy = row * RH;
+            for (const pl of plats) allP.push({ ...pl, x: pl.x + ox, y: pl.y + oy });
+            for (const e of entSpecs) {
+                const n = { ...e };
+                if (n.type === 'blade_h') {
+                    n.ax += ox; n.bx += ox; n.ay += oy; n.by += oy;
+                } else if (n.type === 'blade_c') {
+                    n.cx += ox; n.cy += oy;
+                } else {
+                    if (n.x != null) n.x += ox;
+                    if (n.y != null) n.y += oy;
+                }
+                const built = buildEntityFromSpec(n, 0, 0);
+                if (built) allE.push(built);
+            }
+        }
+
+        // ── Room 4 (col 0, row 4) — "Volcanic Entry" — player starts here ───
+        addR(0, 4, [
+            { x:0,   y:0,   w:8,   h:180, color:LWALL },  // left wall
+            { x:312, y:0,   w:8,   h:180, color:LWALL },  // right wall
+            { x:0,   y:0,   w:100, h:8,   color:LCEIL },  // ceiling-L (gap 100-220 ↑)
+            { x:220, y:0,   w:100, h:8,   color:LCEIL },  // ceiling-R
+            { x:0,   y:168, w:320, h:12,  color:ROCK  },  // floor (sealed, no fall)
+            { x:40,  y:140, w:55,  h:8,   color:ROCK2 },  // step 1
+            { x:170, y:112, w:55,  h:8,   color:ICE_P, isIcy:true }, // step 2 (ice)
+            { x:55,  y:80,  w:55,  h:8,   color:ROCK2 },  // step 3
+            { x:145, y:46,  w:90,  h:8,   color:ICE_P, isIcy:true }, // launchpad (ice, below gap)
+        ], [
+            { type:'fireball', x:160, y:96,  vx:55  },   // intro fireball
+            { type:'crystal',  x:205, y:32  },            // crystal above launchpad — teach refill
+            { type:'spike',    x:8,   y:168, size:8,  dir:'up' },
+            { type:'spike',    x:95,  y:168, size:8,  dir:'up' },
+            { type:'spike',    x:215, y:168, size:8,  dir:'up' },
+        ]);
+        roomSpawnsOut.push({ x:0*RW+14, y:4*RH+155 });  // bottom room spawn
+        roomNamesOut.push('HEART OF THE MOUNTAIN');
+        roomSkiesOut.push(['#1a0800', '#2a1000']); // warm bottom
+
+        // ── Room 3 (col 0, row 3) — "Ember Shaft" ────────────────────────────
+        addR(0, 3, [
+            { x:0,   y:0,   w:8,   h:180, color:LWALL },
+            { x:312, y:0,   w:8,   h:180, color:LWALL },
+            { x:0,   y:0,   w:100, h:8,   color:LCEIL },  // ceiling-L (gap 100-220 ↑ room 2)
+            { x:220, y:0,   w:100, h:8,   color:LCEIL },
+            { x:0,   y:168, w:100, h:12,  color:ROCK  },  // floor-L  (gap 100-220 ↓ room 4)
+            { x:220, y:168, w:100, h:12,  color:ROCK  },  // floor-R
+            { x:25,  y:135, w:65,  h:8,   color:ICE_P, isIcy:true }, // step 1 (ice)
+            { x:190, y:106, w:60,  h:8,   color:ROCK2 }, // step 2
+            { x:40,  y:76,  w:58,  h:8,   color:ICE2P, isIcy:true }, // step 3 (ice)
+            // launchpad near exit is a crumble block (entity only, no static platform here)
+        ], [
+            { type:'fireball', x:160, y:90,  vx:70  },
+            { type:'fireball', x:80,  y:130, vx:-52 },
+            { type:'crumble',  x:150, y:42,  w:82   },   // crumble launchpad
+            { type:'crystal',  x:220, y:28  },
+            { type:'spike',    x:8,   y:168, size:8,  dir:'up' },
+            { type:'spike',    x:103, y:168, size:8,  dir:'up' },
+            { type:'spike',    x:215, y:168, size:8,  dir:'up' },
+        ]);
+        // no additional spawn or name: roomIdx always 0, roomNameMap handles it
+        roomSkiesOut.push(['#200c00', '#381400']); // slightly lighter
+
+        // ── Room 2 (col 0, row 2) — "Ice Core" ───────────────────────────────
+        addR(0, 2, [
+            { x:0,   y:0,   w:8,   h:180, color:LWALL },
+            { x:312, y:0,   w:8,   h:180, color:LWALL },
+            { x:0,   y:0,   w:80,  h:8,   color:LCEIL },  // ceiling-L (gap 80-240 ↑ room 1)
+            { x:240, y:0,   w:80,  h:8,   color:LCEIL },
+            { x:0,   y:168, w:100, h:12,  color:ICE_P },  // floor-L (gap 100-220 ↓ room 3)
+            { x:220, y:168, w:100, h:12,  color:ICE_P },
+            { x:60,  y:138, w:60,  h:8,   color:ICE2P, isIcy:true },
+            { x:195, y:110, w:60,  h:8,   color:ICE2P, isIcy:true },
+            { x:40,  y:80,  w:60,  h:8,   color:ROCK2 },
+            { x:170, y:46,  w:80,  h:8,   color:ICE3P, isIcy:true }, // near exit gap
+        ], [
+            { type:'fireball', x:155, y:88,  vx:85  },
+            { type:'fireball', x:140, y:138, vx:-70 },
+            { type:'fireball', x:200, y:58,  vx:60  },
+            { type:'crystal',  x:100, y:124 },
+            { type:'spike',    x:8,   y:168, size:8,  dir:'up' },
+            { type:'spike',    x:215, y:168, size:8,  dir:'up' },
+        ]);
+        roomSkiesOut.push(['#0a1828', '#142a40']); // cooler mid
+
+        // ── Room 1 (col 0, row 1) — "Storm Gates" ────────────────────────────
+        addR(0, 1, [
+            { x:0,   y:0,   w:8,   h:180, color:LWALL },
+            { x:312, y:0,   w:8,   h:180, color:LWALL },
+            { x:0,   y:0,   w:100, h:8,   color:LCEIL },  // ceiling-L (gap 100-220 ↑ room 0)
+            { x:220, y:0,   w:100, h:8,   color:LCEIL },
+            { x:0,   y:168, w:80,  h:12,  color:ROCK  },  // floor-L (gap 80-240 ↓ room 2)
+            { x:240, y:168, w:80,  h:12,  color:ROCK  },
+            { x:35,  y:132, w:55,  h:8,   color:ICE2P, isIcy:true },
+            { x:210, y:104, w:55,  h:8,   color:ROCK2 },
+            { x:80,  y:72,  w:65,  h:8,   color:ICE3P, isIcy:true },
+            // launchpad near summit exit is crumble (entity only)
+        ], [
+            { type:'fireball', x:155, y:90,  vx:90  },
+            { type:'fireball', x:80,  y:138, vx:75  },
+            { type:'fireball', x:250, y:62,  vx:-80 },
+            { type:'crumble',  x:175, y:40,  w:80   },   // crumble before final push
+            { type:'crystal',  x:158, y:24  },
+            { type:'spike',    x:8,   y:168, size:8,  dir:'up' },
+            { type:'spike',    x:235, y:168, size:8,  dir:'up' },
+        ]);
+        roomSkiesOut.push(['#060c1a', '#0c1830']); // dark storm
+
+        // ── Room 0 (col 0, row 0) — "Mountain Heart" — GOAL ─────────────────
+        addR(0, 0, [
+            { x:0,   y:0,   w:8,   h:180, color:LWALL },
+            { x:312, y:0,   w:8,   h:180, color:LWALL },
+            { x:0,   y:0,   w:320, h:8,   color:LCEIL },  // sealed ceiling (top of world)
+            { x:0,   y:168, w:100, h:12,  color:ICE_P },  // floor-L (gap 100-220 ↓ room 1)
+            { x:220, y:168, w:100, h:12,  color:ICE_P },
+            { x:50,  y:132, w:70,  h:8,   color:ROCK2 },
+            { x:195, y:102, w:70,  h:8,   color:ICE2P, isIcy:true },
+            { x:80,  y:66,  w:75,  h:8,   color:ROCK3 },
+            { x:210, y:34,  w:90,  h:14,  color:ROCK2 }, // goal pedestal
+        ], [
+            { type:'fireball', x:155, y:84,  vx:85  },
+            { type:'fireball', x:80,  y:130, vx:68  },
+            { type:'crystal',  x:120, y:52  },
+            { type:'golden',   x:262, y:18  },
+        ]);
+        roomSkiesOut.push(['#020408', '#050a14']); // near-black summit
+
+        // GOAL: local (248, 18) in room 0 (oy=0) → absolute (248, 18)
+        const goal = { x:248, y:18, w:12, h:12, color:'#ff8030' };
+
+        return {
+            platforms:  allP,
+            pitShading: [],
+            roomSpawns: roomSpawnsOut,
+            roomNames:  roomNamesOut,
+            roomSkies:  roomSkiesOut,
+            roomLabels: [],
+            goal,
+            entities:   allE,
+            _numCols:   1,
+            _worldMinY: 0,
+            _worldH:    5 * RH,   // rows 0-4
+            _roomNameMap: {
+                '0,0': 'MOUNTAIN HEART',
+                '0,1': 'STORM GATES',
+                '0,2': 'ICE CORE',
+                '0,3': 'EMBER SHAFT',
+                '0,4': 'VOLCANIC ENTRY',
+            },
+            _skyByRow: true,
+        };
+    }
+
     // ── Custom level (built in the map editor, stored in localStorage) ───────
     function buildEntityFromSpec(e, ox, oy) {
         ox = ox || 0; oy = oy || 0;
@@ -1269,6 +1473,7 @@
             case 'golden':     return makeGoldenStrawberry(e.x + ox, e.y + oy);
             case 'key':        return makeKey(e.x + ox, e.y + oy);
             case 'keyDoor':    return makeKeyDoor(e.x + ox, e.y + oy, e.w || 8, e.h || 40);
+            case 'fireball':   return makeFireball(e.x + ox, e.y + oy, e.vx || 60, e.vy || 0);
             default: return null;
         }
     }
@@ -1356,9 +1561,26 @@
         // Reset 2D world size for non-custom modes
         worldH = H; worldMinY = 0; DEATH_Y = H + 20; cameraY = 0;
 
+        player.noDashRefill = false;   // default — overridden per level below
+        mountainMode = false;
+
         if (mode === 'gauntlet') {
             NUM_ROOMS = 6;
             applyLevel(buildGauntletLevel(), -1);
+        } else if (mode === 'mountain') {
+            const built = buildMountainLevel();
+            NUM_ROOMS   = built._numCols;           // 1
+            worldMinY   = built._worldMinY;         // 0
+            worldH      = built._worldH;            // 900
+            DEATH_Y     = worldMinY + worldH + 20;  // 920
+            cameraY     = worldMinY + 4 * H;        // start camera at bottom room
+            mazeRoomNameMap = built._roomNameMap || {};
+            mountainMode = true;
+            currentMode  = 'maze';                  // reuse all maze camera/room/transition logic
+            applyLevel(built, -1);
+            player.noDashRefill = true;             // Core mechanic: no dash refill on landing
+            mazeRoomRow = 4;                        // start in row 4 (bottom room)
+            mazeRoomCol = 0;
         } else if (mode === 'random') {
             NUM_ROOMS = AI_ROOMS;
             const seed = Math.floor(Math.random() * 999999);
@@ -1420,18 +1642,32 @@
     }
 
     function render() {
-        const roomIdx = getRoomIdx();
-        const isMaze  = currentMode === 'maze';
+        const roomIdx  = getRoomIdx();
+        const isMaze   = currentMode === 'maze' && !mountainMode;
+        const isMtnOrMaze = currentMode === 'maze'; // covers both maze and mountain (mountain sets currentMode='maze')
 
-        const [skyTop, skyBot] = roomSkies[roomIdx] || ['#1a2a4a','#3a5a8a'];
+        // Sky: for mountain, use mazeRoomRow to pick per-room sky gradient
+        const skyIdx = mountainMode ? mazeRoomRow : roomIdx;
+        const [skyTop, skyBot] = roomSkies[skyIdx] || ['#1a2a4a','#3a5a8a'];
         const sky = ctx.createLinearGradient(0, 0, 0, H);
         sky.addColorStop(0, skyTop); sky.addColorStop(1, skyBot);
         ctx.fillStyle = sky; ctx.fillRect(0, 0, W, H);
 
         ctx.save(); ctx.translate(-cameraX, -cameraY);
 
-        // Background: crystal particles for maze, starfield for other modes
-        if (isMaze) {
+        // Background particles: maze=purple crystals, mountain=ember sparks, other=starfield
+        if (mountainMode) {
+            const t = performance.now() / 800;
+            for (let i = 0; i < 48; i++) {
+                const px = ((i * 137 + 29) * 1699) % ROOM_W;
+                const py = worldMinY + ((i * 97 + 11) * 1301) % (worldH + H);
+                const flicker = 0.1 + 0.4 * Math.abs(Math.sin(t + i * 1.3));
+                ctx.fillStyle = i % 3 === 0 ? `rgba(255,160,40,${flicker.toFixed(2)})`
+                              : i % 3 === 1 ? `rgba(255,80,0,${(flicker*0.6).toFixed(2)})`
+                              :               `rgba(255,220,100,${(flicker*0.3).toFixed(2)})`;
+                ctx.fillRect(px, py, 0.8, 0.8);
+            }
+        } else if (isMaze) {
             const t = performance.now() / 1200;
             for (let i = 0; i < 52; i++) {
                 const px = ((i * 137 + 29) * 1699) % (ROOM_W * 4);
@@ -1457,8 +1693,8 @@
 
         // Pit voids
         for (const pit of pitShading) {
-            if (isMaze) {
-                ctx.fillStyle = 'rgba(60,0,100,0.5)';
+            if (isMtnOrMaze) {
+                ctx.fillStyle = mountainMode ? 'rgba(80,20,0,0.5)' : 'rgba(60,0,100,0.5)';
                 ctx.fillRect(pit.x, pit.y, pit.w, pit.h);
             } else {
                 ctx.fillStyle = 'rgba(0,0,0,0.55)';
@@ -1470,7 +1706,25 @@
 
         for (const pl of platforms) {
             ctx.fillStyle = pl.color; ctx.fillRect(pl.x, pl.y, pl.w, pl.h);
-            if (isMaze) {
+            if (mountainMode) {
+                if (pl.isIcy) {
+                    // Ice sheen: bright blue highlight + crack lines
+                    ctx.fillStyle = 'rgba(150,230,255,0.55)';
+                    ctx.fillRect(pl.x, pl.y, pl.w, 2);
+                    ctx.strokeStyle = 'rgba(100,200,255,0.35)';
+                    ctx.lineWidth = 0.5;
+                    ctx.strokeRect(pl.x + 0.25, pl.y + 0.25, pl.w - 0.5, pl.h - 0.5);
+                    // Diagonal crack detail
+                    ctx.beginPath(); ctx.moveTo(pl.x + pl.w * 0.3, pl.y);
+                    ctx.lineTo(pl.x + pl.w * 0.45, pl.y + pl.h); ctx.stroke();
+                } else {
+                    // Lava rock: orange/red edge highlight
+                    ctx.fillStyle = 'rgba(255,120,20,0.30)';
+                    ctx.fillRect(pl.x, pl.y, pl.w, 1);
+                    ctx.fillStyle = 'rgba(0,0,0,0.25)';
+                    ctx.fillRect(pl.x, pl.y + pl.h - 1, pl.w, 1);
+                }
+            } else if (isMaze) {
                 // Purple mirror sheen on top
                 ctx.fillStyle = 'rgba(190,80,255,0.55)';
                 ctx.fillRect(pl.x, pl.y, pl.w, 1);
@@ -1535,12 +1789,28 @@
 
         ctx.restore();
 
-        // Mirror Temple screen vignette (post-world overlay)
+        // Screen vignette
         if (isMaze) {
             const vg = ctx.createRadialGradient(W/2, H/2, H*0.18, W/2, H/2, H*0.72);
             vg.addColorStop(0, 'rgba(0,0,0,0)');
             vg.addColorStop(1, 'rgba(20,0,40,0.40)');
             ctx.fillStyle = vg; ctx.fillRect(0, 0, W, H);
+        } else if (mountainMode) {
+            const vg = ctx.createRadialGradient(W/2, H/2, H*0.18, W/2, H/2, H*0.72);
+            vg.addColorStop(0, 'rgba(0,0,0,0)');
+            vg.addColorStop(1, 'rgba(40,10,0,0.45)');
+            ctx.fillStyle = vg; ctx.fillRect(0, 0, W, H);
+        }
+
+        // Dash HUD (mountain mode — show remaining dashes since they don't refill)
+        if (mountainMode) {
+            const dashColor = player.Dashes > 0 ? '#ff8820' : '#664422';
+            ctx.fillStyle = dashColor; ctx.font = '7px monospace';
+            ctx.fillText(`DASH: ${player.Dashes}/${player.MaxDashes}`, W - 58, 10);
+            if (player.Dashes === 0) {
+                ctx.fillStyle = 'rgba(255,100,0,0.45)';
+                ctx.fillText('use crystal!', W - 74, 19);
+            }
         }
 
         // Room transition is a pure camera pan — no overlays, no labels.
@@ -1561,11 +1831,23 @@
         }
 
         // HUD
-        const hudCol = isMaze ? 'rgba(210,150,255,0.75)' : 'rgba(255,255,255,0.50)';
+        const hudCol = mountainMode ? 'rgba(255,180,80,0.80)'
+                     : isMaze ? 'rgba(210,150,255,0.75)' : 'rgba(255,255,255,0.50)';
         ctx.fillStyle = hudCol; ctx.font = '7px monospace';
-        ctx.fillText(roomNames[roomIdx] || '', 10, 10);
-        for (let i = 0; i < NUM_ROOMS; i++) {
-            ctx.fillStyle = i <= furthestRoom ? (isMaze ? '#c060ff' : '#d4af37') : 'rgba(255,255,255,0.20)';
+        // Room name: prefer mazeRoomNameMap for per-cell names (maze + mountain)
+        let roomDisplayName = roomNames[roomIdx] || '';
+        if (isMtnOrMaze && mazeRoomNameMap) {
+            const key = `${mazeRoomCol},${mazeRoomRow}`;
+            if (mazeRoomNameMap[key]) roomDisplayName = mazeRoomNameMap[key];
+        }
+        ctx.fillText(roomDisplayName, 10, 10);
+        // Progress dots: for mountain, show vertical progress (4 - mazeRoomRow = rooms climbed)
+        const progressCount = mountainMode ? 5 : NUM_ROOMS;
+        const progressDone  = mountainMode ? (4 - mazeRoomRow) : furthestRoom;
+        for (let i = 0; i < progressCount; i++) {
+            ctx.fillStyle = i <= progressDone
+                ? (mountainMode ? '#ff8820' : isMaze ? '#c060ff' : '#d4af37')
+                : 'rgba(255,255,255,0.20)';
             ctx.fillRect(10 + i * 12, 14, 8, 3);
         }
         if (aiEnabled && typeof NeuralAI !== 'undefined') {
@@ -1617,6 +1899,8 @@
         const input = readInput();
         const dynPlat = entities.filter(e => e.isSolid)
             .map(e => ({ x: e.x, y: e.y, w: e.w, h: e.h, color: e.color || '#888' }));
+        // Ice surface detection (uses previous-frame position — 1-tick delay, imperceptible)
+        player.onIce = platforms.some(p => p.isIcy && playerOnTop(player, p));
         player.update(input, dynPlat.length ? platforms.concat(dynPlat) : platforms, FIXED_DT);
         for (const ent of entities) {
             if (ent.update(player, FIXED_DT) === 'kill') { player.y = DEATH_Y + 1; break; }
