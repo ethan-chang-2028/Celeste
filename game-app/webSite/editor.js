@@ -59,6 +59,7 @@
         if (!center) return;
         const aw = center.clientWidth  - 8;
         const ah = center.clientHeight - 8;
+        if (aw <= 0 || ah <= 0) { requestAnimationFrame(fitCanvas); return; }
         const s  = Math.min(1, aw / (GW * SCALE), ah / (GH * SCALE));
         const dw = GW * SCALE * s;
         const dh = GH * SCALE * s;
@@ -731,6 +732,6 @@
         updateRoomLabel();
         updateProps();
         render();
-        fitCanvas();
+        requestAnimationFrame(fitCanvas);
     })();
 })();
