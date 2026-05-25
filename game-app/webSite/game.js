@@ -1892,6 +1892,8 @@
                 mazeRoomRow = RoomTrans.pendingRow;
                 cameraX = RoomTrans.toX;
                 cameraY = RoomTrans.toY;
+                // Mountain: refill dash on room entry (matches Celeste Core chapter feel)
+                if (mountainMode) player.Dashes = player.MaxDashes;
             }
             return;
         }
