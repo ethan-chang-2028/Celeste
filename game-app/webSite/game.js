@@ -562,10 +562,15 @@
     let worldMinY    = 0;    // world Y of the topmost row (can be negative)
     let respawnRoom  = 0;
     let furthestRoom = 0;
-    let mazeKeysHeld    = 0;
-    let mazeRoomCol     = 0;
-    let mazeRoomRow     = 1;
-    let transitionFlash = 0;
+    let mazeRoomCol  = 0;
+    let mazeRoomRow  = 1;
+    let mazeRoomNameMap = {};
+    const RoomTrans = {
+        phase: 0,          // 0=idle 1=fadeOut 2=hold 3=fadeIn
+        timer: 0, alpha: 0,
+        pendingCol: 0, pendingRow: 0, pendingName: '',
+        FADE: 0.10, HOLD: 0.12,
+    };
     const player = new CelestePlayer(roomSpawns[0].x, roomSpawns[0].y);
     let runStart = performance.now();
     let deaths   = 0;
@@ -591,15 +596,15 @@
             updateAIBtn();
         }
         player.reset(roomSpawns[respawnRoom].x, roomSpawns[respawnRoom].y);
+        // player.reset() clears keysHeld; also reset key/door entity states
         if (currentMode === 'maze') {
-            mazeKeysHeld = 0;
             for (const e of entities) { if (e.type === 'key' || e.type === 'keyDoor') e.reset(); }
             const sp = roomSpawns[respawnRoom];
             mazeRoomCol = Math.max(0, Math.floor(sp.x / ROOM_W));
             mazeRoomRow = Math.max(0, Math.floor((sp.y - worldMinY) / H));
             cameraX = mazeRoomCol * ROOM_W;
             cameraY = worldMinY + mazeRoomRow * H;
-            transitionFlash = 0;
+            RoomTrans.phase = 0; RoomTrans.alpha = 0;
         }
         if (!won) deaths++;
     }
@@ -612,7 +617,7 @@
         deaths = 0; won = false;
         for (const e of entities) e.reset();
         if (currentMode === 'maze' && roomSpawns[0]) {
-            mazeKeysHeld = 0; transitionFlash = 0;
+            RoomTrans.phase = 0; RoomTrans.alpha = 0;
             mazeRoomCol = Math.max(0, Math.floor(roomSpawns[0].x / ROOM_W));
             mazeRoomRow = Math.max(0, Math.floor((roomSpawns[0].y - worldMinY) / H));
             cameraX = mazeRoomCol * ROOM_W;
@@ -1270,6 +1275,17 @@
             _numCols:   4,
             _worldMinY: -RH,   // row -1 = worldY -180
             _worldH:    3 * RH, // rows -1, 0, +1 = 540 px tall
+            // rowIdx = floor((player.y - worldMinY) / H): 0=top row, 1=mid, 2=bot
+            _roomNameMap: {
+                '0,1': 'MIRROR ENTRANCE',
+                '0,0': 'HOLLOW HEIGHTS',
+                '1,1': 'MIRRORED NEXUS',
+                '1,0': 'ICE GALLERY',
+                '2,0': 'CRYSTAL CAVERN',
+                '2,1': 'BLADE CORRIDOR',
+                '1,2': 'SPIKE DESCENT',
+                '3,1': 'MIRROR SUMMIT',
+            },
         };
     }
 
@@ -1392,6 +1408,7 @@
             worldH    = built._worldH;            // 540
             DEATH_Y   = worldMinY + worldH + 20;  // 380
             cameraY   = 0;                        // player starts in row 0
+            mazeRoomNameMap = built._roomNameMap || {};
             applyLevel(built, -1);
         } else if (mode === 'custom') {
             const stored = localStorage.getItem('celeste_custom_level');
@@ -1563,15 +1580,29 @@
             ctx.fillStyle = vg; ctx.fillRect(0, 0, W, H);
         }
 
-        // Room transition flash
-        if (transitionFlash > 0) {
-            ctx.fillStyle = `rgba(255,255,255,${Math.min(0.85, transitionFlash * 3.2).toFixed(2)})`;
+        // Room transition — black fade with centred room name
+        if (isMaze && RoomTrans.alpha > 0) {
+            ctx.fillStyle = `rgba(0,0,0,${RoomTrans.alpha.toFixed(2)})`;
             ctx.fillRect(0, 0, W, H);
+            if (RoomTrans.phase >= 2 && RoomTrans.pendingName) {
+                const tAlpha = RoomTrans.phase === 2
+                    ? Math.min(1, (RoomTrans.HOLD - RoomTrans.timer) / (RoomTrans.HOLD * 0.4))
+                    : RoomTrans.alpha;
+                ctx.globalAlpha = tAlpha * 0.95;
+                ctx.fillStyle = '#c8a0ff';
+                ctx.font = 'bold 8px monospace';
+                ctx.textAlign = 'center';
+                ctx.fillText(RoomTrans.pendingName, W / 2, H / 2 - 1);
+                ctx.fillStyle = 'rgba(180,120,255,0.45)';
+                ctx.fillRect(W / 2 - 48, H / 2 + 3, 96, 1);
+                ctx.textAlign = 'left';
+                ctx.globalAlpha = 1;
+            }
         }
 
         // Key HUD (maze mode)
-        if (isMaze && mazeKeysHeld > 0) {
-            for (let k = 0; k < mazeKeysHeld; k++) {
+        if (isMaze && player.keysHeld > 0) {
+            for (let k = 0; k < player.keysHeld; k++) {
                 const hx = W - 14 - k * 14, hy = 5;
                 ctx.globalAlpha = 0.9;
                 ctx.strokeStyle = '#d4af37'; ctx.lineWidth = 1.5;
@@ -1620,6 +1651,26 @@
     let stepCount = 0, fpsWindow = last, measuredFps = 60;
 
     function step() {
+        // ── Room transition tick (maze only) — freeze everything during wipe ────
+        if (currentMode === 'maze' && RoomTrans.phase !== 0) {
+            RoomTrans.timer = Math.max(0, RoomTrans.timer - FIXED_DT);
+            if (RoomTrans.phase === 1) {
+                RoomTrans.alpha = 1 - RoomTrans.timer / RoomTrans.FADE;
+                if (RoomTrans.timer <= 0) {
+                    RoomTrans.phase = 2; RoomTrans.timer = RoomTrans.HOLD;
+                    mazeRoomCol = RoomTrans.pendingCol; mazeRoomRow = RoomTrans.pendingRow;
+                    cameraX = mazeRoomCol * ROOM_W; cameraY = worldMinY + mazeRoomRow * H;
+                }
+            } else if (RoomTrans.phase === 2) {
+                RoomTrans.alpha = 1;
+                if (RoomTrans.timer <= 0) { RoomTrans.phase = 3; RoomTrans.timer = RoomTrans.FADE; }
+            } else {
+                RoomTrans.alpha = RoomTrans.timer / RoomTrans.FADE;
+                if (RoomTrans.timer <= 0) { RoomTrans.phase = 0; RoomTrans.alpha = 0; }
+            }
+            return;
+        }
+
         const input = readInput();
         const dynPlat = entities.filter(e => e.isSolid)
             .map(e => ({ x: e.x, y: e.y, w: e.w, h: e.h, color: e.color || '#888' }));
@@ -1637,7 +1688,9 @@
             const _rows  = Math.round(worldH / H);
             const newRow = Math.max(0, Math.min(_rows - 1, Math.floor((player.y - worldMinY) / H)));
             if (newCol !== mazeRoomCol || newRow !== mazeRoomRow) {
-                mazeRoomCol = newCol; mazeRoomRow = newRow; transitionFlash = 0.35;
+                RoomTrans.phase = 1; RoomTrans.timer = RoomTrans.FADE; RoomTrans.alpha = 0;
+                RoomTrans.pendingCol = newCol; RoomTrans.pendingRow = newRow;
+                RoomTrans.pendingName = mazeRoomNameMap[`${newCol},${newRow}`] || roomNames[newCol] || '';
             }
             cameraX = mazeRoomCol * ROOM_W;
             cameraY = worldMinY + mazeRoomRow * H;
