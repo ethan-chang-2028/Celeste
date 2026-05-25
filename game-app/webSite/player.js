@@ -1059,15 +1059,22 @@ function makeEnticeBlade(config) {
 }
 
 function makeStrawberry(x, y) {
+    const _ox = x - 6, _oy = y - 6;
     return {
-        type: 'strawberry', x: x - 6, y: y - 6, w: 12, h: 12,
-        isSolid: false, _collected: false, _touchTimer: 0,
-        reset() { this._collected = false; this._touchTimer = 0; },
+        type: 'strawberry', x: _ox, y: _oy, w: 12, h: 12,
+        isSolid: false, _collected: false, _grabbed: false,
+        reset() { this._collected = false; this._grabbed = false; this.x = _ox; this.y = _oy; },
         update(player, dt) {
             if (this._collected) return;
-            if (!rectsOverlap(player, this)) { this._touchTimer = 0; return; }
-            this._touchTimer += dt;
-            if (this._touchTimer >= 0.35) this._collected = true;
+            if (!this._grabbed) {
+                if (rectsOverlap(player, this)) this._grabbed = true;
+                return;
+            }
+            // Float above player's head while carried
+            this.x += (player.x + player.w / 2 - 6 - this.x) * 0.25;
+            this.y += (player.y - 16 - this.y) * 0.25;
+            // Lock in when player safely lands
+            if (player.onGround) this._collected = true;
         },
         draw(ctx) {
             if (this._collected) return;
