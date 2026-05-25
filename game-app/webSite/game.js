@@ -496,10 +496,11 @@
     let mazeRoomNameMap = {};
     let transitionFlash = 0;
     const RoomTrans = {
-        phase: 0,          // 0=idle 1=fadeOut 2=hold 3=fadeIn
-        timer: 0, alpha: 0,
+        active: false,
+        timer: 0,
+        fromX: 0, fromY: 0, toX: 0, toY: 0,
         pendingCol: 0, pendingRow: 0, pendingName: '',
-        FADE: 0.22, HOLD: 0.35,
+        DURATION: 0.55,
     };
     const player = new CelestePlayer(roomSpawns[0].x, roomSpawns[0].y);
     let runStart = performance.now();
@@ -534,7 +535,7 @@
             mazeRoomRow = Math.max(0, Math.floor((sp.y - worldMinY) / H));
             cameraX = mazeRoomCol * ROOM_W;
             cameraY = worldMinY + mazeRoomRow * H;
-            RoomTrans.phase = 0; RoomTrans.alpha = 0;
+            RoomTrans.active = false; RoomTrans.timer = 0;
         }
         if (!won) deaths++;
     }
@@ -547,7 +548,7 @@
         deaths = 0; won = false;
         for (const e of entities) e.reset();
         if (currentMode === 'maze' && roomSpawns[0]) {
-            RoomTrans.phase = 0; RoomTrans.alpha = 0;
+            RoomTrans.active = false; RoomTrans.timer = 0;
             mazeRoomCol = Math.max(0, Math.floor(roomSpawns[0].x / ROOM_W));
             mazeRoomRow = Math.max(0, Math.floor((roomSpawns[0].y - worldMinY) / H));
             cameraX = mazeRoomCol * ROOM_W;
@@ -1510,28 +1511,22 @@
             ctx.fillStyle = vg; ctx.fillRect(0, 0, W, H);
         }
 
-        // Room transition — white flash into deep purple hold with room name
-        if (isMaze && RoomTrans.alpha > 0) {
-            // Phase 1 (fade out): flash white then settle to solid purple-black
-            const overlayColor = RoomTrans.phase === 1
-                ? `rgba(220,180,255,${(RoomTrans.alpha * 0.85).toFixed(2)})`
-                : `rgba(8,0,20,${Math.min(1, RoomTrans.alpha * 1.15).toFixed(2)})`;
-            ctx.fillStyle = overlayColor;
-            ctx.fillRect(0, 0, W, H);
-            if (RoomTrans.phase >= 2 && RoomTrans.pendingName) {
-                const tAlpha = RoomTrans.phase === 2
-                    ? Math.min(1, (RoomTrans.HOLD - RoomTrans.timer) / (RoomTrans.HOLD * 0.3))
-                    : RoomTrans.alpha;
-                ctx.globalAlpha = tAlpha;
-                ctx.fillStyle = '#e8d0ff';
-                ctx.font = 'bold 9px monospace';
-                ctx.textAlign = 'center';
-                ctx.fillText(RoomTrans.pendingName, W / 2, H / 2 - 2);
-                ctx.fillStyle = 'rgba(200,150,255,0.6)';
-                ctx.fillRect(W / 2 - 52, H / 2 + 4, 104, 1);
-                ctx.textAlign = 'left';
-                ctx.globalAlpha = 1;
-            }
+        // Room transition — camera slides; show room name label during the pan
+        if (isMaze && RoomTrans.active && RoomTrans.pendingName) {
+            const t = 1 - RoomTrans.timer / RoomTrans.DURATION;
+            // Label rises in for the first 60%, fades out across the last 30%
+            const labelAlpha = t < 0.6 ? Math.min(1, t / 0.3) : Math.max(0, 1 - (t - 0.7) / 0.3);
+            ctx.globalAlpha = labelAlpha * 0.95;
+            ctx.fillStyle = 'rgba(8,0,20,0.75)';
+            ctx.fillRect(W / 2 - 60, H / 2 - 8, 120, 16);
+            ctx.fillStyle = '#e8d0ff';
+            ctx.font = 'bold 9px monospace';
+            ctx.textAlign = 'center';
+            ctx.fillText(RoomTrans.pendingName, W / 2, H / 2 + 2);
+            ctx.fillStyle = 'rgba(200,150,255,0.8)';
+            ctx.fillRect(W / 2 - 48, H / 2 + 5, 96, 1);
+            ctx.textAlign = 'left';
+            ctx.globalAlpha = 1;
         }
 
         // Key HUD (maze mode)
@@ -1585,22 +1580,20 @@
     let stepCount = 0, fpsWindow = last, measuredFps = 60;
 
     function step() {
-        // ── Room transition tick (maze only) — freeze everything during wipe ────
-        if (currentMode === 'maze' && RoomTrans.phase !== 0) {
+        // ── Room transition tick (maze only) — camera slides, player frozen ────
+        if (currentMode === 'maze' && RoomTrans.active) {
             RoomTrans.timer = Math.max(0, RoomTrans.timer - FIXED_DT);
-            if (RoomTrans.phase === 1) {
-                RoomTrans.alpha = 1 - RoomTrans.timer / RoomTrans.FADE;
-                if (RoomTrans.timer <= 0) {
-                    RoomTrans.phase = 2; RoomTrans.timer = RoomTrans.HOLD;
-                    mazeRoomCol = RoomTrans.pendingCol; mazeRoomRow = RoomTrans.pendingRow;
-                    cameraX = mazeRoomCol * ROOM_W; cameraY = worldMinY + mazeRoomRow * H;
-                }
-            } else if (RoomTrans.phase === 2) {
-                RoomTrans.alpha = 1;
-                if (RoomTrans.timer <= 0) { RoomTrans.phase = 3; RoomTrans.timer = RoomTrans.FADE; }
-            } else {
-                RoomTrans.alpha = RoomTrans.timer / RoomTrans.FADE;
-                if (RoomTrans.timer <= 0) { RoomTrans.phase = 0; RoomTrans.alpha = 0; }
+            const t = 1 - RoomTrans.timer / RoomTrans.DURATION;
+            // Ease in-out cubic for a smooth, weighty slide
+            const eased = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+            cameraX = RoomTrans.fromX + (RoomTrans.toX - RoomTrans.fromX) * eased;
+            cameraY = RoomTrans.fromY + (RoomTrans.toY - RoomTrans.fromY) * eased;
+            if (RoomTrans.timer <= 0) {
+                RoomTrans.active = false;
+                mazeRoomCol = RoomTrans.pendingCol;
+                mazeRoomRow = RoomTrans.pendingRow;
+                cameraX = RoomTrans.toX;
+                cameraY = RoomTrans.toY;
             }
             return;
         }
@@ -1622,12 +1615,19 @@
             const _rows  = Math.round(worldH / H);
             const newRow = Math.max(0, Math.min(_rows - 1, Math.floor((player.y - worldMinY) / H)));
             if (newCol !== mazeRoomCol || newRow !== mazeRoomRow) {
-                RoomTrans.phase = 1; RoomTrans.timer = RoomTrans.FADE; RoomTrans.alpha = 0;
-                RoomTrans.pendingCol = newCol; RoomTrans.pendingRow = newRow;
+                RoomTrans.active = true;
+                RoomTrans.timer  = RoomTrans.DURATION;
+                RoomTrans.fromX  = mazeRoomCol * ROOM_W;
+                RoomTrans.fromY  = worldMinY + mazeRoomRow * H;
+                RoomTrans.toX    = newCol * ROOM_W;
+                RoomTrans.toY    = worldMinY + newRow * H;
+                RoomTrans.pendingCol  = newCol;
+                RoomTrans.pendingRow  = newRow;
                 RoomTrans.pendingName = mazeRoomNameMap[`${newCol},${newRow}`] || roomNames[newCol] || '';
+            } else {
+                cameraX = mazeRoomCol * ROOM_W;
+                cameraY = worldMinY + mazeRoomRow * H;
             }
-            cameraX = mazeRoomCol * ROOM_W;
-            cameraY = worldMinY + mazeRoomRow * H;
         } else {
             const _targetX = player.x + player.w / 2 - W / 2;
             const _maxX    = NUM_ROOMS * ROOM_W - W;
