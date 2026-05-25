@@ -218,6 +218,11 @@
 
     <script src="/player.js"></script>
     <script src="/ai-neural.js"></script>
+    <!-- WASM AI: compiled from game-app/Native/Interop/JsBridge.cpp via Emscripten.
+         These two files are only present after running the build script.
+         If absent the pure-JS ai-neural.js above is used automatically. -->
+    <script src="/ai-neural.wasm.js" onerror="void 0"></script>
+    <script src="/ai-wasm-bridge.js"></script>
     <script src="/game.js"></script>
     <script>
         // Auto-start if arriving from the editor via ?mode=custom
