@@ -125,16 +125,23 @@
 
     <span class="ed-sep">|</span>
 
-    <!-- Room navigation -->
-    <button class="act-btn" onclick="edPrevRoom()" title="← Arrow">◀</button>
-    <span id="ed-room-label">Room 1 / 1</span>
-    <button class="act-btn" onclick="edNextRoom()" title="→ Arrow">▶</button>
-    <button class="act-btn" onclick="edAddRoom()"  title="Add a room at the end">+Room</button>
-    <button class="act-btn danger" onclick="edRemoveRoom()" title="Remove last room">−Room</button>
+    <!-- Room navigation (any direction) -->
+    <button class="act-btn" onclick="edNavRoom(-1,0)" title="Move to room left (←)">◀</button>
+    <button class="act-btn" onclick="edNavRoom(0,-1)" title="Move to room above (↑)">▲</button>
+    <span id="ed-room-label">[0,0]  1 rooms</span>
+    <button class="act-btn" onclick="edNavRoom(0,1)"  title="Move to room below (↓)">▼</button>
+    <button class="act-btn" onclick="edNavRoom(1,0)"  title="Move to room right (→)">▶</button>
+    <button class="act-btn" onclick="edAddRoomDir(1,0)"  title="Add room to the right">+→</button>
+    <button class="act-btn" onclick="edAddRoomDir(-1,0)" title="Add room to the left">+←</button>
+    <button class="act-btn" onclick="edAddRoomDir(0,1)"  title="Add room below">+↓</button>
+    <button class="act-btn" onclick="edAddRoomDir(0,-1)" title="Add room above">+↑</button>
+    <button class="act-btn danger" onclick="edRemoveRoom()" title="Remove current room">−Room</button>
 
     <span class="ed-sep">|</span>
 
-    <!-- File ops -->
+    <!-- File ops + undo -->
+    <button class="act-btn" onclick="edUndo()" title="Undo (Ctrl+Z)">↩</button>
+    <button class="act-btn" onclick="edRedo()" title="Redo (Ctrl+Y)">↪</button>
     <button class="act-btn" onclick="edNew()"    title="Start fresh">New</button>
     <button class="act-btn" onclick="edSave()"   title="Save to browser storage">Save</button>
     <button class="act-btn" onclick="edExport()" title="Download as JSON">Export</button>
@@ -187,8 +194,10 @@
         <kbd>X</kbd> erase &nbsp;
         <kbd>G</kbd> goal &nbsp;
         <kbd>Del</kbd> delete &nbsp;
-        <kbd>←/→</kbd> rooms &nbsp;
-        Alt+drag = move existing
+        <kbd>Arrows</kbd> navigate rooms &nbsp;
+        <kbd>Ctrl+Z/Y</kbd> undo/redo &nbsp;
+        Right-click = delete &nbsp;
+        Alt+drag = move
     </span>
 </footer>
 

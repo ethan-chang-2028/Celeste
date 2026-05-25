@@ -10,7 +10,7 @@
     const W = canvas.width, H = canvas.height; // 320 × 180
     const FIXED_DT  = 1 / 60;
     const MAX_ACCUM = 0.25;
-    const DEATH_Y   = H + 20;
+    let   DEATH_Y   = H + 20;
     const ROOM_W    = W;
     const AI_ROOMS  = 5;         // rooms used by the procedural AI maps
     let   NUM_ROOMS = AI_ROOMS;  // current room count — changes per level
@@ -202,6 +202,8 @@
     let gameActive   = false;   // true only after the user picks a level
     let currentMode  = 'ai';    // 'gauntlet' | 'ai'
     let cameraX      = 0;
+    let cameraY      = 0;
+    let worldH       = H;   // updated per custom level; clamps camera Y
     let respawnRoom  = 0;
     let furthestRoom = 0;
     const player = new CelestePlayer(roomSpawns[0].x, roomSpawns[0].y);
@@ -662,49 +664,87 @@
     }
 
     // ── Custom level (built in the map editor, stored in localStorage) ───────
+    function buildEntityFromSpec(e, ox, oy) {
+        ox = ox || 0; oy = oy || 0;
+        switch (e.type) {
+            case 'spring':     return makeSpring(e.x + ox, e.y + oy, e.orientation || 'floor');
+            case 'bumper':     return makeBumper(e.x + ox, e.y + oy);
+            case 'crystal':    return makeDashCrystal(e.x + ox, e.y + oy);
+            case 'spike':      return makeSpike(e.x + ox, e.y + oy, e.size || 8, e.dir || 'up');
+            case 'blade_h':    return makeEnticeBlade({ ax:e.ax+ox, ay:e.ay+oy, bx:e.bx+ox, by:e.by+oy, speed:e.speed||60 });
+            case 'blade_c':    return makeEnticeBlade({ path:'circular', cx:e.cx+ox, cy:e.cy+oy,
+                                   radius:e.radius||18, startAngle:e.startAngle||0, speed:e.speed||1.5 });
+            case 'strawberry': return makeStrawberry(e.x + ox, e.y + oy);
+            case 'crumble':    return makeCrumbleBlock(e.x + ox, e.y + oy, e.w || 32);
+            case 'falling':    return makeFallingBlock(e.x + ox, e.y + oy, e.w || 32, e.h || 8);
+            case 'golden':     return makeGoldenStrawberry(e.x + ox, e.y + oy);
+            default: return null;
+        }
+    }
+
     function buildCustomLevel(data) {
-        const ents = (data.entities || []).map(e => {
-            switch (e.type) {
-                case 'spring':     return makeSpring(e.x, e.y, e.orientation || 'floor');
-                case 'bumper':     return makeBumper(e.x, e.y);
-                case 'crystal':    return makeDashCrystal(e.x, e.y);
-                case 'spike':      return makeSpike(e.x, e.y, e.size || 8, e.dir || 'up');
-                case 'blade_h':    return makeEnticeBlade({ ax:e.ax, ay:e.ay, bx:e.bx, by:e.by, speed:e.speed||60 });
-                case 'blade_c':    return makeEnticeBlade({ path:'circular', cx:e.cx, cy:e.cy,
-                                       radius:e.radius||18, startAngle:e.startAngle||0, speed:e.speed||1.5 });
-                case 'strawberry': return makeStrawberry(e.x, e.y);
-                case 'crumble':    return makeCrumbleBlock(e.x, e.y, e.w || 32);
-                case 'falling':    return makeFallingBlock(e.x, e.y, e.w || 32, e.h || 8);
-                case 'golden':     return makeGoldenStrawberry(e.x, e.y);
-                default: return null;
+        // v2 format: { rooms:[{col,row,name,sky,spawn,platforms[],entities[]}], goal, startRoom }
+        if (data.rooms) {
+            const allPlatforms = [], allEntities = [], spawns = [], names = [], skies = [];
+            let minRow = Infinity, maxRow = -Infinity;
+            let minCol = Infinity, maxCol = -Infinity;
+
+            for (const room of data.rooms) {
+                const ox = room.col * ROOM_W, oy = room.row * H;
+                minRow = Math.min(minRow, room.row); maxRow = Math.max(maxRow, room.row);
+                minCol = Math.min(minCol, room.col); maxCol = Math.max(maxCol, room.col);
+                for (const pl of (room.platforms || []))
+                    allPlatforms.push({ ...pl, x: pl.x + ox, y: pl.y + oy });
+                for (const e of (room.entities || [])) {
+                    const built = buildEntityFromSpec(e, ox, oy);
+                    if (built) allEntities.push(built);
+                }
+                spawns.push({ x: ox + (room.spawn ? room.spawn.x : 14), y: oy + (room.spawn ? room.spawn.y : FLOOR_Y - 13) });
+                names.push(room.name || `ROOM ${spawns.length}`);
+                skies.push(room.sky || ['#1a2a4a', '#3a5a8a']);
             }
-        }).filter(Boolean);
 
+            const totalCols = maxCol - minCol + 1;
+            const totalRows = maxRow - minRow + 1;
+            const wH = totalRows * H;
+            const goal = data.goal ? {
+                x: data.goal.x + data.goal.col * ROOM_W,
+                y: data.goal.y + data.goal.row * H,
+                w: data.goal.w || 12, h: data.goal.h || 12, color: data.goal.color || '#d4af37',
+            } : null;
+
+            return {
+                platforms:  allPlatforms,
+                pitShading: [],
+                roomSpawns: spawns,
+                roomNames:  names,
+                roomSkies:  skies,
+                roomLabels: [],
+                goal,
+                entities:   allEntities,
+                _numCols:   totalCols,
+                _worldH:    wH,
+            };
+        }
+
+        // v1 fallback: flat { platforms, entities, spawns, goal, numRooms }
+        const ents = (data.entities || []).map(e => buildEntityFromSpec(e, 0, 0)).filter(Boolean);
         const n = data.numRooms || (data.spawns ? data.spawns.length : 3);
-
-        // Auto-generate spawn if the stored one is missing or unsafe
         const spawns = Array.from({ length: n }, (_, i) => {
             if (data.spawns && data.spawns[i]) return data.spawns[i];
             const ox = i * ROOM_W;
             const cands = (data.platforms || []).filter(p =>
                 p.x < ox + ROOM_W && p.x + p.w > ox && p.y >= 80 && p.y <= FLOOR_Y && p.h <= FLOOR_H
             ).sort((a, b) => a.x - b.x);
-            if (cands.length) {
-                const pl = cands[0];
-                return { x: Math.max(pl.x, ox) + 14, y: pl.y - 13 };
-            }
+            if (cands.length) { const pl = cands[0]; return { x: Math.max(pl.x, ox) + 14, y: pl.y - 13 }; }
             return { x: ox + 14, y: FLOOR_Y - 13 };
         });
-
-        const names = data.names  || Array.from({ length: n }, (_, i) => `ROOM ${i + 1}`);
-        const skies  = data.skies || Array.from({ length: n }, () => ['#1a2a4a','#3a5a8a']);
-
         return {
             platforms:  data.platforms || [],
             pitShading: [],
             roomSpawns: spawns,
-            roomNames:  names,
-            roomSkies:  skies,
+            roomNames:  data.names  || Array.from({ length: n }, (_, i) => `ROOM ${i + 1}`),
+            roomSkies:  data.skies  || Array.from({ length: n }, () => ['#1a2a4a', '#3a5a8a']),
             roomLabels: [],
             goal:       data.goal || null,
             entities:   ents,
@@ -721,6 +761,9 @@
         document.querySelectorAll('.ai-only').forEach(el => el.style.display = 'none');
         document.querySelectorAll('.random-only').forEach(el => el.style.display = 'none');
 
+        // Reset 2D world size for non-custom modes
+        worldH = H; DEATH_Y = H + 20; cameraY = 0;
+
         if (mode === 'gauntlet') {
             NUM_ROOMS = 6;
             applyLevel(buildGauntletLevel(), -1);
@@ -736,8 +779,14 @@
                 return;
             }
             const data = JSON.parse(stored);
-            NUM_ROOMS = data.numRooms || 3;
-            applyLevel(buildCustomLevel(data), -1);
+            const built = buildCustomLevel(data);
+            NUM_ROOMS = built.roomSpawns.length;
+            worldH    = built._worldH || H;
+            DEATH_Y   = worldH + 20;
+            cameraY   = 0;
+            // Horizontal extent for custom levels = unique cols × ROOM_W
+            if (built._numCols) NUM_ROOMS = built._numCols;
+            applyLevel(built, -1);
         } else {
             NUM_ROOMS = AI_ROOMS;
             const seed = Math.floor(Math.random() * 999999);
@@ -775,11 +824,11 @@
         sky.addColorStop(0, skyTop); sky.addColorStop(1, skyBot);
         ctx.fillStyle = sky; ctx.fillRect(0, 0, W, H);
 
-        ctx.save(); ctx.translate(-cameraX, 0);
+        ctx.save(); ctx.translate(-cameraX, -cameraY);
 
         // Starfield (parallax at 25% camera speed)
         ctx.save();
-        ctx.translate(cameraX * 0.75, 0); // undo 75% of translate so stars scroll slowly
+        ctx.translate(cameraX * 0.75, cameraY * 0.75); // undo 75% of translate so stars scroll slowly
         ctx.fillStyle = 'rgba(200,215,255,0.45)';
         for (let i = 0; i < 48; i++) {
             const sx = ((i * 137 + 29) * 1699) % (ROOM_W * 6);
@@ -887,6 +936,9 @@
         const _targetX = player.x + player.w / 2 - W / 2;
         const _maxX    = NUM_ROOMS * ROOM_W - W;
         cameraX += (Math.max(0, Math.min(_maxX, _targetX)) - cameraX) * 0.12;
+        const _targetY = player.y + player.h / 2 - H / 2;
+        const _maxY    = Math.max(0, worldH - H);
+        cameraY += (Math.max(0, Math.min(_maxY, _targetY)) - cameraY) * 0.12;
 
         if (!won && playerOverlapsGoal()) {
             won = true; winMs = performance.now() - runStart;
