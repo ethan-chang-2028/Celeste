@@ -19,6 +19,7 @@
     let drag = null, bladeA = null;
     let ghostPos = null;             // {lx,ly} entity hover preview
     let undoStack = [], redoStack = [];
+    let mmInfo = null;               // minimap layout for click hit-testing
 
     const cr = () => lv.rooms[roomIdx];
 
@@ -86,6 +87,15 @@
         return {
             lx: snap((ex - rect.left) * GW / rect.width),
             ly: snap((ey - rect.top)  * GH / rect.height),
+        };
+    }
+
+    // Convert mouse event → raw canvas pixel coords (0..GW*SCALE, 0..GH*SCALE)
+    function toCanvasPx(ev) {
+        const rect = canvas.getBoundingClientRect();
+        return {
+            cx: (ev.clientX - rect.left) * (GW * SCALE) / rect.width,
+            cy: (ev.clientY - rect.top)  * (GH * SCALE) / rect.height,
         };
     }
 
@@ -239,40 +249,108 @@
 
     function drawNeighborArrows(room) {
         const dirs = [
-            { dc: 0,  dr: -1, sx: GW / 2,     sy: 12,       label: '▲' },
-            { dc: 0,  dr:  1, sx: GW / 2,     sy: GH - 6,   label: '▼' },
-            { dc: -1, dr:  0, sx: 10,          sy: GH / 2,   label: '◀' },
-            { dc:  1, dr:  0, sx: GW - 10,     sy: GH / 2,   label: '▶' },
+            { dc: 0,  dr: -1, x: GW/2*SCALE,       y: 14,              ax: 'center', label: '▲ UP' },
+            { dc: 0,  dr:  1, x: GW/2*SCALE,       y: GH*SCALE - 5,    ax: 'center', label: '▼ DOWN' },
+            { dc: -1, dr:  0, x: 8,                 y: GH/2*SCALE,      ax: 'left',   label: '◀ LEFT' },
+            { dc:  1, dr:  0, x: GW*SCALE - 8,     y: GH/2*SCALE,      ax: 'right',  label: 'RIGHT ▶' },
         ];
-        ctx.textAlign = 'center';
         for (const d of dirs) {
-            const exists = !!findRoom(room.col + d.dc, room.row + d.dr);
-            ctx.font = `${SCALE * 3.5}px monospace`;
-            ctx.fillStyle = exists ? 'rgba(80,200,80,0.65)' : 'rgba(255,255,255,0.12)';
-            ctx.fillText(d.label, d.sx * SCALE, d.sy * SCALE);
+            const neighbor = findRoom(room.col + d.dc, room.row + d.dr);
+            ctx.textAlign = d.ax;
+            if (neighbor) {
+                // Green label with neighbour's name
+                ctx.fillStyle = 'rgba(60,200,60,0.85)';
+                ctx.font = `bold ${SCALE * 3}px monospace`;
+                ctx.fillText(d.label, d.x, d.y);
+                ctx.font = `${SCALE * 2.2}px monospace`;
+                ctx.fillStyle = 'rgba(60,200,60,0.6)';
+                ctx.fillText(neighbor.name, d.x, d.y + SCALE * 3.5);
+            } else {
+                // Dim "add" hint
+                ctx.fillStyle = 'rgba(255,255,255,0.1)';
+                ctx.font = `${SCALE * 2.5}px monospace`;
+                ctx.fillText(d.label, d.x, d.y);
+            }
         }
         ctx.textAlign = 'left';
     }
 
     function drawMinimap() {
-        if (lv.rooms.length <= 1) return;
-        const CW = 10, CH = 6, PAD = 3;
+        // Always show minimap (even 1 room so user sees where they are)
+        const CW = 52, CH = 30, GAP = 3, PAD = 6, TITLE = 14;
         const cols = lv.rooms.map(r => r.col);
         const rows = lv.rooms.map(r => r.row);
         const minC = Math.min(...cols), maxC = Math.max(...cols);
         const minR = Math.min(...rows), maxR = Math.max(...rows);
-        const W = (maxC - minC + 1) * (CW + 1) + PAD * 2;
-        const H = (maxR - minR + 1) * (CH + 1) + PAD * 2;
-        const ox = GW * SCALE - W - 6, oy = GH * SCALE - H - 6;
+        // Expand grid by 1 in each direction so user can see where to add rooms
+        const gMinC = minC - 1, gMaxC = maxC + 1;
+        const gMinR = minR - 1, gMaxR = maxR + 1;
+        const gCols = gMaxC - gMinC + 1, gRows = gMaxR - gMinR + 1;
+        const W = gCols * (CW + GAP) - GAP + PAD * 2;
+        const H = gRows * (CH + GAP) - GAP + PAD * 2 + TITLE;
+        const ox = GW * SCALE - W - 6;
+        const oy = 6;
 
-        ctx.fillStyle = 'rgba(0,0,0,0.65)';
-        ctx.fillRect(ox - 1, oy - 1, W + 2, H + 2);
+        // Panel bg
+        ctx.fillStyle = 'rgba(4,5,16,0.92)';
+        ctx.fillRect(ox, oy, W, H);
+        ctx.strokeStyle = '#2a3050'; ctx.lineWidth = 1;
+        ctx.strokeRect(ox + 0.5, oy + 0.5, W - 1, H - 1);
 
-        for (const r of lv.rooms) {
-            const x = ox + PAD + (r.col - minC) * (CW + 1);
-            const y = oy + PAD + (r.row - minR) * (CH + 1);
-            ctx.fillStyle = (r === cr()) ? '#e8c87a' : '#3a5a8a';
-            ctx.fillRect(x, y, CW, CH);
+        // Title
+        ctx.fillStyle = '#7aa2ff'; ctx.font = `bold 8px monospace`;
+        ctx.fillText('MAP  (click to go · + to add room)', ox + PAD, oy + 10);
+
+        mmInfo = { ox, oy: oy + TITLE, gMinC, gMinR, CW, CH, GAP, PAD };
+
+        for (let r = gMinR; r <= gMaxR; r++) {
+            for (let c = gMinC; c <= gMaxC; c++) {
+                const cellX = ox + PAD + (c - gMinC) * (CW + GAP);
+                const cellY = oy + TITLE + PAD + (r - gMinR) * (CH + GAP);
+                const existing = findRoom(c, r);
+                const isCur = existing && existing === cr();
+
+                if (existing) {
+                    // Filled room cell
+                    ctx.fillStyle = isCur ? '#2a2000' : '#0f1a28';
+                    ctx.fillRect(cellX, cellY, CW, CH);
+                    ctx.strokeStyle = isCur ? '#e8c87a' : '#2a4a6a';
+                    ctx.lineWidth = isCur ? 2 : 1;
+                    ctx.strokeRect(cellX + 0.5, cellY + 0.5, CW - 1, CH - 1);
+                    // Coords
+                    ctx.fillStyle = isCur ? '#e8c87a' : '#5a8aaa';
+                    ctx.font = '7px monospace';
+                    ctx.fillText(`[${c},${r}]`, cellX + 3, cellY + 9);
+                    // Name
+                    ctx.fillStyle = isCur ? '#fff' : '#8a9aaa';
+                    ctx.font = '6px monospace';
+                    const label = (existing.name || '').substring(0, 7);
+                    ctx.fillText(label, cellX + 3, cellY + 20);
+                    if (isCur) {
+                        ctx.fillStyle = '#e8c87a';
+                        ctx.font = 'bold 6px monospace';
+                        ctx.fillText('◉ HERE', cellX + 3, cellY + 28);
+                    }
+                } else {
+                    // Check if adjacent to any real room — show as addable
+                    const adjExists = findRoom(c-1,r) || findRoom(c+1,r) || findRoom(c,r-1) || findRoom(c,r+1);
+                    if (adjExists) {
+                        ctx.fillStyle = 'rgba(20,50,20,0.5)';
+                        ctx.fillRect(cellX, cellY, CW, CH);
+                        ctx.strokeStyle = 'rgba(50,120,50,0.4)'; ctx.lineWidth = 1;
+                        ctx.setLineDash([3, 2]);
+                        ctx.strokeRect(cellX + 0.5, cellY + 0.5, CW - 1, CH - 1);
+                        ctx.setLineDash([]);
+                        ctx.fillStyle = 'rgba(80,200,80,0.5)';
+                        ctx.font = 'bold 14px monospace'; ctx.textAlign = 'center';
+                        ctx.fillText('+', cellX + CW/2, cellY + CH/2 + 5);
+                        ctx.textAlign = 'left';
+                        ctx.fillStyle = 'rgba(80,160,80,0.5)';
+                        ctx.font = '6px monospace';
+                        ctx.fillText(`[${c},${r}]`, cellX + 3, cellY + CH - 4);
+                    }
+                }
+            }
         }
     }
 
@@ -356,6 +434,45 @@
     /* ─── mouse events ──────────────────────────────────── */
     canvas.addEventListener('mousedown', ev => {
         if (ev.button !== 0) return;
+
+        // ── Minimap click: navigate or add room ──────────────
+        if (mmInfo) {
+            const { cx, cy } = toCanvasPx(ev);
+            const { ox, oy, gMinC, gMinR, CW, CH, GAP, PAD } = mmInfo;
+            const relX = cx - ox - PAD, relY = cy - oy - PAD;
+            if (relX >= 0 && relY >= 0) {
+                const col = gMinC + Math.floor(relX / (CW + GAP));
+                const row = gMinR + Math.floor(relY / (CH + GAP));
+                // Only act if click is inside a cell (not in the gap)
+                const cellOffX = relX % (CW + GAP), cellOffY = relY % (CH + GAP);
+                if (cellOffX <= CW && cellOffY <= CH) {
+                    const existing = findRoom(col, row);
+                    if (existing) {
+                        roomIdx = lv.rooms.indexOf(existing);
+                        sel = null; selKind = '';
+                        updateRoomLabel(); updateProps(); render();
+                        return;
+                    }
+                    const adjExists = findRoom(col-1,row) || findRoom(col+1,row) || findRoom(col,row-1) || findRoom(col,row+1);
+                    if (adjExists) {
+                        pushUndo();
+                        const r = mkRoom(col, row);
+                        // Add walls for vertical-only connections
+                        const hasH = findRoom(col-1,row) || findRoom(col+1,row);
+                        if (!hasH) {
+                            r.platforms.push({ x: 0,      y: 0, w: 8, h: GH, color: '#4a5570' });
+                            r.platforms.push({ x: GW - 8, y: 0, w: 8, h: GH, color: '#4a5570' });
+                        }
+                        lv.rooms.push(r);
+                        roomIdx = lv.rooms.length - 1;
+                        sel = null; selKind = '';
+                        updateRoomLabel(); updateProps(); autoSave(); render();
+                        return;
+                    }
+                }
+            }
+        }
+
         const { lx, ly } = toLocal(ev.clientX, ev.clientY);
 
         if (tool === 'select' || (tool === 'platform' && ev.altKey)) {
