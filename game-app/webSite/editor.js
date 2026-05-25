@@ -53,14 +53,30 @@
         return lv.rooms.find(r => r.col === col && r.row === row);
     }
 
+    /* ─── fit canvas to available space ────────────────── */
+    function fitCanvas() {
+        const center = canvas.parentElement;
+        if (!center) return;
+        const aw = center.clientWidth  - 8;
+        const ah = center.clientHeight - 8;
+        const s  = Math.min(1, aw / (GW * SCALE), ah / (GH * SCALE));
+        const dw = GW * SCALE * s;
+        const dh = GH * SCALE * s;
+        canvas.style.transform = `scale(${s})`;
+        canvas.style.left = Math.max(0, (aw - dw) / 2) + 'px';
+        canvas.style.top  = Math.max(0, (ah - dh) / 2) + 'px';
+    }
+    window.addEventListener('resize', fitCanvas);
+
     /* ─── coordinate helpers ────────────────────────────── */
     const snap = v => Math.round(v / SNAP) * SNAP;
 
     function toLocal(ex, ey) {
         const rect = canvas.getBoundingClientRect();
+        // Use rect dimensions so coords are correct regardless of CSS scale
         return {
-            lx: snap((ex - rect.left) / SCALE),
-            ly: snap((ey - rect.top)  / SCALE),
+            lx: snap((ex - rect.left) * GW / rect.width),
+            ly: snap((ey - rect.top)  * GH / rect.height),
         };
     }
 
@@ -715,5 +731,6 @@
         updateRoomLabel();
         updateProps();
         render();
+        fitCanvas();
     })();
 })();

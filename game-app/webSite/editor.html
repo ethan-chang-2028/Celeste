@@ -12,10 +12,11 @@
 
         /* ── Header toolbar ── */
         .ed-header {
-            display: flex; align-items: center; flex-wrap: wrap;
-            gap: 6px; padding: 6px 10px;
+            display: flex; align-items: center; flex-wrap: nowrap;
+            gap: 4px; padding: 5px 8px;
             background: #11131c; border-bottom: 1px solid #2a2f42;
-            flex-shrink: 0;
+            flex-shrink: 0; overflow-x: auto;
+            min-height: 38px;
         }
         .ed-header h1 { font-size: 1rem; color: #e8c87a; letter-spacing: .15em; margin-right: 6px; }
         .ed-header a  { color: #7aa2ff; font-size: .8rem; text-decoration: none; margin-right: 8px; }
@@ -52,12 +53,15 @@
 
         /* ── Canvas area ── */
         .ed-center {
-            flex: 1; display: flex; flex-direction: column;
-            align-items: center; justify-content: center;
-            overflow: auto; background: #080a10; padding: 12px;
+            flex: 1; overflow: hidden; background: #080a10;
+            position: relative;
         }
-        #ed-canvas { image-rendering: pixelated; image-rendering: crisp-edges;
-                     cursor: crosshair; box-shadow: 0 0 20px rgba(0,0,0,0.8); }
+        #ed-canvas {
+            position: absolute;
+            image-rendering: pixelated; image-rendering: crisp-edges;
+            cursor: crosshair; box-shadow: 0 0 20px rgba(0,0,0,0.8);
+            transform-origin: 0 0;
+        }
 
         /* ── Right panel ── */
         .ed-right {
