@@ -499,7 +499,7 @@
         phase: 0,          // 0=idle 1=fadeOut 2=hold 3=fadeIn
         timer: 0, alpha: 0,
         pendingCol: 0, pendingRow: 0, pendingName: '',
-        FADE: 0.10, HOLD: 0.12,
+        FADE: 0.22, HOLD: 0.35,
     };
     const player = new CelestePlayer(roomSpawns[0].x, roomSpawns[0].y);
     let runStart = performance.now();
@@ -1510,21 +1510,25 @@
             ctx.fillStyle = vg; ctx.fillRect(0, 0, W, H);
         }
 
-        // Room transition — black fade with centred room name
+        // Room transition — white flash into deep purple hold with room name
         if (isMaze && RoomTrans.alpha > 0) {
-            ctx.fillStyle = `rgba(0,0,0,${RoomTrans.alpha.toFixed(2)})`;
+            // Phase 1 (fade out): flash white then settle to solid purple-black
+            const overlayColor = RoomTrans.phase === 1
+                ? `rgba(220,180,255,${(RoomTrans.alpha * 0.85).toFixed(2)})`
+                : `rgba(8,0,20,${Math.min(1, RoomTrans.alpha * 1.15).toFixed(2)})`;
+            ctx.fillStyle = overlayColor;
             ctx.fillRect(0, 0, W, H);
             if (RoomTrans.phase >= 2 && RoomTrans.pendingName) {
                 const tAlpha = RoomTrans.phase === 2
-                    ? Math.min(1, (RoomTrans.HOLD - RoomTrans.timer) / (RoomTrans.HOLD * 0.4))
+                    ? Math.min(1, (RoomTrans.HOLD - RoomTrans.timer) / (RoomTrans.HOLD * 0.3))
                     : RoomTrans.alpha;
-                ctx.globalAlpha = tAlpha * 0.95;
-                ctx.fillStyle = '#c8a0ff';
-                ctx.font = 'bold 8px monospace';
+                ctx.globalAlpha = tAlpha;
+                ctx.fillStyle = '#e8d0ff';
+                ctx.font = 'bold 9px monospace';
                 ctx.textAlign = 'center';
-                ctx.fillText(RoomTrans.pendingName, W / 2, H / 2 - 1);
-                ctx.fillStyle = 'rgba(180,120,255,0.45)';
-                ctx.fillRect(W / 2 - 48, H / 2 + 3, 96, 1);
+                ctx.fillText(RoomTrans.pendingName, W / 2, H / 2 - 2);
+                ctx.fillStyle = 'rgba(200,150,255,0.6)';
+                ctx.fillRect(W / 2 - 52, H / 2 + 4, 104, 1);
                 ctx.textAlign = 'left';
                 ctx.globalAlpha = 1;
             }

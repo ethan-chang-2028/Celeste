@@ -900,7 +900,11 @@ function makeKeyDoor(x, y, w, h) {
         reset() { this._open = false; this.isSolid = true; this._openAnim = 0; },
         update(player, dt) {
             if (this._open) { this._openAnim = Math.min(1, this._openAnim + dt * 5); return; }
-            if (player.keysHeld > 0 && rectsOverlap(player, this)) {
+            // Expand trigger by 3px so touching the solid wall counts as contact.
+            // rectsOverlap uses strict >, so player pushed flush against the door
+            // (player.x+w == door.x) would return false without this expansion.
+            const trigger = { x: this.x - 3, y: this.y, w: this.w + 6, h: this.h };
+            if (player.keysHeld > 0 && rectsOverlap(player, trigger)) {
                 this._open = true; this.isSolid = false; player.keysHeld--;
             }
         },
