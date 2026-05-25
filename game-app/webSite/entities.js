@@ -251,13 +251,11 @@ function makeStrawberry(x, y) {
     return {
         type: 'strawberry',
         x: x - 6, y: y - 6, w: 12, h: 12,
-        isSolid: false, _collected: false, _touchTimer: 0,
-        reset() { this._collected = false; this._touchTimer = 0; },
+        isSolid: false, _collected: false,
+        reset() { this._collected = false; },
         update(player, dt) {
             if (this._collected) return;
-            if (!rectsOverlap(player, this)) { this._touchTimer = 0; return; }
-            this._touchTimer += dt;
-            if (this._touchTimer >= 0.35) this._collected = true;
+            if (rectsOverlap(player, this)) this._collected = true;
         },
         draw(ctx) {
             if (this._collected) return;
