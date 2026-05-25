@@ -10,7 +10,7 @@
     const W = canvas.width, H = canvas.height; // 320 × 180
     const FIXED_DT  = 1 / 60;
     const MAX_ACCUM = 0.25;
-    const DEATH_Y   = H + 20;
+    let   DEATH_Y   = H + 20;
     const ROOM_W    = W;
     const AI_ROOMS  = 5;         // rooms used by the procedural AI maps
     let   NUM_ROOMS = AI_ROOMS;  // current room count — changes per level
@@ -475,6 +475,9 @@
     let gameActive   = false;   // true only after the user picks a level
     let currentMode  = 'ai';    // 'gauntlet' | 'ai'
     let cameraX      = 0;
+    let cameraY      = 0;
+    let worldH       = H;
+    let worldMinY    = 0;
     let respawnRoom  = 0;
     let furthestRoom = 0;
     const player = new CelestePlayer(roomSpawns[0].x, roomSpawns[0].y);
@@ -733,7 +736,7 @@
     function buildMazeLevel() {
         const RW = ROOM_W, RH = H;
         // Colour palette — dark ice aesthetic
-        const ICE  = '#2a4a6a', ICE2 = '#1a3050', ICE3 = '#3a608a', WALL = '#0c1520';
+        const ICE  = '#2a1248', ICE2 = '#180a2c', ICE3 = '#4a228a', WALL = '#080412';
 
         const allP = [], allE = [], roomSpawnsOut = [], roomNamesOut = [], roomSkiesOut = [];
 
@@ -788,7 +791,7 @@
         ]);
         roomSpawnsOut.push({ x:0*RW+14, y:0*RH+FLOOR_Y-13 });
         roomNamesOut.push('MIRROR ENTRANCE');
-        roomSkiesOut.push(['#04050f', '#07091a']);
+        roomSkiesOut.push(['#06020e', '#0d0418']);
 
         // ── Room H (col 0, row -1) — Hollow Heights (dead end above A) ───────
         addR(0, -1, [
@@ -826,7 +829,7 @@
         ]);
         roomSpawnsOut.push({ x:1*RW+14, y:0*RH+FLOOR_Y-13 });
         roomNamesOut.push('MIRRORED NEXUS');
-        roomSkiesOut.push(['#030408', '#060810']);
+        roomSkiesOut.push(['#050210', '#0a0420']);
 
         // ── Room B (col 1, row -1) — Ice Gallery (above D, exits right to C) ─
         addR(1, -1, [
@@ -882,7 +885,7 @@
         ]);
         roomSpawnsOut.push({ x:2*RW+14, y:0*RH+FLOOR_Y-13 });
         roomNamesOut.push('BLADE CORRIDOR');
-        roomSkiesOut.push(['#050408', '#090810']);
+        roomSkiesOut.push(['#060210', '#0c0420']);
 
         // ── Room F (col 1, row 1) — Spike Descent (dead end below D) ─────────
         addR(1, 1, [
@@ -923,7 +926,7 @@
         ]);
         roomSpawnsOut.push({ x:3*RW+14, y:0*RH+FLOOR_Y-13 });
         roomNamesOut.push('MIRROR SUMMIT');
-        roomSkiesOut.push(['#030308', '#06060f']);
+        roomSkiesOut.push(['#050210', '#0b0420']);
 
         // Goal flag in G, local (270, 32) → world (3*320+270, 32)
         const goal = { x:3*RW+270, y:32, w:12, h:12, color:'#d4af37' };
@@ -1108,24 +1111,59 @@
 
     function render() {
         const roomIdx = getRoomIdx();
+        const isMaze  = currentMode === 'maze';
+
         const [skyTop, skyBot] = roomSkies[roomIdx] || ['#1a2a4a','#3a5a8a'];
         const sky = ctx.createLinearGradient(0, 0, 0, H);
         sky.addColorStop(0, skyTop); sky.addColorStop(1, skyBot);
         ctx.fillStyle = sky; ctx.fillRect(0, 0, W, H);
 
-        ctx.save(); ctx.translate(-cameraX, 0);
+        ctx.save(); ctx.translate(-cameraX, -cameraY);
 
-        ctx.fillStyle = 'rgba(150,40,40,0.25)';
-        for (const pit of pitShading) ctx.fillRect(pit.x, pit.y, pit.w, pit.h);
-
-        for (const pl of platforms) {
-            ctx.fillStyle = pl.color; ctx.fillRect(pl.x, pl.y, pl.w, pl.h);
-            ctx.fillStyle = 'rgba(255,255,255,0.12)'; ctx.fillRect(pl.x, pl.y, pl.w, 1);
+        // Background particles
+        if (isMaze) {
+            // Crystal particles — purple/pink twinkling
+            const t = performance.now() / 1200;
+            for (let i = 0; i < 52; i++) {
+                const px = ((i * 137 + 29) * 1699) % (ROOM_W * 4);
+                const py = worldMinY + ((i * 97 + 11) * 1301) % (worldH + H);
+                const blink = 0.15 + 0.35 * Math.abs(Math.sin(t + i * 0.7));
+                ctx.fillStyle = i % 3 === 0 ? `rgba(210,80,255,${blink.toFixed(2)})`
+                              : i % 3 === 1 ? `rgba(140,40,220,${(blink*0.7).toFixed(2)})`
+                              :               `rgba(255,150,255,${(blink*0.4).toFixed(2)})`;
+                ctx.fillRect(px, py, i % 5 === 0 ? 1.5 : 0.5, i % 5 === 0 ? 1.5 : 0.5);
+            }
         }
 
+        // Pit voids
+        ctx.fillStyle = isMaze ? 'rgba(60,0,100,0.5)' : 'rgba(150,40,40,0.25)';
+        for (const pit of pitShading) ctx.fillRect(pit.x, pit.y, pit.w, pit.h);
+
+        // Platforms
+        for (const pl of platforms) {
+            ctx.fillStyle = pl.color;
+            ctx.fillRect(pl.x, pl.y, pl.w, pl.h);
+            if (isMaze) {
+                // Purple mirror sheen on top
+                ctx.fillStyle = 'rgba(190,80,255,0.55)';
+                ctx.fillRect(pl.x, pl.y, pl.w, 1);
+                ctx.fillStyle = 'rgba(120,40,200,0.20)';
+                ctx.fillRect(pl.x, pl.y + 1, pl.w, 1);
+            } else {
+                ctx.fillStyle = 'rgba(255,255,255,0.12)';
+                ctx.fillRect(pl.x, pl.y, pl.w, 1);
+            }
+        }
+
+        // Room dividers
+        const divTop = isMaze ? worldMinY : 0;
+        const divBot = isMaze ? worldMinY + worldH : H;
         ctx.strokeStyle = 'rgba(255,255,255,0.10)'; ctx.lineWidth = 1;
         for (let r = 1; r < NUM_ROOMS; r++) {
-            ctx.beginPath(); ctx.moveTo(r * ROOM_W, 0); ctx.lineTo(r * ROOM_W, H); ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(r * ROOM_W, divTop);
+            ctx.lineTo(r * ROOM_W, divBot);
+            ctx.stroke();
         }
 
         if (GOAL && GOAL.x !== undefined) {
@@ -1155,19 +1193,31 @@
 
         player.draw(ctx);
 
-        ctx.fillStyle = 'rgba(255,255,255,0.08)'; ctx.font = 'bold 80px monospace';
-        for (let r = 0; r < NUM_ROOMS; r++) ctx.fillText(String(r + 1), r * ROOM_W + 148, 120);
+        // Room number watermarks (only non-maze)
+        if (!isMaze) {
+            ctx.fillStyle = 'rgba(255,255,255,0.08)'; ctx.font = 'bold 80px monospace';
+            for (let r = 0; r < NUM_ROOMS; r++) ctx.fillText(String(r + 1), r * ROOM_W + 148, 120);
+        }
 
         ctx.fillStyle = 'rgba(220,220,220,0.55)'; ctx.font = '6px monospace';
         for (const lbl of roomLabels) ctx.fillText(lbl.text, lbl.x, lbl.y);
 
         ctx.restore();
 
+        // Mirror Temple screen vignette (post-world overlay)
+        if (isMaze) {
+            const vg = ctx.createRadialGradient(W/2, H/2, H*0.18, W/2, H/2, H*0.72);
+            vg.addColorStop(0, 'rgba(0,0,0,0)');
+            vg.addColorStop(1, 'rgba(20,0,40,0.40)');
+            ctx.fillStyle = vg; ctx.fillRect(0, 0, W, H);
+        }
+
         // HUD
-        ctx.fillStyle = 'rgba(255,255,255,0.50)'; ctx.font = '7px monospace';
+        const hudCol = isMaze ? 'rgba(210,150,255,0.75)' : 'rgba(255,255,255,0.50)';
+        ctx.fillStyle = hudCol; ctx.font = '7px monospace';
         ctx.fillText(roomNames[roomIdx] || '', 10, 10);
         for (let i = 0; i < NUM_ROOMS; i++) {
-            ctx.fillStyle = i <= furthestRoom ? '#d4af37' : 'rgba(255,255,255,0.20)';
+            ctx.fillStyle = i <= furthestRoom ? (isMaze ? '#c060ff' : '#d4af37') : 'rgba(255,255,255,0.20)';
             ctx.fillRect(10 + i * 12, 14, 8, 3);
         }
         if (aiEnabled && typeof NeuralAI !== 'undefined') {
@@ -1212,6 +1262,13 @@
         }
         cameraX = getRoomIdx() * ROOM_W;
 
+        // Vertical camera for 2D levels (maze mode)
+        if (currentMode === 'maze') {
+            const _ty  = player.y + 6 - H / 2;
+            const _maxY = Math.max(worldMinY, worldMinY + worldH - H);
+            cameraY += (Math.max(worldMinY, Math.min(_maxY, _ty)) - cameraY) * 0.12;
+        }
+
         if (!won && playerOverlapsGoal()) {
             won = true; winMs = performance.now() - runStart;
             if (bestMs === null || winMs < bestMs) bestMs = winMs;
@@ -1220,7 +1277,7 @@
                 updateAIBtn();
             }
         }
-        if (player.y > DEATH_Y) { respawn(); return; }
+        if (player.y > DEATH_Y || player.y < worldMinY - 20) { respawn(); return; }
 
         // AI stuck-death: no x movement for AI_STUCK_LIMIT frames → die and retry
         if (aiEnabled) {
