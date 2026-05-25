@@ -494,6 +494,7 @@
     let mazeRoomCol  = 0;
     let mazeRoomRow  = 1;
     let mazeRoomNameMap = {};
+    let transitionFlash = 0;
     const RoomTrans = {
         phase: 0,          // 0=idle 1=fadeOut 2=hold 3=fadeIn
         timer: 0, alpha: 0,
