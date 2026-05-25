@@ -1,5 +1,5 @@
 // ai-neural.js  ← PRIMARY AI IMPLEMENTATION
-// Neural net: 17 inputs → 14 hidden (ReLU) → 6 outputs (sigmoid)
+// Neural net: 17 inputs → 14 hidden (ReLU) → 16 outputs (softmax)
 // Training: neuroevolution (GA) + real-time ES weight adaptation + stuck detection
 // Architecture reference: game-app/Native/Engine/Ai/ai_learning.hpp
 
@@ -9,8 +9,13 @@
     // ── Network dimensions (mirrors ai_learning.hpp) ──────────────────────────
     const N_IN   = 17;
     const N_HID  = 14;
+<<<<<<< claude/great-sagan-7X0jp
+    const N_OUT  = 16;
+    const W_SIZE = N_IN * N_HID + N_HID + N_HID * N_OUT + N_OUT; // 492
+=======
     const N_OUT  = 9;
     const W_SIZE = N_IN * N_HID + N_HID + N_HID * N_OUT + N_OUT; // 387
+>>>>>>> main
 
     // ── Hyperparameters ───────────────────────────────────────────────────────
     const HP = {
@@ -97,6 +102,24 @@
         for (let k = 0; k < N_OUT; k++) { exps[k] = Math.exp((out[k] - maxO) / HP.EXPLORE_TEMP); sumE += exps[k]; }
         let r = rand() * sumE, best = N_OUT - 1;
         for (let k = 0; k < N_OUT; k++) { r -= exps[k]; if (r <= 0) { best = k; break; } }
+<<<<<<< claude/great-sagan-7X0jp
+        // 0=left  1=right  2=jump  3=dash→right  4=jump+right  5=jump+left
+        // 6=grab+climb-left  7=grab+climb-right  8=grab+wall-jump
+        // 9=dash→left  10=dash→up  11=dash→up-right  12=dash→up-left
+        // 13=dash→down  14=dash→down-right  15=dash→down-left
+        //                  0  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15
+        const DASH_DX  =  [ 0, 0, 0, 1, 0, 0, 0, 0, 0,-1, 0, 1,-1, 0, 1,-1];
+        const DASH_DY  =  [ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,-1,-1,-1, 1, 1, 1];
+        const isDash   = best === 3 || best >= 9;
+        return {
+            L:  best === 0 || best === 5 || best === 6,
+            R:  best === 1 || best === 4 || best === 7,
+            J:  best === 2 || best === 4 || best === 5 || best === 8,
+            X:  isDash,
+            G:  best === 6 || best === 7 || best === 8,
+            DX: DASH_DX[best],
+            DY: DASH_DY[best],
+=======
         // 0=left  1=right  2=jump  3=dash  4=jump+right  5=jump+left
         // 6=grab+climb-left  7=grab+climb-right  8=grab+wall-jump
         return {
@@ -105,6 +128,7 @@
             J: best === 2 || best === 4 || best === 5 || best === 8,
             X: best === 3,
             G: best === 6 || best === 7 || best === 8,
+>>>>>>> main
         };
     }
 
@@ -256,7 +280,11 @@
 
     // ── Training manager ──────────────────────────────────────────────────────
     const POOL_SIZE   = 16;  // was 12 — more diversity in gene pool
+<<<<<<< claude/great-sagan-7X0jp
+    const STORAGE_KEY = 'apexAI_bestWeights_v3';
+=======
     const STORAGE_KEY = 'apexAI_bestWeights_v2';
+>>>>>>> main
 
     const NeuralAI = {
         // Public stats
@@ -338,9 +366,15 @@
             const jumpPressed = action.J && !this._prevJ;
             this._prevJ = action.J;
 
+            const moveX = action.X ? action.DX : (action.R ? 1 : (action.L ? -1 : 0));
+            const moveY = action.X ? action.DY : ((action.G && !action.J) ? -1 : 0);
             return {
+<<<<<<< claude/great-sagan-7X0jp
+                moveX, moveY,
+=======
                 moveX:       action.R ? 1 : (action.L ? -1 : 0),
                 moveY:       (action.G && !action.J) ? -1 : 0,  // climb up when grabbing (not wall-jumping)
+>>>>>>> main
                 jumpPressed,
                 jumpHeld:    action.J,
                 dashPressed: action.X,
@@ -457,8 +491,14 @@
             const action = think(w, inputs);
             const jumpPressed = action.J && !ag.prevJ;
             ag.prevJ = action.J;
+<<<<<<< claude/great-sagan-7X0jp
+            const moveX2 = action.X ? action.DX : (action.R ? 1 : (action.L ? -1 : 0));
+            const moveY2 = action.X ? action.DY : ((action.G && !action.J) ? -1 : 0);
+            return { moveX: moveX2, moveY: moveY2,
+=======
             return { moveX: action.R ? 1 : (action.L ? -1 : 0),
                      moveY: (action.G && !action.J) ? -1 : 0,
+>>>>>>> main
                      jumpPressed, jumpHeld: action.J, dashPressed: action.X, grabHeld: !!action.G };
         },
 

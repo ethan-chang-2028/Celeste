@@ -649,11 +649,24 @@
     let won      = false;
     let winMs    = 0;
 
+<<<<<<< claude/great-sagan-7X0jp
+    // AI stuck-death: two checks —
+    //   position: no movement > 2px in 1.5 s → instant kill
+    //   progress: no improvement toward goal in 4 s → kill (catches slow wall-slides)
+    const AI_STUCK_LIMIT    = 90;   // frames (~1.5 s)
+    const AI_PROGRESS_LIMIT = 240;  // frames (~4 s)
+    let aiStuckFrames    = 0;
+    let aiStuckLastX     = 0;
+    let aiStuckLastY     = 0;
+    let aiProgressFrames = 0;
+    let aiProgressBest   = -Infinity;
+=======
     // AI stuck-death: if position hasn't changed in 3 s, force a death
     const AI_STUCK_LIMIT = 180; // frames (~3 s at 60 fps)
     let aiStuckFrames = 0;
     let aiStuckLastX  = 0;
     let aiStuckLastY  = 0;
+>>>>>>> main
 
     function getRoomIdx() {
         return Math.max(0, Math.min(NUM_ROOMS - 1, Math.floor(player.x / ROOM_W)));
@@ -668,7 +681,8 @@
     }
 
     function respawn() {
-        aiStuckFrames = 0;
+        aiStuckFrames    = 0;
+        aiProgressFrames = 0;
         aiStuckLastX  = player.x;
         aiStuckLastY  = player.y;
         if (aiEnabled && typeof NeuralAI !== 'undefined') {
@@ -686,6 +700,10 @@
             const gsy = roomSpawns[si] ? roomSpawns[si].y : roomSpawns[0].y;
             gh.p.reset(gsx, gsy);
             gh.stuckFrames = 0; gh.stuckX = gsx; gh.stuckY = gsy; gh.lastRow = -1;
+<<<<<<< claude/great-sagan-7X0jp
+            gh.progressFrames = 0; gh.progressBest = -Infinity;
+=======
+>>>>>>> main
         }
         if (typeof NeuralAI !== 'undefined') NeuralAI.resetAgents();
         // player.reset() clears keysHeld; also reset key/door entity states
@@ -704,7 +722,9 @@
         if (!won) deaths++;
     }
     function restartRun() {
-        aiStuckFrames = 0;
+        aiStuckFrames    = 0;
+        aiProgressFrames = 0;
+        aiProgressBest   = -Infinity;
         aiStuckLastX  = roomSpawns[0] ? roomSpawns[0].x : 0;
         aiStuckLastY  = roomSpawns[0] ? roomSpawns[0].y : 0;
         respawnRoom = furthestRoom = 0;
@@ -725,6 +745,10 @@
         for (const gh of aiGhosts) {
             gh.p.reset(sx0, sy0);
             gh.stuckFrames = 0; gh.stuckX = sx0; gh.stuckY = sy0; gh.lastRow = -1;
+<<<<<<< claude/great-sagan-7X0jp
+            gh.progressFrames = 0; gh.progressBest = -Infinity;
+=======
+>>>>>>> main
         }
         if (aiEnabled && typeof NeuralAI !== 'undefined') NeuralAI.resetAgents();
     }
@@ -757,7 +781,12 @@
         for (let i = 0; i < n; i++) {
             const p = new CelestePlayer(sx, sy);
             p.noDashRefill = player.noDashRefill;
+<<<<<<< claude/great-sagan-7X0jp
+            aiGhosts.push({ p, idx: i, stuckFrames: 0, stuckX: sx, stuckY: sy,
+                            lastRow: -1, progressFrames: 0, progressBest: -Infinity });
+=======
             aiGhosts.push({ p, idx: i, stuckFrames: 0, stuckX: sx, stuckY: sy, lastRow: -1 });
+>>>>>>> main
         }
         NeuralAI.initAgents();
     }
@@ -2150,6 +2179,22 @@
                     const ghRow = Math.max(0, Math.floor((gh.p.y - worldMinY) / H));
                     if (ghRow !== gh.lastRow) { gh.p.Dashes = gh.p.MaxDashes; gh.lastRow = ghRow; }
                 }
+<<<<<<< claude/great-sagan-7X0jp
+                // Stuck detection — position and progress checks
+                if (Math.abs(gh.p.x - gh.stuckX) > 2 || Math.abs(gh.p.y - gh.stuckY) > 2) {
+                    gh.stuckFrames = 0; gh.stuckX = gh.p.x; gh.stuckY = gh.p.y;
+                } else { gh.stuckFrames++; }
+                const ghProg = mountainMode ? -gh.p.y : gh.p.x;
+                if (ghProg > gh.progressBest) { gh.progressBest = ghProg; gh.progressFrames = 0; }
+                else { gh.progressFrames++; }
+                if (gh.stuckFrames >= AI_STUCK_LIMIT || gh.progressFrames >= AI_PROGRESS_LIMIT) {
+                    const si = closestRespawnIdx(gh.p.x, gh.p.y);
+                    const rs = roomSpawns[si] || roomSpawns[0];
+                    NeuralAI.killAgent(gh.idx);
+                    gh.p.reset(rs.x, rs.y);
+                    gh.stuckFrames = 0; gh.stuckX = rs.x; gh.stuckY = rs.y;
+                    gh.progressFrames = 0; gh.progressBest = -Infinity; gh.lastRow = -1;
+=======
                 // Stuck detection
                 if (Math.abs(gh.p.x - gh.stuckX) > 2 || Math.abs(gh.p.y - gh.stuckY) > 2) {
                     gh.stuckFrames = 0; gh.stuckX = gh.p.x; gh.stuckY = gh.p.y;
@@ -2158,6 +2203,7 @@
                     const rs = roomSpawns[si] || roomSpawns[0];
                     NeuralAI.killAgent(gh.idx);
                     gh.p.reset(rs.x, rs.y); gh.stuckFrames = 0; gh.stuckX = rs.x; gh.stuckY = rs.y; gh.lastRow = -1;
+>>>>>>> main
                     continue;
                 }
                 // Death
@@ -2165,7 +2211,13 @@
                     const si = closestRespawnIdx(gh.p.x, gh.p.y);
                     const rs = roomSpawns[si] || roomSpawns[0];
                     NeuralAI.killAgent(gh.idx);
+<<<<<<< claude/great-sagan-7X0jp
+                    gh.p.reset(rs.x, rs.y);
+                    gh.stuckFrames = 0; gh.stuckX = rs.x; gh.stuckY = rs.y;
+                    gh.progressFrames = 0; gh.progressBest = -Infinity; gh.lastRow = -1;
+=======
                     gh.p.reset(rs.x, rs.y); gh.stuckFrames = 0; gh.stuckX = rs.x; gh.stuckY = rs.y; gh.lastRow = -1;
+>>>>>>> main
                     continue;
                 }
                 // Goal
@@ -2173,7 +2225,13 @@
                          && gh.p.y < GOAL.y + GOAL.h && gh.p.y + gh.p.h > GOAL.y) {
                     const rs = roomSpawns[0];
                     NeuralAI.goalAgent(gh.idx);
+<<<<<<< claude/great-sagan-7X0jp
+                    gh.p.reset(rs.x, rs.y);
+                    gh.stuckFrames = 0; gh.stuckX = rs.x; gh.stuckY = rs.y;
+                    gh.progressFrames = 0; gh.progressBest = -Infinity; gh.lastRow = -1;
+=======
                     gh.p.reset(rs.x, rs.y); gh.stuckFrames = 0; gh.stuckX = rs.x; gh.stuckY = rs.y; gh.lastRow = -1;
+>>>>>>> main
                 }
             }
         }
@@ -2188,18 +2246,38 @@
         }
         if (player.y > DEATH_Y || player.y < worldMinY - 20) { respawn(); return; }
 
+<<<<<<< claude/great-sagan-7X0jp
+        // AI stuck-death: two independent kill conditions
+        if (aiEnabled) {
+            // 1) Position check: less than 2px movement in 1.5 s
+=======
         // AI stuck-death: no movement for AI_STUCK_LIMIT frames → die and retry
         if (aiEnabled) {
+>>>>>>> main
             if (Math.abs(player.x - aiStuckLastX) > 2 || Math.abs(player.y - aiStuckLastY) > 2) {
                 aiStuckFrames = 0;
                 aiStuckLastX  = player.x;
                 aiStuckLastY  = player.y;
+<<<<<<< claude/great-sagan-7X0jp
+            } else if (++aiStuckFrames >= AI_STUCK_LIMIT) {
+                player.y = DEATH_Y + 1; return;
+            }
+            // 2) Progress check: no improvement toward goal in 4 s
+            //    catches slow wall-slides or oscillation that pass the position check
+            const prog = mountainMode ? -player.y : player.x;
+            if (prog > aiProgressBest) {
+                aiProgressBest   = prog;
+                aiProgressFrames = 0;
+            } else if (++aiProgressFrames >= AI_PROGRESS_LIMIT) {
+                player.y = DEATH_Y + 1; return;
+=======
             } else {
                 aiStuckFrames++;
                 if (aiStuckFrames >= AI_STUCK_LIMIT) {
                     player.y = DEATH_Y + 1; // push below death line → triggers respawn next tick
                     return;
                 }
+>>>>>>> main
             }
         }
 
