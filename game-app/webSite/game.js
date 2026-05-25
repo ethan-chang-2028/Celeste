@@ -499,8 +499,8 @@
         active: false,
         timer: 0,
         fromX: 0, fromY: 0, toX: 0, toY: 0,
-        pendingCol: 0, pendingRow: 0, pendingName: '',
-        DURATION: 0.55,
+        pendingCol: 0, pendingRow: 0,
+        DURATION: 0.40,
     };
     const player = new CelestePlayer(roomSpawns[0].x, roomSpawns[0].y);
     let runStart = performance.now();
@@ -1511,23 +1511,7 @@
             ctx.fillStyle = vg; ctx.fillRect(0, 0, W, H);
         }
 
-        // Room transition — camera slides; show room name label during the pan
-        if (isMaze && RoomTrans.active && RoomTrans.pendingName) {
-            const t = 1 - RoomTrans.timer / RoomTrans.DURATION;
-            // Label rises in for the first 60%, fades out across the last 30%
-            const labelAlpha = t < 0.6 ? Math.min(1, t / 0.3) : Math.max(0, 1 - (t - 0.7) / 0.3);
-            ctx.globalAlpha = labelAlpha * 0.95;
-            ctx.fillStyle = 'rgba(8,0,20,0.75)';
-            ctx.fillRect(W / 2 - 60, H / 2 - 8, 120, 16);
-            ctx.fillStyle = '#e8d0ff';
-            ctx.font = 'bold 9px monospace';
-            ctx.textAlign = 'center';
-            ctx.fillText(RoomTrans.pendingName, W / 2, H / 2 + 2);
-            ctx.fillStyle = 'rgba(200,150,255,0.8)';
-            ctx.fillRect(W / 2 - 48, H / 2 + 5, 96, 1);
-            ctx.textAlign = 'left';
-            ctx.globalAlpha = 1;
-        }
+        // Room transition is a pure camera pan — no overlays, no labels.
 
         // Key HUD (maze mode)
         if (isMaze && player.keysHeld > 0) {
@@ -1623,7 +1607,6 @@
                 RoomTrans.toY    = worldMinY + newRow * H;
                 RoomTrans.pendingCol  = newCol;
                 RoomTrans.pendingRow  = newRow;
-                RoomTrans.pendingName = mazeRoomNameMap[`${newCol},${newRow}`] || roomNames[newCol] || '';
             } else {
                 cameraX = mazeRoomCol * ROOM_W;
                 cameraY = worldMinY + mazeRoomRow * H;
