@@ -669,6 +669,14 @@
             updateAIBtn();
         }
         player.reset(roomSpawns[respawnRoom].x, roomSpawns[respawnRoom].y);
+        // Reset ghost agents
+        const sx = roomSpawns[0] ? roomSpawns[0].x : 0;
+        const sy = roomSpawns[0] ? roomSpawns[0].y : 0;
+        for (const gh of aiGhosts) {
+            gh.p.reset(sx, sy);
+            gh.stuckFrames = 0; gh.stuckX = sx; gh.stuckY = sy; gh.lastRow = -1;
+        }
+        if (typeof NeuralAI !== 'undefined') NeuralAI.resetAgents();
         // player.reset() clears keysHeld; also reset key/door entity states
         if (currentMode === 'maze') {
             for (const e of entities) {
@@ -701,11 +709,19 @@
             cameraX = mazeRoomCol * ROOM_W;
             cameraY = worldMinY + mazeRoomRow * H;
         }
+        const sx0 = roomSpawns[0] ? roomSpawns[0].x : 0;
+        const sy0 = roomSpawns[0] ? roomSpawns[0].y : 0;
+        for (const gh of aiGhosts) {
+            gh.p.reset(sx0, sy0);
+            gh.stuckFrames = 0; gh.stuckX = sx0; gh.stuckY = sy0; gh.lastRow = -1;
+        }
+        if (aiEnabled && typeof NeuralAI !== 'undefined') NeuralAI.resetAgents();
     }
 
     // ── AI Player Controller (neural — delegates to NeuralAI in ai-neural.js) ─
     let aiEnabled   = false;
     let aiSpeedMult = 1;
+    let aiGhosts = [];  // ghost CelestePlayer instances for parallel training
 
     function initNeuralAI() {
         if (typeof NeuralAI === 'undefined') return;
@@ -718,12 +734,28 @@
         } else {
             NeuralAI.init(spawnX, GOAL ? GOAL.x + GOAL.w : 1600);
         }
+        spawnAIGhosts();
+    }
+
+    function spawnAIGhosts() {
+        aiGhosts = [];
+        if (!aiEnabled || typeof NeuralAI === 'undefined') return;
+        const n = NeuralAI.N_AGENTS - 1;
+        const sx = roomSpawns[0] ? roomSpawns[0].x : 0;
+        const sy = roomSpawns[0] ? roomSpawns[0].y : 0;
+        for (let i = 0; i < n; i++) {
+            const p = new CelestePlayer(sx, sy);
+            p.noDashRefill = player.noDashRefill;
+            aiGhosts.push({ p, idx: i, stuckFrames: 0, stuckX: sx, stuckY: sy, lastRow: -1 });
+        }
+        NeuralAI.initAgents();
     }
 
     // Toggle AI control (called from button)
     window.toggleAIControl = function () {
         aiEnabled = !aiEnabled;
         if (aiEnabled) initNeuralAI();
+        if (!aiEnabled) aiGhosts = [];
         updateAIBtn();
     };
 
@@ -746,7 +778,7 @@
         if (!btn) return;
         if (aiEnabled) {
             const gen = (typeof NeuralAI !== 'undefined') ? NeuralAI.generation : 0;
-            btn.textContent = `🧠 Neural AI: ON (Gen ${gen})`;
+            btn.textContent = `🧠 Neural AI: ON  ×${NeuralAI.N_AGENTS} (Gen ${gen})`;
             btn.style.background = '#1a7a1a';
         } else {
             btn.textContent = '🧠 Neural AI: OFF';
@@ -1910,6 +1942,16 @@
             }
         }
 
+        // Ghost AI agents
+        if (aiEnabled && aiGhosts.length > 0) {
+            ctx.globalAlpha = 0.20;
+            for (const gh of aiGhosts) {
+                ctx.fillStyle = '#44ff88';
+                ctx.fillRect(gh.p.x, gh.p.y, gh.p.w, gh.p.h);
+            }
+            ctx.globalAlpha = 1;
+        }
+
         player.draw(ctx);
 
         // Room number watermarks (only non-maze)
@@ -1998,7 +2040,7 @@
         if (aiEnabled && typeof NeuralAI !== 'undefined') {
             const ai = NeuralAI;
             ctx.fillStyle = '#44ff44'; ctx.font = 'bold 7px monospace';
-            ctx.fillText(`NEURAL AI  ${aiSpeedMult}x`, W - 80, 10);
+            ctx.fillText(`NEURAL AI ×${NeuralAI.N_AGENTS}  ${aiSpeedMult}x`, W - 88, 10);
             ctx.font = '6px monospace';
             ctx.fillText(`Gen ${ai.generation}  Run ${ai.runCount}`, W - 80, 18);
             ctx.fillText(`Best ${(ai.globalBestFit * 100).toFixed(0)}%`, W - 80, 25);
@@ -2084,6 +2126,43 @@
             cameraY += (Math.max(_camMinY, Math.min(_camMaxY, _targetY)) - cameraY) * 0.12;
         }
         transitionFlash = Math.max(0, transitionFlash - FIXED_DT);
+
+        // Ghost agents: parallel training
+        if (aiEnabled && aiGhosts.length > 0) {
+            const sx = roomSpawns[0] ? roomSpawns[0].x : 0;
+            const sy = roomSpawns[0] ? roomSpawns[0].y : 0;
+            const allPlats = dynPlat.length ? platforms.concat(dynPlat) : platforms;
+            for (const gh of aiGhosts) {
+                const inp2 = NeuralAI.computeAgent(gh.idx, gh.p, platforms, GOAL);
+                if (!inp2) continue;
+                gh.p.update(inp2, allPlats, FIXED_DT);
+                // Mountain: dash refill on room change
+                if (mountainMode) {
+                    const ghRow = Math.max(0, Math.floor((gh.p.y - worldMinY) / H));
+                    if (ghRow !== gh.lastRow) { gh.p.Dashes = gh.p.MaxDashes; gh.lastRow = ghRow; }
+                }
+                // Stuck detection
+                if (Math.abs(gh.p.x - gh.stuckX) > 2 || Math.abs(gh.p.y - gh.stuckY) > 2) {
+                    gh.stuckFrames = 0; gh.stuckX = gh.p.x; gh.stuckY = gh.p.y;
+                } else if (++gh.stuckFrames >= AI_STUCK_LIMIT) {
+                    NeuralAI.killAgent(gh.idx);
+                    gh.p.reset(sx, sy); gh.stuckFrames = 0; gh.stuckX = sx; gh.stuckY = sy; gh.lastRow = -1;
+                    continue;
+                }
+                // Death
+                if (gh.p.y > DEATH_Y || gh.p.y < worldMinY - 20) {
+                    NeuralAI.killAgent(gh.idx);
+                    gh.p.reset(sx, sy); gh.stuckFrames = 0; gh.stuckX = sx; gh.stuckY = sy; gh.lastRow = -1;
+                    continue;
+                }
+                // Goal
+                if (GOAL && gh.p.x < GOAL.x + GOAL.w && gh.p.x + gh.p.w > GOAL.x
+                         && gh.p.y < GOAL.y + GOAL.h && gh.p.y + gh.p.h > GOAL.y) {
+                    NeuralAI.goalAgent(gh.idx);
+                    gh.p.reset(sx, sy); gh.stuckFrames = 0; gh.stuckX = sx; gh.stuckY = sy; gh.lastRow = -1;
+                }
+            }
+        }
 
         if (!won && playerOverlapsGoal()) {
             won = true; winMs = performance.now() - runStart;

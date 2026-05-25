@@ -273,6 +273,8 @@
         _goalEnd:           1600,
         _prevJ:             false,
         _runsSinceImproved: 0,
+        N_AGENTS:      8,   // total agents (1 main + 7 ghosts)
+        _agentStates:  [],  // per-ghost state (main agent state is the top-level fields)
         _isVertical:        false,
         _spawnY:            0,
         _goalY:             0,
@@ -355,44 +357,41 @@
         // ── Called on goal reached ────────────────────────────────────────────
         onGoal()  { this._endRun(1.0 + 1.0 / (this.runCount + 1)); },
 
-        _endRun(fitness) {
+        _poolUpdate(weights, fitness) {
             this.runCount++;
-            this._pool.push({ weights: copyW(this._weights), fitness });
-
-            // Keep pool trimmed to best POOL_SIZE runs
+            this._pool.push({ weights: copyW(weights), fitness });
             if (this._pool.length > POOL_SIZE) {
                 this._pool.sort((a, b) => a.fitness - b.fitness);
                 this._pool.shift();
             }
-
-            // Update global best & stagnation counter
             if (fitness > this.globalBestFit) {
                 this.globalBestFit      = fitness;
-                this._globalBest        = copyW(this._weights);
+                this._globalBest        = copyW(weights);
                 this._runsSinceImproved = 0;
                 this._save();
             } else {
                 this._runsSinceImproved++;
             }
-
-            // Stagnation escape: inject a heavily-mutated best + one random agent
-            // into the worst two pool slots to break the gene pool out of a plateau.
             if (this._runsSinceImproved >= HP.STAGNATE_RUNS && this._pool.length >= 3) {
-                const base = this._globalBest || this._weights;
+                const base = this._globalBest || weights;
                 this._pool.sort((a, b) => a.fitness - b.fitness);
                 this._pool[0] = { weights: mutateWeights(base, 0.45, 0.75), fitness: 0 };
                 this._pool[1] = { weights: randWeights(),                    fitness: 0 };
                 this._runsSinceImproved = 0;
             }
+        },
 
-            // Breed next weights
+        _breedWeights() {
             if (this._pool.length >= 3) {
                 this.generation++;
-                this._weights = breedNext(this._pool, this.generation, this._globalBest);
-            } else {
-                this._weights = mutateWeights(this._weights, HP.MUTATE_RATE, HP.MUTATE_STR);
+                return breedNext(this._pool, this.generation, this._globalBest);
             }
+            return mutateWeights(this._weights, HP.MUTATE_RATE, HP.MUTATE_STR);
+        },
 
+        _endRun(fitness) {
+            this._poolUpdate(this._weights, fitness);
+            this._weights = this._breedWeights();
             this._adaptSt = makeAdaptState();
             this._stuckSt = makeStuckState(this._weights);
             this._maxX    = this._spawnX;
@@ -412,6 +411,75 @@
             this._runsSinceImproved = 0;
             this._adaptSt = makeAdaptState();
             this._stuckSt = makeStuckState(this._weights);
+        },
+
+        // ── Ghost agent management ────────────────────────────────────────────────
+
+        _makeGhostState() {
+            const w = this._pool.length >= 3
+                ? breedNext(this._pool, this.generation, this._globalBest)
+                : (this._globalBest ? spawnNoise(this._globalBest) : randWeights());
+            return { weights: w, adaptSt: makeAdaptState(), stuckSt: makeStuckState(w),
+                     prevJ: false, maxX: this._spawnX, minY: this._spawnY };
+        },
+
+        initAgents() {
+            this._agentStates = [];
+            for (let i = 0; i < this.N_AGENTS - 1; i++)
+                this._agentStates.push(this._makeGhostState());
+        },
+
+        resetAgents() {
+            for (const ag of this._agentStates) {
+                ag.maxX = this._spawnX;
+                ag.minY = this._spawnY;
+                ag.prevJ = false;
+                ag.adaptSt = makeAdaptState();
+                ag.stuckSt = makeStuckState(ag.weights);
+            }
+        },
+
+        computeAgent(i, player, platforms, goal) {
+            const ag = this._agentStates[i];
+            if (!ag) return null;
+            ag.maxX = Math.max(ag.maxX, player.x);
+            if (this._isVertical) ag.minY = Math.min(ag.minY, player.y);
+            const fitNow = this._isVertical
+                ? Math.max(0, (this._spawnY - ag.minY) / Math.max(1, this._spawnY - this._goalY))
+                : ag.maxX / this._goalEnd;
+            ag.weights = adaptTick(ag.weights, ag.adaptSt, fitNow);
+            ag.stuckSt.weights = ag.weights;
+            ag.weights = stuckCheck(ag.stuckSt, fitNow, this._globalBest);
+            const w      = activeWeights(ag.weights, ag.adaptSt);
+            const inputs = buildSensorInputs(player, platforms, goal);
+            const action = think(w, inputs);
+            const jumpPressed = action.J && !ag.prevJ;
+            ag.prevJ = action.J;
+            return { moveX: action.R ? 1 : (action.L ? -1 : 0), moveY: 0,
+                     jumpPressed, jumpHeld: action.J, dashPressed: action.X, grabHeld: false };
+        },
+
+        killAgent(i) {
+            const ag = this._agentStates[i];
+            if (!ag) return;
+            const fitness = this._isVertical
+                ? Math.max(0, (this._spawnY - ag.minY) / Math.max(1, this._spawnY - this._goalY))
+                : ag.maxX / this._goalEnd;
+            this._poolUpdate(ag.weights, fitness);
+            const newW = this._breedWeights();
+            this._agentStates[i] = { weights: newW, adaptSt: makeAdaptState(),
+                                      stuckSt: makeStuckState(newW), prevJ: false,
+                                      maxX: this._spawnX, minY: this._spawnY };
+        },
+
+        goalAgent(i) {
+            const ag = this._agentStates[i];
+            if (!ag) return;
+            this._poolUpdate(ag.weights, 1.0 + 1.0 / (this.runCount + 1));
+            const newW = this._breedWeights();
+            this._agentStates[i] = { weights: newW, adaptSt: makeAdaptState(),
+                                      stuckSt: makeStuckState(newW), prevJ: false,
+                                      maxX: this._spawnX, minY: this._spawnY };
         },
 
         // ── Persistence: server-first, localStorage fallback ──────────────────
