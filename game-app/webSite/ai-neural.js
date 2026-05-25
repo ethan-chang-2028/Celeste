@@ -9,8 +9,8 @@
     // ── Network dimensions (mirrors ai_learning.hpp) ──────────────────────────
     const N_IN   = 17;
     const N_HID  = 14;
-    const N_OUT  = 6;
-    const W_SIZE = N_IN * N_HID + N_HID + N_HID * N_OUT + N_OUT; // 342
+    const N_OUT  = 9;
+    const W_SIZE = N_IN * N_HID + N_HID + N_HID * N_OUT + N_OUT; // 387
 
     // ── Hyperparameters ───────────────────────────────────────────────────────
     const HP = {
@@ -98,11 +98,13 @@
         let r = rand() * sumE, best = N_OUT - 1;
         for (let k = 0; k < N_OUT; k++) { r -= exps[k]; if (r <= 0) { best = k; break; } }
         // 0=left  1=right  2=jump  3=dash  4=jump+right  5=jump+left
+        // 6=grab+climb-left  7=grab+climb-right  8=grab+wall-jump
         return {
-            L: best === 0 || best === 5,
-            R: best === 1 || best === 4,
-            J: best === 2 || best === 4 || best === 5,
+            L: best === 0 || best === 5 || best === 6,
+            R: best === 1 || best === 4 || best === 7,
+            J: best === 2 || best === 4 || best === 5 || best === 8,
             X: best === 3,
+            G: best === 6 || best === 7 || best === 8,
         };
     }
 
@@ -254,7 +256,7 @@
 
     // ── Training manager ──────────────────────────────────────────────────────
     const POOL_SIZE   = 16;  // was 12 — more diversity in gene pool
-    const STORAGE_KEY = 'apexAI_bestWeights_v1';
+    const STORAGE_KEY = 'apexAI_bestWeights_v2';
 
     const NeuralAI = {
         // Public stats
@@ -338,11 +340,11 @@
 
             return {
                 moveX:       action.R ? 1 : (action.L ? -1 : 0),
-                moveY:       0,
+                moveY:       (action.G && !action.J) ? -1 : 0,  // climb up when grabbing (not wall-jumping)
                 jumpPressed,
                 jumpHeld:    action.J,
                 dashPressed: action.X,
-                grabHeld:    false,
+                grabHeld:    !!action.G,
             };
         },
 
@@ -455,8 +457,9 @@
             const action = think(w, inputs);
             const jumpPressed = action.J && !ag.prevJ;
             ag.prevJ = action.J;
-            return { moveX: action.R ? 1 : (action.L ? -1 : 0), moveY: 0,
-                     jumpPressed, jumpHeld: action.J, dashPressed: action.X, grabHeld: false };
+            return { moveX: action.R ? 1 : (action.L ? -1 : 0),
+                     moveY: (action.G && !action.J) ? -1 : 0,
+                     jumpPressed, jumpHeld: action.J, dashPressed: action.X, grabHeld: !!action.G };
         },
 
         killAgent(i) {
