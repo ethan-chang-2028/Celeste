@@ -1004,6 +1004,13 @@
         ], [
             { type:'crystal', x:50,  y:127 },
             { type:'spring',  x:240, y:168, orientation:'floor' },
+            { type:'spike',   x:85,  y:168, size:8, dir:'up' }, // right of step 1
+            { type:'spike',   x:108, y:168, size:8, dir:'up' }, // approach to chimney
+            { type:'spike',   x:128, y:168, size:8, dir:'up' }, // chimney floor
+            { type:'spike',   x:148, y:168, size:8, dir:'up' }, // chimney floor
+            { type:'spike',   x:168, y:168, size:8, dir:'up' }, // chimney floor
+            { type:'spike',   x:185, y:168, size:8, dir:'up' }, // chimney floor
+            { type:'spike',   x:204, y:168, size:8, dir:'up' }, // right of chimney
         ]);
         roomSpawnsOut.push({ x:0*RW+14, y:0*RH+FLOOR_Y-13 });
         roomNamesOut.push('MIRROR ENTRANCE');
