@@ -211,6 +211,8 @@
 
     // ── Sensor system (mirrors buildSensorInputs + castRay) ───────────────────
     function castRay(cx, cy, dx, dy, platforms, goal) {
+        const b   = (typeof window !== 'undefined' && window.AI_BOUNDS)
+                  || { minX: 0, maxX: 1600, minY: -40, maxY: 200 };
         const len = Math.hypot(dx, dy);
         const ndx = dx / len, ndy = dy / len;
         for (let t = RAY_STEP; t <= RAY_LEN; t += RAY_STEP) {
@@ -220,7 +222,7 @@
                     return t / RAY_LEN;
             if (goal && rx > goal.x && rx < goal.x + goal.w && ry > goal.y && ry < goal.y + goal.h)
                 return 0;
-            if (rx < 0 || rx > 1600 || ry > 200 || ry < -40)
+            if (rx < b.minX || rx > b.maxX || ry > b.maxY || ry < b.minY)
                 return t / RAY_LEN;
         }
         return 1.0;
@@ -240,11 +242,13 @@
         inp[13] = player.Speed.X / 90;   // normalised by MaxRun
         inp[14] = player.Speed.Y / 160;  // normalised by MaxFall
         inp[15] = player.Dashes > 0 ? 1 : 0;
-        // Horizontal component of normalised goal vector (inp[16])
+        // Direction toward goal: horizontal for h-levels, vertical (up) for v-levels
         const gx = (goal.x + goal.w / 2) - cx;
         const gy = (goal.y + goal.h / 2) - cy;
         const gd = Math.hypot(gx, gy) || 1;
-        inp[16] = gx / gd;
+        inp[16] = (typeof window !== 'undefined' && window.AI_GOAL_VERTICAL)
+                ? (-gy / gd)   // positive = goal is above
+                : (gx  / gd);  // positive = goal is to the right
         return inp;
     }
 
@@ -269,14 +273,22 @@
         _goalEnd:           1600,
         _prevJ:             false,
         _runsSinceImproved: 0,
+        _isVertical:        false,
+        _spawnY:            0,
+        _goalY:             0,
+        _minY:              0,
 
         // Expose RAY_DIRS so game.js can draw the rays
         RAY_DIRS,
         RAY_LEN,
 
-        init(spawnX, goalEnd) {
-            this._spawnX  = spawnX  || 0;
-            this._goalEnd = goalEnd || 1600;
+        init(spawnX, goalEnd, opts) {
+            this._spawnX     = spawnX  || 0;
+            this._goalEnd    = goalEnd || 1600;
+            this._isVertical = !!(opts && opts.isVertical);
+            this._spawnY     = (opts && opts.spawnY != null) ? opts.spawnY : 0;
+            this._goalY      = (opts && opts.goalY  != null) ? opts.goalY  : 0;
+            this._minY       = this._spawnY;
             this._weights = this._load() || randWeights();
             this._adaptSt = makeAdaptState();
             this._stuckSt = makeStuckState(this._weights);
@@ -285,9 +297,15 @@
             this._prevJ   = false;
         },
 
-        reset(spawnX) {
-            this._spawnX  = spawnX;
-            this._maxX    = spawnX;
+        reset(spawnX, opts) {
+            this._spawnX = spawnX;
+            this._maxX   = spawnX;
+            if (opts) {
+                if (opts.isVertical !== undefined) this._isVertical = opts.isVertical;
+                if (opts.spawnY     != null)       this._spawnY     = opts.spawnY;
+                if (opts.goalY      != null)       this._goalY      = opts.goalY;
+            }
+            this._minY    = this._spawnY;
             this._adaptSt = makeAdaptState();
             this._stuckSt = makeStuckState(this._weights);
             this._prevJ   = false;
@@ -296,7 +314,10 @@
         // ── Called every frame when AI is active ─────────────────────────────
         compute(player, platforms, goal) {
             this._maxX = Math.max(this._maxX, player.x);
-            const fitNow = this._maxX / this._goalEnd;
+            if (this._isVertical) this._minY = Math.min(this._minY, player.y);
+            const fitNow = this._isVertical
+                ? Math.max(0, (this._spawnY - this._minY) / Math.max(1, this._spawnY - this._goalY))
+                : this._maxX / this._goalEnd;
 
             // Real-time ES adaptation
             this._weights = adaptTick(this._weights, this._adaptSt, fitNow);
@@ -324,7 +345,12 @@
         },
 
         // ── Called on death ───────────────────────────────────────────────────
-        onDeath() { this._endRun(this._maxX / this._goalEnd); },
+        onDeath() {
+            const fit = this._isVertical
+                ? Math.max(0, (this._spawnY - this._minY) / Math.max(1, this._spawnY - this._goalY))
+                : this._maxX / this._goalEnd;
+            this._endRun(fit);
+        },
 
         // ── Called on goal reached ────────────────────────────────────────────
         onGoal()  { this._endRun(1.0 + 1.0 / (this.runCount + 1)); },
@@ -370,6 +396,7 @@
             this._adaptSt = makeAdaptState();
             this._stuckSt = makeStuckState(this._weights);
             this._maxX    = this._spawnX;
+            this._minY    = this._spawnY;
             this._prevJ   = false;
         },
 

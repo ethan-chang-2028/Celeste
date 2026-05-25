@@ -653,6 +653,7 @@
     const AI_STUCK_LIMIT = 180; // frames (~3 s at 60 fps)
     let aiStuckFrames = 0;
     let aiStuckLastX  = 0;
+    let aiStuckLastY  = 0;
 
     function getRoomIdx() {
         return Math.max(0, Math.min(NUM_ROOMS - 1, Math.floor(player.x / ROOM_W)));
@@ -660,6 +661,7 @@
     function respawn() {
         aiStuckFrames = 0;
         aiStuckLastX  = player.x;
+        aiStuckLastY  = player.y;
         if (aiEnabled && typeof NeuralAI !== 'undefined') {
             NeuralAI.onDeath();
             respawnRoom = 0;
@@ -685,6 +687,7 @@
     function restartRun() {
         aiStuckFrames = 0;
         aiStuckLastX  = roomSpawns[0] ? roomSpawns[0].x : 0;
+        aiStuckLastY  = roomSpawns[0] ? roomSpawns[0].y : 0;
         respawnRoom = furthestRoom = 0;
         player.reset(roomSpawns[0].x, roomSpawns[0].y);
         runStart = performance.now();
@@ -706,7 +709,15 @@
 
     function initNeuralAI() {
         if (typeof NeuralAI === 'undefined') return;
-        NeuralAI.init(roomSpawns[0].x, GOAL.x + GOAL.w);
+        const spawnX = roomSpawns[0] ? roomSpawns[0].x : 0;
+        if (mountainMode) {
+            const spawnY = roomSpawns[0] ? roomSpawns[0].y : 0;
+            const goalY  = GOAL ? GOAL.y + GOAL.h / 2 : 0;
+            NeuralAI.init(spawnX, GOAL ? GOAL.x + GOAL.w : 320,
+                { isVertical: true, spawnY, goalY });
+        } else {
+            NeuralAI.init(spawnX, GOAL ? GOAL.x + GOAL.w : 1600);
+        }
     }
 
     // Toggle AI control (called from button)
@@ -1667,6 +1678,7 @@
 
         // Hide all mode-specific controls, then reveal the right set
         document.querySelectorAll('.ai-only').forEach(el => el.style.display = 'none');
+        document.querySelectorAll('.ai-ctrl').forEach(el => el.style.display = '');  // always show in all modes
         document.querySelectorAll('.random-only').forEach(el => el.style.display = 'none');
 
         // Reset 2D world size for non-custom modes
@@ -1730,6 +1742,15 @@
             document.querySelectorAll('.ai-only').forEach(el => el.style.display = '');
         }
 
+        // Set world bounds for AI raycasting and goal direction sense
+        window.AI_BOUNDS = {
+            minX: -20,
+            maxX: NUM_ROOMS * ROOM_W + 20,
+            minY: worldMinY - 20,
+            maxY: worldMinY + worldH + 20,
+        };
+        window.AI_GOAL_VERTICAL = mountainMode;
+
         bestMs = null;
         restartRun();
         if (typeof NeuralAI !== 'undefined') NeuralAI.reset(roomSpawns[0].x);
@@ -1743,6 +1764,7 @@
         gameActive = false;
         aiEnabled  = false;
         updateAIBtn();
+        document.querySelectorAll('.ai-ctrl').forEach(el => el.style.display = 'none');
         document.getElementById('game-ui').style.display    = 'none';
         document.getElementById('level-menu').style.display = '';
     };
@@ -2080,11 +2102,12 @@
         }
         if (player.y > DEATH_Y || player.y < worldMinY - 20) { respawn(); return; }
 
-        // AI stuck-death: no x movement for AI_STUCK_LIMIT frames → die and retry
+        // AI stuck-death: no movement for AI_STUCK_LIMIT frames → die and retry
         if (aiEnabled) {
-            if (Math.abs(player.x - aiStuckLastX) > 1) {
+            if (Math.abs(player.x - aiStuckLastX) > 2 || Math.abs(player.y - aiStuckLastY) > 2) {
                 aiStuckFrames = 0;
                 aiStuckLastX  = player.x;
+                aiStuckLastY  = player.y;
             } else {
                 aiStuckFrames++;
                 if (aiStuckFrames >= AI_STUCK_LIMIT) {
