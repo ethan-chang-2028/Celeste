@@ -658,23 +658,34 @@
     function getRoomIdx() {
         return Math.max(0, Math.min(NUM_ROOMS - 1, Math.floor(player.x / ROOM_W)));
     }
+    function closestRespawnIdx(px, py) {
+        let best = 0, bestDist = Infinity;
+        for (let i = 0; i < roomSpawns.length; i++) {
+            const d = Math.hypot(px - roomSpawns[i].x, py - roomSpawns[i].y);
+            if (d < bestDist) { bestDist = d; best = i; }
+        }
+        return best;
+    }
+
     function respawn() {
         aiStuckFrames = 0;
         aiStuckLastX  = player.x;
         aiStuckLastY  = player.y;
         if (aiEnabled && typeof NeuralAI !== 'undefined') {
+            const si = closestRespawnIdx(player.x, player.y);
             NeuralAI.onDeath();
-            respawnRoom = 0;
-            NeuralAI.reset(roomSpawns[0].x);
+            respawnRoom = si;
+            NeuralAI.reset(roomSpawns[si].x);
             updateAIBtn();
         }
         player.reset(roomSpawns[respawnRoom].x, roomSpawns[respawnRoom].y);
-        // Reset ghost agents
-        const sx = roomSpawns[0] ? roomSpawns[0].x : 0;
-        const sy = roomSpawns[0] ? roomSpawns[0].y : 0;
+        // Reset ghost agents to their closest spawn point
         for (const gh of aiGhosts) {
-            gh.p.reset(sx, sy);
-            gh.stuckFrames = 0; gh.stuckX = sx; gh.stuckY = sy; gh.lastRow = -1;
+            const si = closestRespawnIdx(gh.p.x, gh.p.y);
+            const gsx = roomSpawns[si] ? roomSpawns[si].x : roomSpawns[0].x;
+            const gsy = roomSpawns[si] ? roomSpawns[si].y : roomSpawns[0].y;
+            gh.p.reset(gsx, gsy);
+            gh.stuckFrames = 0; gh.stuckX = gsx; gh.stuckY = gsy; gh.lastRow = -1;
         }
         if (typeof NeuralAI !== 'undefined') NeuralAI.resetAgents();
         // player.reset() clears keysHeld; also reset key/door entity states
@@ -2129,8 +2140,6 @@
 
         // Ghost agents: parallel training
         if (aiEnabled && aiGhosts.length > 0) {
-            const sx = roomSpawns[0] ? roomSpawns[0].x : 0;
-            const sy = roomSpawns[0] ? roomSpawns[0].y : 0;
             const allPlats = dynPlat.length ? platforms.concat(dynPlat) : platforms;
             for (const gh of aiGhosts) {
                 const inp2 = NeuralAI.computeAgent(gh.idx, gh.p, platforms, GOAL);
@@ -2145,21 +2154,26 @@
                 if (Math.abs(gh.p.x - gh.stuckX) > 2 || Math.abs(gh.p.y - gh.stuckY) > 2) {
                     gh.stuckFrames = 0; gh.stuckX = gh.p.x; gh.stuckY = gh.p.y;
                 } else if (++gh.stuckFrames >= AI_STUCK_LIMIT) {
+                    const si = closestRespawnIdx(gh.p.x, gh.p.y);
+                    const rs = roomSpawns[si] || roomSpawns[0];
                     NeuralAI.killAgent(gh.idx);
-                    gh.p.reset(sx, sy); gh.stuckFrames = 0; gh.stuckX = sx; gh.stuckY = sy; gh.lastRow = -1;
+                    gh.p.reset(rs.x, rs.y); gh.stuckFrames = 0; gh.stuckX = rs.x; gh.stuckY = rs.y; gh.lastRow = -1;
                     continue;
                 }
                 // Death
                 if (gh.p.y > DEATH_Y || gh.p.y < worldMinY - 20) {
+                    const si = closestRespawnIdx(gh.p.x, gh.p.y);
+                    const rs = roomSpawns[si] || roomSpawns[0];
                     NeuralAI.killAgent(gh.idx);
-                    gh.p.reset(sx, sy); gh.stuckFrames = 0; gh.stuckX = sx; gh.stuckY = sy; gh.lastRow = -1;
+                    gh.p.reset(rs.x, rs.y); gh.stuckFrames = 0; gh.stuckX = rs.x; gh.stuckY = rs.y; gh.lastRow = -1;
                     continue;
                 }
                 // Goal
                 if (GOAL && gh.p.x < GOAL.x + GOAL.w && gh.p.x + gh.p.w > GOAL.x
                          && gh.p.y < GOAL.y + GOAL.h && gh.p.y + gh.p.h > GOAL.y) {
+                    const rs = roomSpawns[0];
                     NeuralAI.goalAgent(gh.idx);
-                    gh.p.reset(sx, sy); gh.stuckFrames = 0; gh.stuckX = sx; gh.stuckY = sy; gh.lastRow = -1;
+                    gh.p.reset(rs.x, rs.y); gh.stuckFrames = 0; gh.stuckX = rs.x; gh.stuckY = rs.y; gh.lastRow = -1;
                 }
             }
         }

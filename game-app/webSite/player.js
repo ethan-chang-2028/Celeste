@@ -405,8 +405,9 @@ class CelestePlayer {
         const input = this._input;
 
         // Player.cs:2792-2820 — Grab + climb transition
+        // Speed.Y check removed: allow grabbing wall at any vertical velocity
         if (input.grabHeld && !this._isTired()) {
-            if (this.Speed.Y >= 0 && Math.sign(this.Speed.X) !== -this.Facing) {
+            if (Math.sign(this.Speed.X) !== -this.Facing) {
                 if (this._climbCheck(this.Facing)) {
                     return StClimb;
                 }
