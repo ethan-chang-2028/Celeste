@@ -169,6 +169,8 @@ class CelestePlayer {
         this.dashTrail = [];                    // [{x, y, age}, ...] for ghost trail
         this._dashTrailAccum = 0;
         this.keysHeld = 0;
+        this.noDashRefill = false;
+        this.onIce = false;
     }
 
     reset(x, y) {
@@ -191,6 +193,8 @@ class CelestePlayer {
         this.wallBoostTimer = 0;
         this.wallBoostDir = 0;
         this.keysHeld = 0;
+        this.onIce = false;
+        // noDashRefill is a level flag — NOT reset on death, only on level change
     }
 
     // Returns true if there is a solid `dir` pixels in the X direction.
@@ -248,7 +252,7 @@ class CelestePlayer {
         // Player.cs:724-740 — dash cooldown / refill (simplified: ground = refill)
         if (this.dashCooldownTimer > 0)      this.dashCooldownTimer -= dt;
         if (this.dashRefillCooldownTimer > 0) this.dashRefillCooldownTimer -= dt;
-        else if (this.onGround && this.Dashes < this.MaxDashes) this.Dashes = this.MaxDashes;
+        else if (this.onGround && !this.noDashRefill && this.Dashes < this.MaxDashes) this.Dashes = this.MaxDashes;
 
         // Player.cs:702-707 — on ground refresh stamina, wall-slide, AutoJump
         if (this.onGround && this.State !== StClimb) {
@@ -401,8 +405,9 @@ class CelestePlayer {
         const input = this._input;
 
         // Player.cs:2792-2820 — Grab + climb transition
+        // Speed.Y check removed: allow grabbing wall at any vertical velocity
         if (input.grabHeld && !this._isTired()) {
-            if (this.Speed.Y >= 0 && Math.sign(this.Speed.X) !== -this.Facing) {
+            if (Math.sign(this.Speed.X) !== -this.Facing) {
                 if (this._climbCheck(this.Facing)) {
                     return StClimb;
                 }
@@ -418,10 +423,12 @@ class CelestePlayer {
         {
             const mult = this.onGround ? 1 : AirMult;
             const max = MaxRun;
+            // Ice surfaces apply 1/8 of normal acceleration and deceleration.
+            const iceDiv = (this.onIce && this.onGround) ? 8 : 1;
             if (Math.abs(this.Speed.X) > max && Math.sign(this.Speed.X) === this.moveX) {
-                this.Speed.X = Approach(this.Speed.X, max * this.moveX, RunReduce * mult * dt);
+                this.Speed.X = Approach(this.Speed.X, max * this.moveX, RunReduce * mult * dt / iceDiv);
             } else {
-                this.Speed.X = Approach(this.Speed.X, max * this.moveX, RunAccel * mult * dt);
+                this.Speed.X = Approach(this.Speed.X, max * this.moveX, RunAccel * mult * dt / iceDiv);
             }
         }
 

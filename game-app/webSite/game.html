@@ -148,6 +148,10 @@
                         <span class="menu-option__label">🪞 Mirror Temple</span>
                         <span class="menu-option__desc">8-room ice maze — explore 4 columns × 3 rows · dead ends · hidden strawberries · find the summit</span>
                     </button>
+                    <button class="menu-option menu-option--gold" onclick="startGame('mountain')">
+                        <span class="menu-option__label">🔥 Heart of the Mountain</span>
+                        <span class="menu-option__desc">5-room vertical ascent — fireballs · ice floors · no dash refill from landing · climb from the volcano to the summit</span>
+                    </button>
                     <button class="menu-option" onclick="startGame('random')">
                         <span class="menu-option__label">▶ Random Level</span>
                         <span class="menu-option__desc">Fully random rooms with entities — springs · blades · crystals · spikes · always clearable · seed-replayable</span>
@@ -183,13 +187,13 @@
                 <input class="ai-only" type="number" id="seed-input" placeholder="Seed #" min="0" max="999999">
                 <button class="ai-only" onclick="loadSeed()">Load Seed</button>
                 <span class="ai-only" id="map-seed">Seed: —</span>
-                <button id="ai-control-btn" class="ai-only" onclick="toggleAIControl()" style="background:#5a2a80;">&#129504; Neural AI: OFF</button>
-                <button class="ai-only" onclick="resetAI()" style="background:#7a2020;" title="Wipe learned weights and start from scratch">&#128260; Reset AI</button>
-                <span class="ai-only" style="color:#aaa;font-family:monospace;font-size:0.8rem;">Speed:</span>
-                <button class="ai-only ai-speed-btn" data-speed="1"  onclick="setAISpeed(1)"  style="background:#1a6a1a;" title="1× speed">1x</button>
-                <button class="ai-only ai-speed-btn" data-speed="2"  onclick="setAISpeed(2)"  style="background:#3a3a6a;" title="2× speed">2x</button>
-                <button class="ai-only ai-speed-btn" data-speed="4"  onclick="setAISpeed(4)"  style="background:#3a3a6a;" title="4× speed">4x</button>
-                <button class="ai-only ai-speed-btn" data-speed="8"  onclick="setAISpeed(8)"  style="background:#3a3a6a;" title="8× speed">8x</button>
+                <button id="ai-control-btn" class="ai-ctrl" onclick="toggleAIControl()" style="background:#5a2a80;display:none;">&#129504; Neural AI: OFF</button>
+                <button class="ai-ctrl" onclick="resetAI()" style="background:#7a2020;display:none;" title="Wipe learned weights and start from scratch">&#128260; Reset AI</button>
+                <span class="ai-ctrl" style="color:#aaa;font-family:monospace;font-size:0.8rem;display:none;">Speed:</span>
+                <button class="ai-ctrl ai-speed-btn" data-speed="1"  onclick="setAISpeed(1)"  style="background:#1a6a1a;display:none;" title="1× speed">1x</button>
+                <button class="ai-ctrl ai-speed-btn" data-speed="2"  onclick="setAISpeed(2)"  style="background:#3a3a6a;display:none;" title="2× speed">2x</button>
+                <button class="ai-ctrl ai-speed-btn" data-speed="4"  onclick="setAISpeed(4)"  style="background:#3a3a6a;display:none;" title="4× speed">4x</button>
+                <button class="ai-ctrl ai-speed-btn" data-speed="8"  onclick="setAISpeed(8)"  style="background:#3a3a6a;display:none;" title="8× speed">8x</button>
                 <button class="random-only" style="display:none;background:#1a5a30;" onclick="randomGenerateMap()">&#127922; New Map</button>
                 <input  class="random-only" style="display:none;" type="number" id="random-seed-input" placeholder="Seed #" min="0" max="999999">
                 <button class="random-only" style="display:none;" onclick="loadRandomSeed()">Load Seed</button>
