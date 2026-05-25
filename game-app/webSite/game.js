@@ -301,6 +301,77 @@
         };
     }
 
+    // ── Key ──────────────────────────────────────────────────────────────────
+    function makeKey(x, y) {
+        return {
+            type: 'key', x: x - 7, y: y - 7, w: 14, h: 14,
+            isSolid: false, _picked: false, _bobTimer: 0,
+            reset() { this._picked = false; this._bobTimer = 0; },
+            update(player, dt) {
+                if (this._picked) return;
+                this._bobTimer += dt;
+                if (rectsOverlap(player, this)) { this._picked = true; mazeKeysHeld++; }
+            },
+            draw(ctx) {
+                if (this._picked) return;
+                const bob = Math.sin(this._bobTimer * 3) * 2;
+                const cx = this.x + 7, cy = this.y + 7 + bob;
+                // Glow
+                ctx.fillStyle = 'rgba(255,215,0,0.28)';
+                ctx.beginPath(); ctx.arc(cx, cy, 10, 0, Math.PI * 2); ctx.fill();
+                // Ring
+                ctx.strokeStyle = '#d4af37'; ctx.lineWidth = 2;
+                ctx.beginPath(); ctx.arc(cx - 2, cy - 2, 4, 0, Math.PI * 2); ctx.stroke();
+                // Shaft + teeth
+                ctx.fillStyle = '#d4af37';
+                ctx.fillRect(cx + 1, cy - 3, 2, 9);
+                ctx.fillRect(cx + 3, cy + 1, 3, 2);
+                ctx.fillRect(cx + 3, cy + 4, 3, 2);
+            }
+        };
+    }
+
+    // ── Key Door ─────────────────────────────────────────────────────────────
+    function makeKeyDoor(x, y, w, h) {
+        return {
+            type: 'keyDoor', x, y, w, h,
+            isSolid: true, _open: false, _openAnim: 0,
+            reset() { this._open = false; this.isSolid = true; this._openAnim = 0; },
+            update(player, dt) {
+                if (this._open) { this._openAnim = Math.min(1, this._openAnim + dt * 5); return; }
+                if (mazeKeysHeld > 0 && rectsOverlap(player, this)) {
+                    this._open = true; this.isSolid = false; mazeKeysHeld--;
+                }
+            },
+            draw(ctx) {
+                if (this._open && this._openAnim >= 1) return;
+                ctx.globalAlpha = this._open ? 1 - this._openAnim : 1;
+                // Door body
+                ctx.fillStyle = '#6a3a08';
+                ctx.fillRect(this.x, this.y, this.w, this.h);
+                // Gold bars across width
+                ctx.fillStyle = '#d4af37';
+                for (let i = 0; i < 3; i++) {
+                    const by = this.y + Math.round(this.h * (i + 1) / 4) - 1;
+                    ctx.fillRect(this.x, by, this.w, 2);
+                }
+                // Gold border
+                ctx.strokeStyle = '#d4af37'; ctx.lineWidth = 1;
+                ctx.strokeRect(this.x + 0.5, this.y + 0.5, this.w - 1, this.h - 1);
+                // Lock keyhole
+                if (!this._open) {
+                    const mx = this.x + this.w / 2, my = this.y + this.h / 2;
+                    ctx.fillStyle = '#d4af37';
+                    ctx.beginPath(); ctx.arc(mx, my - 3, 3, 0, Math.PI * 2); ctx.fill();
+                    ctx.fillStyle = '#6a3a08';
+                    ctx.beginPath(); ctx.arc(mx, my - 3, 1.5, 0, Math.PI * 2); ctx.fill();
+                    ctx.fillRect(mx - 1, my - 1, 2, 5);
+                }
+                ctx.globalAlpha = 1;
+            }
+        };
+    }
+
     // ── Seeded PRNG ──────────────────────────────────────────────────────────
     function mkRng(seed) {
         let s = seed | 0;
@@ -487,6 +558,10 @@
     let worldMinY    = 0;
     let respawnRoom  = 0;
     let furthestRoom = 0;
+    let mazeKeysHeld    = 0;
+    let mazeRoomCol     = 0;
+    let mazeRoomRow     = 1;
+    let transitionFlash = 0;
     const player = new CelestePlayer(roomSpawns[0].x, roomSpawns[0].y);
     let runStart = performance.now();
     let deaths   = 0;
@@ -512,6 +587,16 @@
             updateAIBtn();
         }
         player.reset(roomSpawns[respawnRoom].x, roomSpawns[respawnRoom].y);
+        if (currentMode === 'maze') {
+            mazeKeysHeld = 0;
+            for (const e of entities) { if (e.type === 'key' || e.type === 'keyDoor') e.reset(); }
+            const sp = roomSpawns[respawnRoom];
+            mazeRoomCol = Math.max(0, Math.floor(sp.x / ROOM_W));
+            mazeRoomRow = Math.max(0, Math.floor((sp.y - worldMinY) / H));
+            cameraX = mazeRoomCol * ROOM_W;
+            cameraY = worldMinY + mazeRoomRow * H;
+            transitionFlash = 0;
+        }
         if (!won) deaths++;
     }
     function restartRun() {
@@ -522,6 +607,13 @@
         runStart = performance.now();
         deaths = 0; won = false;
         for (const e of entities) e.reset();
+        if (currentMode === 'maze' && roomSpawns[0]) {
+            mazeKeysHeld = 0; transitionFlash = 0;
+            mazeRoomCol = Math.max(0, Math.floor(roomSpawns[0].x / ROOM_W));
+            mazeRoomRow = Math.max(0, Math.floor((roomSpawns[0].y - worldMinY) / H));
+            cameraX = mazeRoomCol * ROOM_W;
+            cameraY = worldMinY + mazeRoomRow * H;
+        }
     }
 
     // ── AI Player Controller (neural — delegates to NeuralAI in ai-neural.js) ─
@@ -880,6 +972,7 @@
             { x:215, y:68,  w:60,  h:8,   color:ICE  }, // top platform
         ], [
             { type:'strawberry', x:245, y:53 },
+            { type:'key',        x:130, y:50 },
             { type:'blade_c', cx:160, cy:100, radius:30, startAngle:1.0, speed:1.6 },
             { type:'spike',   x:130, y:8,    size:8, dir:'down' },
             { type:'spike',   x:196, y:8,    size:8, dir:'down' },
@@ -903,6 +996,7 @@
             { type:'spike',    x:80,  y:168, size:8, dir:'up' },
             { type:'spike',    x:158, y:168, size:8, dir:'up' },
             { type:'spike',    x:232, y:168, size:8, dir:'up' },
+            { type:'keyDoor',  x:312, y:80,  w:8,   h:40 },
         ]);
         roomSpawnsOut.push({ x:2*RW+14, y:0*RH+FLOOR_Y-13 });
         roomNamesOut.push('BLADE CORRIDOR');
@@ -985,6 +1079,8 @@
             case 'crumble':    return makeCrumbleBlock(e.x + ox, e.y + oy, e.w || 32);
             case 'falling':    return makeFallingBlock(e.x + ox, e.y + oy, e.w || 32, e.h || 8);
             case 'golden':     return makeGoldenStrawberry(e.x + ox, e.y + oy);
+            case 'key':        return makeKey(e.x + ox, e.y + oy);
+            case 'keyDoor':    return makeKeyDoor(e.x + ox, e.y + oy, e.w || 8, e.h || 40);
             default: return null;
         }
     }
@@ -1240,6 +1336,27 @@
             ctx.fillStyle = vg; ctx.fillRect(0, 0, W, H);
         }
 
+        // Room transition flash
+        if (transitionFlash > 0) {
+            ctx.fillStyle = `rgba(255,255,255,${Math.min(0.85, transitionFlash * 3.2).toFixed(2)})`;
+            ctx.fillRect(0, 0, W, H);
+        }
+
+        // Key HUD (maze mode)
+        if (isMaze && mazeKeysHeld > 0) {
+            for (let k = 0; k < mazeKeysHeld; k++) {
+                const hx = W - 14 - k * 14, hy = 5;
+                ctx.globalAlpha = 0.9;
+                ctx.strokeStyle = '#d4af37'; ctx.lineWidth = 1.5;
+                ctx.beginPath(); ctx.arc(hx + 2, hy + 3, 3, 0, Math.PI * 2); ctx.stroke();
+                ctx.fillStyle = '#d4af37';
+                ctx.fillRect(hx + 4, hy - 1, 2, 9);
+                ctx.fillRect(hx + 6, hy + 3, 3, 2);
+                ctx.fillRect(hx + 6, hy + 6, 3, 2);
+                ctx.globalAlpha = 1;
+            }
+        }
+
         // HUD
         const hudCol = isMaze ? 'rgba(210,150,255,0.75)' : 'rgba(255,255,255,0.50)';
         ctx.fillStyle = hudCol; ctx.font = '7px monospace';
@@ -1288,14 +1405,25 @@
             respawnRoom  = getRoomIdx();
             furthestRoom = Math.max(furthestRoom, respawnRoom);
         }
-        cameraX = getRoomIdx() * ROOM_W;
-
-        // Vertical camera for 2D levels (maze mode)
         if (currentMode === 'maze') {
-            const _ty  = player.y + 6 - H / 2;
-            const _maxY = Math.max(worldMinY, worldMinY + worldH - H);
-            cameraY += (Math.max(worldMinY, Math.min(_maxY, _ty)) - cameraY) * 0.12;
+            const newCol = Math.max(0, Math.min(NUM_ROOMS - 1, Math.floor(player.x / ROOM_W)));
+            const _rows  = Math.round(worldH / H);
+            const newRow = Math.max(0, Math.min(_rows - 1, Math.floor((player.y - worldMinY) / H)));
+            if (newCol !== mazeRoomCol || newRow !== mazeRoomRow) {
+                mazeRoomCol = newCol; mazeRoomRow = newRow; transitionFlash = 0.35;
+            }
+            cameraX = mazeRoomCol * ROOM_W;
+            cameraY = worldMinY + mazeRoomRow * H;
+        } else {
+            const _targetX = player.x + player.w / 2 - W / 2;
+            const _maxX    = NUM_ROOMS * ROOM_W - W;
+            cameraX += (Math.max(0, Math.min(_maxX, _targetX)) - cameraX) * 0.12;
+            const _targetY  = player.y + player.h / 2 - H / 2;
+            const _camMinY  = worldMinY;
+            const _camMaxY  = Math.max(_camMinY, worldMinY + worldH - H);
+            cameraY += (Math.max(_camMinY, Math.min(_camMaxY, _targetY)) - cameraY) * 0.12;
         }
+        transitionFlash = Math.max(0, transitionFlash - FIXED_DT);
 
         if (!won && playerOverlapsGoal()) {
             won = true; winMs = performance.now() - runStart;
