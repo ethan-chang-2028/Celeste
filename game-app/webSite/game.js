@@ -668,7 +668,7 @@
     function buildMazeLevel() {
         const RW = ROOM_W, RH = H;
         // Colour palette — dark ice aesthetic
-        const ICE  = '#2a1248', ICE2 = '#180a2c', ICE3 = '#4a228a', WALL = '#080412';
+        const ICE  = '#2a1248', ICE2 = '#180a2c', ICE3 = '#4a228a', WALL = '#1a0838';
 
         const allP = [], allE = [], roomSpawnsOut = [], roomNamesOut = [], roomSkiesOut = [];
 
@@ -756,6 +756,7 @@
             { x:130, y:100, w:60,  h:8,   color:ICE  }, // centre platform
         ], [
             { type:'crystal', x:158, y:86  },
+            { type:'crystal', x:160, y:50  },
             { type:'spike',   x:104, y:168, size:8, dir:'up' },
             { type:'spike',   x:208, y:168, size:8, dir:'up' },
         ]);
@@ -819,23 +820,24 @@
         roomNamesOut.push('BLADE CORRIDOR');
         roomSkiesOut.push(['#060210', '#0c0420']);
 
-        // ── Room F (col 1, row 1) — Spike Descent (dead end below D) ─────────
+        // ── Room F (col 1, row 1) — Spike Descent (below D, escapable via staircase) ──
         addR(1, 1, [
             { x:0,   y:0,   w:100, h:8,   color:WALL }, // ceiling left (gap 100-220 ↑ D)
             { x:220, y:0,   w:100, h:8,   color:WALL }, // ceiling right
             { x:0,   y:0,   w:8,   h:180, color:WALL }, // left wall
             { x:312, y:0,   w:8,   h:180, color:WALL }, // right wall
             { x:0,   y:168, w:320, h:12,  color:ICE2 }, // floor
-            { x:50,  y:120, w:40,  h:8,   color:ICE3 },
-            { x:200, y:90,  w:40,  h:8,   color:ICE3 },
+            { x:110, y:134, w:100, h:8,   color:ICE3 }, // step 1 — reachable from floor
+            { x:100, y:100, w:80,  h:8,   color:ICE3 }, // step 2 — reachable from step 1
+            { x:100, y:66,  w:80,  h:8,   color:ICE3 }, // step 3 — launchpad into exit gap
         ], [
             { type:'spike', x:104, y:168, size:8, dir:'up' },
             { type:'spike', x:130, y:168, size:8, dir:'up' },
             { type:'spike', x:156, y:168, size:8, dir:'up' },
             { type:'spike', x:182, y:168, size:8, dir:'up' },
-            { type:'blade_h', ax:28, ay:148, bx:280, by:148, speed:56 },
-            { type:'strawberry', x:160, y:58 },
-            { type:'crystal',    x:80,  y:106 },
+            { type:'blade_h', ax:20, ay:152, bx:88, by:152, speed:64 },
+            { type:'strawberry', x:160, y:45 },
+            { type:'crystal',    x:160, y:85 },
         ]);
 
         // ── Room G (col 3, row 0) — Mirror Summit (GOAL) ─────────────────────
@@ -1099,6 +1101,10 @@
                 ctx.fillRect(pl.x, pl.y, pl.w, 1);
                 ctx.fillStyle = 'rgba(120,40,200,0.20)';
                 ctx.fillRect(pl.x, pl.y + 1, pl.w, 1);
+                // Edge outline so walls read against dark background
+                ctx.strokeStyle = 'rgba(90,30,160,0.60)';
+                ctx.lineWidth = 0.5;
+                ctx.strokeRect(pl.x + 0.25, pl.y + 0.25, pl.w - 0.5, pl.h - 0.5);
             } else {
                 ctx.fillStyle = 'rgba(255,255,255,0.18)'; ctx.fillRect(pl.x, pl.y, pl.w, 1);
                 ctx.fillStyle = 'rgba(0,0,0,0.30)';       ctx.fillRect(pl.x, pl.y + pl.h - 1, pl.w, 1);
