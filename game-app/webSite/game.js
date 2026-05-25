@@ -802,11 +802,6 @@
             ctx.fillStyle = 'rgba(0,0,0,0.30)';       ctx.fillRect(pl.x, pl.y + pl.h - 1, pl.w, 1); // bottom shadow
         }
 
-        ctx.strokeStyle = 'rgba(255,255,255,0.10)'; ctx.lineWidth = 1;
-        for (let r = 1; r < NUM_ROOMS; r++) {
-            ctx.beginPath(); ctx.moveTo(r * ROOM_W, 0); ctx.lineTo(r * ROOM_W, H); ctx.stroke();
-        }
-
         if (GOAL && GOAL.x !== undefined) {
             const pulse = 0.6 + 0.4 * Math.sin(performance.now() / 250);
             ctx.fillStyle = GOAL.color; ctx.globalAlpha = pulse;
@@ -889,7 +884,9 @@
             respawnRoom  = getRoomIdx();
             furthestRoom = Math.max(furthestRoom, respawnRoom);
         }
-        cameraX = getRoomIdx() * ROOM_W;
+        const _targetX = player.x + player.w / 2 - W / 2;
+        const _maxX    = NUM_ROOMS * ROOM_W - W;
+        cameraX += (Math.max(0, Math.min(_maxX, _targetX)) - cameraX) * 0.12;
 
         if (!won && playerOverlapsGoal()) {
             won = true; winMs = performance.now() - runStart;
