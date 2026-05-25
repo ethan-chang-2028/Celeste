@@ -664,6 +664,220 @@
                  roomNames: nm, roomSkies: sk, roomLabels: lb, goal, entities: ents };
     }
 
+    // ── Mirror Temple: 8-room ice maze (Chapter-5-style) ────────────────────
+    function buildMazeLevel() {
+        const RW = ROOM_W, RH = H;
+        // Colour palette — dark ice aesthetic
+        const ICE  = '#2a1248', ICE2 = '#180a2c', ICE3 = '#4a228a', WALL = '#080412';
+
+        const allP = [], allE = [], roomSpawnsOut = [], roomNamesOut = [], roomSkiesOut = [];
+
+        // Rooms added in any order; offsets applied here.
+        // Entities are spec objects converted via buildEntityFromSpec(spec, 0, 0)
+        // after world offsets have already been baked in.
+        function addR(col, row, plats, entSpecs) {
+            const ox = col * RW, oy = row * RH;
+            for (const pl of plats)
+                allP.push({ ...pl, x: pl.x + ox, y: pl.y + oy });
+            for (const e of entSpecs) {
+                const n = { ...e };
+                if (n.type === 'blade_h') {
+                    n.ax += ox; n.bx += ox; n.ay += oy; n.by += oy;
+                } else if (n.type === 'blade_c') {
+                    n.cx += ox; n.cy += oy;
+                } else {
+                    if (n.x != null) n.x += ox;
+                    if (n.y != null) n.y += oy;
+                }
+                const built = buildEntityFromSpec(n, 0, 0);
+                if (built) allE.push(built);
+            }
+        }
+
+        /* Grid layout (col, row):
+         *  col:  0         1         2         3
+         *  row-1:[H dead]  [B]       [C dead]
+         *  row 0:[A start] [D cross] [E blade] [G goal]
+         *  row+1:          [F dead]
+         *
+         * Horizontal door gaps: y 80–120 in local coords (right/left walls)
+         * Vertical   door gaps: x 100–220 in local coords (ceiling/floor)
+         */
+
+        // ── Room A (col 0, row 0) — Mirror Entrance ─────────────────────────
+        addR(0, 0, [
+            { x:0,   y:0,   w:8,   h:180, color:WALL }, // left boundary
+            { x:312, y:0,   w:8,   h:80,  color:WALL }, // right top   (gap 80-120 → D)
+            { x:312, y:120, w:8,   h:60,  color:WALL }, // right bottom
+            { x:0,   y:0,   w:120, h:8,   color:WALL }, // ceiling left (gap 120-200 ↑ H)
+            { x:200, y:0,   w:120, h:8,   color:WALL }, // ceiling right
+            { x:0,   y:168, w:320, h:12,  color:ICE  }, // floor
+            { x:118, y:24,  w:6,   h:110, color:ICE2 }, // chimney shaft L
+            { x:196, y:24,  w:6,   h:110, color:ICE2 }, // chimney shaft R
+            { x:20,  y:140, w:60,  h:8,   color:ICE3 }, // step 1
+            { x:90,  y:108, w:50,  h:8,   color:ICE3 }, // step 2
+            { x:150, y:76,  w:46,  h:8,   color:ICE3 }, // step 3 (inside shaft)
+        ], [
+            { type:'crystal', x:50,  y:127 },
+            { type:'spring',  x:240, y:168, orientation:'floor' },
+        ]);
+        roomSpawnsOut.push({ x:0*RW+14, y:0*RH+FLOOR_Y-13 });
+        roomNamesOut.push('MIRROR ENTRANCE');
+        roomSkiesOut.push(['#06020e', '#0d0418']);
+
+        // ── Room H (col 0, row -1) — Hollow Heights (dead end above A) ───────
+        addR(0, -1, [
+            { x:0,   y:0,   w:8,   h:180, color:WALL }, // left wall
+            { x:312, y:0,   w:8,   h:180, color:WALL }, // right wall (sealed)
+            { x:0,   y:0,   w:320, h:8,   color:WALL }, // ceiling (sealed)
+            { x:0,   y:168, w:120, h:12,  color:ICE  }, // floor left  (gap 120-200 ↓ A)
+            { x:200, y:168, w:120, h:12,  color:ICE  }, // floor right
+            { x:40,  y:130, w:70,  h:8,   color:ICE3 },
+            { x:180, y:90,  w:70,  h:8,   color:ICE3 },
+            { x:100, y:48,  w:80,  h:8,   color:ICE  }, // top platform
+        ], [
+            { type:'strawberry', x:138, y:33 },
+            { type:'blade_c', cx:160, cy:68, radius:24, startAngle:0,   speed:1.8 },
+            { type:'crystal',  x:60,  y:116 },
+        ]);
+
+        // ── Room D (col 1, row 0) — Mirrored Nexus (crossroads) ──────────────
+        addR(1, 0, [
+            { x:0,   y:0,   w:8,   h:80,  color:WALL }, // left top    (gap 80-120 ← A)
+            { x:0,   y:120, w:8,   h:60,  color:WALL }, // left bottom
+            { x:312, y:0,   w:8,   h:80,  color:WALL }, // right top   (gap 80-120 → E)
+            { x:312, y:120, w:8,   h:60,  color:WALL }, // right bottom
+            { x:0,   y:0,   w:100, h:8,   color:WALL }, // ceiling left (gap 100-220 ↑ B)
+            { x:220, y:0,   w:100, h:8,   color:WALL }, // ceiling right
+            { x:0,   y:168, w:100, h:12,  color:ICE  }, // floor left  (gap 100-220 ↓ F)
+            { x:220, y:168, w:100, h:12,  color:ICE  }, // floor right
+            { x:50,  y:140, w:60,  h:8,   color:ICE3 }, // platform L
+            { x:210, y:140, w:60,  h:8,   color:ICE3 }, // platform R
+            { x:130, y:100, w:60,  h:8,   color:ICE  }, // centre platform
+        ], [
+            { type:'crystal', x:158, y:86  },
+            { type:'spike',   x:104, y:168, size:8, dir:'up' },
+            { type:'spike',   x:208, y:168, size:8, dir:'up' },
+        ]);
+        roomSpawnsOut.push({ x:1*RW+14, y:0*RH+FLOOR_Y-13 });
+        roomNamesOut.push('MIRRORED NEXUS');
+        roomSkiesOut.push(['#050210', '#0a0420']);
+
+        // ── Room B (col 1, row -1) — Ice Gallery (above D, exits right to C) ─
+        addR(1, -1, [
+            { x:0,   y:0,   w:8,   h:180, color:WALL }, // left wall (sealed)
+            { x:312, y:0,   w:8,   h:80,  color:WALL }, // right top   (gap 80-120 → C)
+            { x:312, y:120, w:8,   h:60,  color:WALL }, // right bottom
+            { x:0,   y:0,   w:320, h:8,   color:WALL }, // ceiling (sealed)
+            { x:0,   y:168, w:100, h:12,  color:ICE  }, // floor left  (gap 100-220 ↓ D)
+            { x:220, y:168, w:100, h:12,  color:ICE  }, // floor right
+            { x:30,  y:140, w:50,  h:8,   color:ICE3 },
+            { x:130, y:118, w:50,  h:8,   color:ICE3 },
+            { x:100, y:80,  w:60,  h:8,   color:ICE  },
+            { x:220, y:100, w:52,  h:8,   color:ICE3 },
+        ], [
+            { type:'blade_h', ax:36, ay:148, bx:118, by:148, speed:55 },
+            { type:'crystal',  x:180, y:106 },
+            { type:'spike',    x:200, y:8,   size:8, dir:'down' },
+        ]);
+
+        // ── Room C (col 2, row -1) — Crystal Cavern (dead end) ───────────────
+        addR(2, -1, [
+            { x:0,   y:0,   w:8,   h:80,  color:WALL }, // left top    (gap 80-120 ← B)
+            { x:0,   y:120, w:8,   h:60,  color:WALL }, // left bottom
+            { x:312, y:0,   w:8,   h:180, color:WALL }, // right wall (sealed)
+            { x:0,   y:0,   w:320, h:8,   color:WALL }, // ceiling (sealed)
+            { x:0,   y:168, w:320, h:12,  color:ICE  }, // floor
+            { x:40,  y:140, w:60,  h:8,   color:ICE3 },
+            { x:160, y:110, w:60,  h:8,   color:ICE3 },
+            { x:215, y:68,  w:60,  h:8,   color:ICE  }, // top platform
+        ], [
+            { type:'strawberry', x:245, y:53 },
+            { type:'blade_c', cx:160, cy:100, radius:30, startAngle:1.0, speed:1.6 },
+            { type:'spike',   x:130, y:8,    size:8, dir:'down' },
+            { type:'spike',   x:196, y:8,    size:8, dir:'down' },
+        ]);
+
+        // ── Room E (col 2, row 0) — Blade Corridor ────────────────────────────
+        addR(2, 0, [
+            { x:0,   y:0,   w:8,   h:80,  color:WALL }, // left top    (gap 80-120 ← D)
+            { x:0,   y:120, w:8,   h:60,  color:WALL }, // left bottom
+            { x:312, y:0,   w:8,   h:80,  color:WALL }, // right top   (gap 80-120 → G)
+            { x:312, y:120, w:8,   h:60,  color:WALL }, // right bottom
+            { x:0,   y:0,   w:320, h:8,   color:WALL }, // ceiling
+            { x:0,   y:168, w:320, h:12,  color:ICE  }, // floor
+            { x:20,  y:130, w:50,  h:8,   color:ICE3 }, // entry ledge
+            { x:135, y:100, w:50,  h:8,   color:ICE3 }, // mid ledge
+            { x:250, y:130, w:50,  h:8,   color:ICE3 }, // exit ledge
+        ], [
+            { type:'blade_h', ax:28,  ay:148, bx:158, by:148, speed:68 },
+            { type:'blade_h', ax:152, ay:78,  bx:298, by:78,  speed:74 },
+            { type:'crystal',  x:160, y:86  },
+            { type:'spike',    x:158, y:168, size:8, dir:'up' },
+        ]);
+        roomSpawnsOut.push({ x:2*RW+14, y:0*RH+FLOOR_Y-13 });
+        roomNamesOut.push('BLADE CORRIDOR');
+        roomSkiesOut.push(['#060210', '#0c0420']);
+
+        // ── Room F (col 1, row 1) — Spike Descent (dead end below D) ─────────
+        addR(1, 1, [
+            { x:0,   y:0,   w:100, h:8,   color:WALL }, // ceiling left (gap 100-220 ↑ D)
+            { x:220, y:0,   w:100, h:8,   color:WALL }, // ceiling right
+            { x:0,   y:0,   w:8,   h:180, color:WALL }, // left wall
+            { x:312, y:0,   w:8,   h:180, color:WALL }, // right wall
+            { x:0,   y:168, w:320, h:12,  color:ICE2 }, // floor
+            { x:50,  y:120, w:40,  h:8,   color:ICE3 },
+            { x:200, y:90,  w:40,  h:8,   color:ICE3 },
+        ], [
+            { type:'spike', x:104, y:168, size:8, dir:'up' },
+            { type:'spike', x:130, y:168, size:8, dir:'up' },
+            { type:'spike', x:156, y:168, size:8, dir:'up' },
+            { type:'spike', x:182, y:168, size:8, dir:'up' },
+            { type:'blade_h', ax:28, ay:148, bx:280, by:148, speed:56 },
+            { type:'strawberry', x:160, y:58 },
+            { type:'crystal',    x:80,  y:106 },
+        ]);
+
+        // ── Room G (col 3, row 0) — Mirror Summit (GOAL) ─────────────────────
+        addR(3, 0, [
+            { x:0,   y:0,   w:8,   h:80,  color:WALL }, // left top    (gap 80-120 ← E)
+            { x:0,   y:120, w:8,   h:60,  color:WALL }, // left bottom
+            { x:312, y:0,   w:8,   h:180, color:WALL }, // right wall (sealed)
+            { x:0,   y:0,   w:320, h:8,   color:WALL }, // ceiling
+            { x:0,   y:168, w:320, h:12,  color:ICE  }, // floor
+            { x:20,  y:140, w:55,  h:8,   color:ICE3 }, // step 1
+            { x:100, y:110, w:55,  h:8,   color:ICE3 }, // step 2
+            { x:178, y:80,  w:55,  h:8,   color:ICE3 }, // step 3
+            { x:256, y:48,  w:50,  h:8,   color:ICE  }, // pedestal
+        ], [
+            { type:'blade_c', cx:160, cy:90, radius:36, startAngle:0.5, speed:1.4 },
+            { type:'golden',  x:266, y:32 },
+            { type:'crystal',  x:124, y:96 },
+            { type:'spike',   x:50,  y:8,  size:8, dir:'down' },
+            { type:'spike',   x:110, y:8,  size:8, dir:'down' },
+        ]);
+        roomSpawnsOut.push({ x:3*RW+14, y:0*RH+FLOOR_Y-13 });
+        roomNamesOut.push('MIRROR SUMMIT');
+        roomSkiesOut.push(['#050210', '#0b0420']);
+
+        // Goal flag in G, local (270, 32) → world (3*320+270, 32)
+        const goal = { x:3*RW+270, y:32, w:12, h:12, color:'#d4af37' };
+
+        return {
+            platforms:  allP,
+            pitShading: [],
+            roomSpawns: roomSpawnsOut,   // 4 entries — one per column
+            roomNames:  roomNamesOut,
+            roomSkies:  roomSkiesOut,
+            roomLabels: [],
+            goal,
+            entities:   allE,
+            _numCols:   4,
+            _worldMinY: -RH,   // row -1 = worldY -180
+            _worldH:    3 * RH, // rows -1, 0, +1 = 540 px tall
+        };
+    }
+
     // ── Custom level (built in the map editor, stored in localStorage) ───────
     function buildEntityFromSpec(e, ox, oy) {
         ox = ox || 0; oy = oy || 0;
@@ -774,6 +988,14 @@
             const seed = Math.floor(Math.random() * 999999);
             applyLevel(buildRandomLevel(seed), seed);
             document.querySelectorAll('.random-only').forEach(el => el.style.display = '');
+        } else if (mode === 'maze') {
+            const built = buildMazeLevel();
+            NUM_ROOMS = built._numCols;           // 4
+            worldMinY = built._worldMinY;         // -180
+            worldH    = built._worldH;            // 540
+            DEATH_Y   = worldMinY + worldH + 20;  // 380
+            cameraY   = 0;                        // player starts in row 0
+            applyLevel(built, -1);
         } else if (mode === 'custom') {
             const stored = localStorage.getItem('celeste_custom_level');
             if (!stored) {
@@ -822,6 +1044,8 @@
 
     function render() {
         const roomIdx = getRoomIdx();
+        const isMaze  = currentMode === 'maze';
+
         const [skyTop, skyBot] = roomSkies[roomIdx] || ['#1a2a4a','#3a5a8a'];
         const sky = ctx.createLinearGradient(0, 0, 0, H);
         sky.addColorStop(0, skyTop); sky.addColorStop(1, skyBot);
@@ -829,29 +1053,67 @@
 
         ctx.save(); ctx.translate(-cameraX, -cameraY);
 
-        // Starfield (parallax at 25% camera speed)
-        ctx.save();
-        ctx.translate(cameraX * 0.75, cameraY * 0.75); // undo 75% of translate so stars scroll slowly
-        ctx.fillStyle = 'rgba(200,215,255,0.45)';
-        for (let i = 0; i < 48; i++) {
-            const sx = ((i * 137 + 29) * 1699) % (ROOM_W * 6);
-            const sy = ((i * 97  + 11) * 1301) % H;
-            ctx.fillRect(sx - cameraX * 0.75, sy, i % 4 === 0 ? 1.5 : 0.5, i % 4 === 0 ? 1.5 : 0.5);
+        // Background: crystal particles for maze, starfield for other modes
+        if (isMaze) {
+            const t = performance.now() / 1200;
+            for (let i = 0; i < 52; i++) {
+                const px = ((i * 137 + 29) * 1699) % (ROOM_W * 4);
+                const py = worldMinY + ((i * 97 + 11) * 1301) % (worldH + H);
+                const blink = 0.15 + 0.35 * Math.abs(Math.sin(t + i * 0.7));
+                ctx.fillStyle = i % 3 === 0 ? `rgba(210,80,255,${blink.toFixed(2)})`
+                              : i % 3 === 1 ? `rgba(140,40,220,${(blink*0.7).toFixed(2)})`
+                              :               `rgba(255,150,255,${(blink*0.4).toFixed(2)})`;
+                ctx.fillRect(px, py, i % 5 === 0 ? 1.5 : 0.5, i % 5 === 0 ? 1.5 : 0.5);
+            }
+        } else {
+            // Starfield (parallax at 25% camera speed)
+            ctx.save();
+            ctx.translate(cameraX * 0.75, cameraY * 0.75);
+            ctx.fillStyle = 'rgba(200,215,255,0.45)';
+            for (let i = 0; i < 48; i++) {
+                const sx = ((i * 137 + 29) * 1699) % (ROOM_W * 6);
+                const sy = ((i * 97  + 11) * 1301) % H;
+                ctx.fillRect(sx - cameraX * 0.75, sy, i % 4 === 0 ? 1.5 : 0.5, i % 4 === 0 ? 1.5 : 0.5);
+            }
+            ctx.restore();
         }
-        ctx.restore();
 
         // Pit voids
         for (const pit of pitShading) {
-            ctx.fillStyle = 'rgba(0,0,0,0.55)';
-            ctx.fillRect(pit.x, pit.y, pit.w, pit.h);
-            ctx.fillStyle = 'rgba(200,30,30,0.35)';
-            ctx.fillRect(pit.x, pit.y, pit.w, 2);
+            if (isMaze) {
+                ctx.fillStyle = 'rgba(60,0,100,0.5)';
+                ctx.fillRect(pit.x, pit.y, pit.w, pit.h);
+            } else {
+                ctx.fillStyle = 'rgba(0,0,0,0.55)';
+                ctx.fillRect(pit.x, pit.y, pit.w, pit.h);
+                ctx.fillStyle = 'rgba(200,30,30,0.35)';
+                ctx.fillRect(pit.x, pit.y, pit.w, 2);
+            }
         }
 
         for (const pl of platforms) {
             ctx.fillStyle = pl.color; ctx.fillRect(pl.x, pl.y, pl.w, pl.h);
-            ctx.fillStyle = 'rgba(255,255,255,0.18)'; ctx.fillRect(pl.x, pl.y, pl.w, 1);      // top highlight
-            ctx.fillStyle = 'rgba(0,0,0,0.30)';       ctx.fillRect(pl.x, pl.y + pl.h - 1, pl.w, 1); // bottom shadow
+            if (isMaze) {
+                // Purple mirror sheen on top
+                ctx.fillStyle = 'rgba(190,80,255,0.55)';
+                ctx.fillRect(pl.x, pl.y, pl.w, 1);
+                ctx.fillStyle = 'rgba(120,40,200,0.20)';
+                ctx.fillRect(pl.x, pl.y + 1, pl.w, 1);
+            } else {
+                ctx.fillStyle = 'rgba(255,255,255,0.18)'; ctx.fillRect(pl.x, pl.y, pl.w, 1);
+                ctx.fillStyle = 'rgba(0,0,0,0.30)';       ctx.fillRect(pl.x, pl.y + pl.h - 1, pl.w, 1);
+            }
+        }
+
+        // Room dividers
+        const divTop = isMaze ? worldMinY : 0;
+        const divBot = isMaze ? worldMinY + worldH : H;
+        ctx.strokeStyle = 'rgba(255,255,255,0.10)'; ctx.lineWidth = 1;
+        for (let r = 1; r < NUM_ROOMS; r++) {
+            ctx.beginPath();
+            ctx.moveTo(r * ROOM_W, divTop);
+            ctx.lineTo(r * ROOM_W, divBot);
+            ctx.stroke();
         }
 
         if (GOAL && GOAL.x !== undefined) {
@@ -881,19 +1143,31 @@
 
         player.draw(ctx);
 
-        ctx.fillStyle = 'rgba(255,255,255,0.08)'; ctx.font = 'bold 80px monospace';
-        for (let r = 0; r < NUM_ROOMS; r++) ctx.fillText(String(r + 1), r * ROOM_W + 148, 120);
+        // Room number watermarks (only non-maze)
+        if (!isMaze) {
+            ctx.fillStyle = 'rgba(255,255,255,0.08)'; ctx.font = 'bold 80px monospace';
+            for (let r = 0; r < NUM_ROOMS; r++) ctx.fillText(String(r + 1), r * ROOM_W + 148, 120);
+        }
 
         ctx.fillStyle = 'rgba(220,220,220,0.55)'; ctx.font = '6px monospace';
         for (const lbl of roomLabels) ctx.fillText(lbl.text, lbl.x, lbl.y);
 
         ctx.restore();
 
+        // Mirror Temple screen vignette (post-world overlay)
+        if (isMaze) {
+            const vg = ctx.createRadialGradient(W/2, H/2, H*0.18, W/2, H/2, H*0.72);
+            vg.addColorStop(0, 'rgba(0,0,0,0)');
+            vg.addColorStop(1, 'rgba(20,0,40,0.40)');
+            ctx.fillStyle = vg; ctx.fillRect(0, 0, W, H);
+        }
+
         // HUD
-        ctx.fillStyle = 'rgba(255,255,255,0.50)'; ctx.font = '7px monospace';
+        const hudCol = isMaze ? 'rgba(210,150,255,0.75)' : 'rgba(255,255,255,0.50)';
+        ctx.fillStyle = hudCol; ctx.font = '7px monospace';
         ctx.fillText(roomNames[roomIdx] || '', 10, 10);
         for (let i = 0; i < NUM_ROOMS; i++) {
-            ctx.fillStyle = i <= furthestRoom ? '#d4af37' : 'rgba(255,255,255,0.20)';
+            ctx.fillStyle = i <= furthestRoom ? (isMaze ? '#c060ff' : '#d4af37') : 'rgba(255,255,255,0.20)';
             ctx.fillRect(10 + i * 12, 14, 8, 3);
         }
         if (aiEnabled && typeof NeuralAI !== 'undefined') {
@@ -943,6 +1217,13 @@
         const _camMinY  = worldMinY;
         const _camMaxY  = Math.max(_camMinY, worldMinY + worldH - H);
         cameraY += (Math.max(_camMinY, Math.min(_camMaxY, _targetY)) - cameraY) * 0.12;
+
+        // Vertical camera for 2D levels (maze mode)
+        if (currentMode === 'maze') {
+            const _ty  = player.y + 6 - H / 2;
+            const _maxY = Math.max(worldMinY, worldMinY + worldH - H);
+            cameraY += (Math.max(worldMinY, Math.min(_maxY, _ty)) - cameraY) * 0.12;
+        }
 
         if (!won && playerOverlapsGoal()) {
             won = true; winMs = performance.now() - runStart;
