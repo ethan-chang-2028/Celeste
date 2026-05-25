@@ -7,18 +7,36 @@
  *        This file serves as the architectural reference only.
  *
  *  Architecture:
- *    - Each agent has a small neural net: 17 inputs → 14 hidden → 6 outputs
- *    - Weights are evolved across generations (neuroevolution / NEAT-lite)
+ *    - 8 parallel agents: 1 main player + 7 ghost agents
+ *    - Each agent has a neural net: 17 inputs → 14 hidden → 16 outputs
+ *    - Weights evolved across generations (neuroevolution / NEAT-lite)
  *    - PLUS real-time weight adaptation inside each run (ES perturbation)
  *    - PLUS stuck detection that mutates the agent live, mid-run
  *    - PLUS a global memory of the best weights ever seen, shared across agents
- *    - Exploration noise is injected every run so behaviour is never identical
+ *    - Exploration noise injected every run so behaviour is never identical
+ *
+ *  Input encoding (17 values):
+ *    [0..11]  12 raycasts:  +value = wall/platform distance (closer→higher)
+ *                           −value = hazard/spike distance  (closer→more negative)
+ *                            0     = goal on this ray
+ *    [12]     onGround (0/1)
+ *    [13]     vx / MaxRun
+ *    [14]     vy / MaxFall
+ *    [15]     dashAvailable (0/1)
+ *    [16]     goal direction: gx/gd (horizontal) or −gy/gd (vertical ascent)
+ *
+ *  Output encoding (16 actions, softmax temperature sampling):
+ *    0=left  1=right  2=jump  3=dash→right  4=jump+right  5=jump+left
+ *    6=grab+climb-left  7=grab+climb-right  8=grab+wall-jump
+ *    9=dash→left  10=dash→up  11=dash→up-right  12=dash→up-left
+ *    13=dash→down  14=dash→down-right  15=dash→down-left
  *
  *  Guarantees:
  *    ✓ Every run is different (fresh noise + stochastic action selection)
  *    ✓ Agents improve every attempt (ES online update + generational GA)
  *    ✓ Agents adapt mid-run (perturbation windows, stuck detector)
  *    ✓ Global best weights carry forward across level clears
+ *    ✓ AI can detect and avoid hazards via negative raycast signals
  * ============================================================
  */
 
@@ -35,8 +53,8 @@
 // ── NETWORK DIMENSIONS ────────────────────────────────────
 inline constexpr int N_IN   = 17;
 inline constexpr int N_HID  = 14;
-inline constexpr int N_OUT  = 6;
-inline constexpr int W_SIZE = N_IN * N_HID + N_HID + N_HID * N_OUT + N_OUT;
+inline constexpr int N_OUT  = 16;
+inline constexpr int W_SIZE = N_IN * N_HID + N_HID + N_HID * N_OUT + N_OUT; // 492
 
 // ── TYPES ─────────────────────────────────────────────────
 using Weights = std::array<float, W_SIZE>;
@@ -120,50 +138,62 @@ inline float sigmoid(float x) {
 
 /** Action flags returned by think() */
 struct Action {
-    bool L, R, J, X;
+    bool  L, R, J, X, G;  // left, right, jump, dash, grab
+    float DX, DY;          // dash direction (for X=true)
 };
 
 /**
  * Run the neural net and return a discrete action.
+ * Uses softmax temperature sampling (not argmax) for exploration.
  * @param weights  flat weight vector
  * @param inputs   N_IN sensor values
  */
 inline Action think(const Weights& weights, const Inputs& inputs) {
-    // Hidden layer
+    // Hidden layer (ReLU)
     std::array<float, N_HID> h{};
     for (int j = 0; j < N_HID; j++) {
-        float s = weights[N_IN * N_HID + j];   // bias
+        float s = weights[N_IN * N_HID + j];
         for (int i = 0; i < N_IN; i++)
             s += inputs[i] * weights[i * N_HID + j];
         h[j] = relu(s);
     }
 
-    // Output layer
+    // Output layer (sigmoid logits)
     const int base = N_IN * N_HID + N_HID;
     std::array<float, N_OUT> out{};
     for (int k = 0; k < N_OUT; k++) {
-        float s = weights[base + N_HID * N_OUT + k];   // bias
+        float s = weights[base + N_HID * N_OUT + k];
         for (int j = 0; j < N_HID; j++)
             s += h[j] * weights[base + j * N_OUT + k];
         out[k] = sigmoid(s);
     }
 
-    // Pick highest-confidence action
-    int best = 0;
-    for (int k = 1; k < N_OUT; k++)
-        if (out[k] > out[best]) best = k;
+    // Softmax temperature sampling (EXPLORE_TEMP = 0.55)
+    constexpr float TEMP = 0.55f;
+    float maxO = *std::max_element(out.begin(), out.end());
+    std::array<float, N_OUT> exps{};
+    float sumE = 0.f;
+    for (int k = 0; k < N_OUT; k++) { exps[k] = std::exp((out[k] - maxO) / TEMP); sumE += exps[k]; }
+    float r = randF() * sumE;
+    int best = N_OUT - 1;
+    for (int k = 0; k < N_OUT; k++) { r -= exps[k]; if (r <= 0.f) { best = k; break; } }
 
-    // Stochastic exploration: 4% chance of random action
-    if (randF() < 0.04f) best = randInt(N_OUT);
-
-    // Output mapping:
-    //  0 = move left     1 = move right   2 = jump
-    //  3 = dash          4 = jump+right   5 = jump+left
+    // Action mapping:
+    //  0=left  1=right  2=jump  3=dash→right  4=jump+right  5=jump+left
+    //  6=grab+climb-left  7=grab+climb-right  8=grab+wall-jump
+    //  9=dash→left  10=dash→up  11=dash→up-right  12=dash→up-left
+    //  13=dash→down  14=dash→down-right  15=dash→down-left
+    //                     0  1  2   3  4  5  6  7  8   9 10  11  12 13 14  15
+    constexpr float DX[] = {0, 0, 0,  1, 0, 0, 0, 0, 0, -1,  0,  1, -1, 0,  1, -1};
+    constexpr float DY[] = {0, 0, 0,  0, 0, 0, 0, 0, 0,  0, -1, -1, -1, 1,  1,  1};
+    const bool isDash = best == 3 || best >= 9;
     return {
-        best == 0 || best == 5,
-        best == 1 || best == 4,
-        best == 2 || best == 4 || best == 5,
-        best == 3
+        best == 0 || best == 5 || best == 6,   // L
+        best == 1 || best == 4 || best == 7,   // R
+        best == 2 || best == 4 || best == 5 || best == 8, // J
+        isDash,                                // X
+        best == 6 || best == 7 || best == 8,  // G
+        DX[best], DY[best]
     };
 }
 
@@ -450,10 +480,15 @@ inline constexpr std::array<std::array<float, 2>, RAY_COUNT> RAY_DIRS = {{
     { 0.5f,-1.f  }, {-0.5f,-1.f }, { 1.f, -1.f },  {-1.f, -1.f },
 }};
 
+// castRay return value:
+//   positive (0–1)  = distance to platform/wall    (closer → higher)
+//   negative (−1–0) = distance to hazard/spike     (closer → more negative)
+//   0               = goal is on this ray
 inline float castRay(float cx, float cy, float dx, float dy,
                      const std::vector<Rect>& plats,
-                     const std::vector<Rect>& spikes,
-                     const Rect& goal)
+                     const std::vector<Rect>& hazards,
+                     const Rect& goal,
+                     float worldMinX, float worldMaxX, float worldMinY, float worldMaxY)
 {
     float len = std::sqrt(dx * dx + dy * dy);
     float ndx = dx / len, ndy = dy / len;
@@ -465,14 +500,14 @@ inline float castRay(float cx, float cy, float dx, float dy,
             if (rx > p.x && rx < p.x + p.w && ry > p.y && ry < p.y + p.h)
                 return t / RAY_LEN;
 
-        for (const auto& s : spikes)
-            if (rx > s.x && rx < s.x + s.w && ry > s.y && ry < s.y + s.h)
+        for (const auto& h : hazards)
+            if (rx > h.x && rx < h.x + h.w && ry > h.y && ry < h.y + h.h)
                 return -(t / RAY_LEN);
 
         if (rx > goal.x && rx < goal.x + goal.w && ry > goal.y && ry < goal.y + goal.h)
             return 0.f;
 
-        if (rx < 0.f || rx > 680.f || ry > 320.f)
+        if (rx < worldMinX || rx > worldMaxX || ry < worldMinY || ry > worldMaxY)
             return t / RAY_LEN;   // world edge = wall
     }
     return 1.f;
@@ -492,17 +527,21 @@ inline float castRay(float cx, float cy, float dx, float dy,
 inline Inputs buildSensorInputs(
     const AgentSensorState&  agent,
     const std::vector<Rect>& plats,
-    const std::vector<Rect>& spikes,
+    const std::vector<Rect>& hazards,
     const Rect&              goal,
-    float AW, float AH, float MAXRUN, float MAXFALL)
+    float AW, float AH, float MAXRUN, float MAXFALL,
+    float worldMinX, float worldMaxX, float worldMinY, float worldMaxY,
+    bool  isVertical = false)
 {
     Inputs inp{};
     float cx = agent.x + AW / 2.f;
     float cy = agent.y + AH / 2.f;
 
+    // 12 raycasts: +wall, −hazard, 0=goal
     for (int i = 0; i < RAY_COUNT; i++) {
         float dx = RAY_DIRS[i][0], dy = RAY_DIRS[i][1];
-        inp[i] = castRay(cx, cy, dx, dy, plats, spikes, goal);
+        inp[i] = castRay(cx, cy, dx, dy, plats, hazards, goal,
+                         worldMinX, worldMaxX, worldMinY, worldMaxY);
     }
 
     inp[12] = agent.og ? 1.f : 0.f;
@@ -514,7 +553,9 @@ inline Inputs buildSensorInputs(
     float gy = goal.y + goal.h / 2.f - cy;
     float gd = std::sqrt(gx * gx + gy * gy);
     if (gd == 0.f) gd = 1.f;
-    inp[16] = gx / gd;
+    // Horizontal levels: goal direction = gx/gd (positive = goal to the right)
+    // Vertical levels:   goal direction = −gy/gd (positive = goal is above)
+    inp[16] = isVertical ? (-gy / gd) : (gx / gd);
 
     return inp;
 }

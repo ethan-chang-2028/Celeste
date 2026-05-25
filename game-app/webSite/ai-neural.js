@@ -1,5 +1,5 @@
 // ai-neural.js  ← PRIMARY AI IMPLEMENTATION
-// Neural net: 17 inputs → 14 hidden (ReLU) → 6 outputs (sigmoid)
+// Neural net: 17 inputs → 14 hidden (ReLU) → 16 outputs (softmax)
 // Training: neuroevolution (GA) + real-time ES weight adaptation + stuck detection
 // Architecture reference: game-app/Native/Engine/Ai/ai_learning.hpp
 
@@ -9,8 +9,8 @@
     // ── Network dimensions (mirrors ai_learning.hpp) ──────────────────────────
     const N_IN   = 17;
     const N_HID  = 14;
-    const N_OUT  = 9;
-    const W_SIZE = N_IN * N_HID + N_HID + N_HID * N_OUT + N_OUT; // 387
+    const N_OUT  = 16;
+    const W_SIZE = N_IN * N_HID + N_HID + N_HID * N_OUT + N_OUT; // 492
 
     // ── Hyperparameters ───────────────────────────────────────────────────────
     const HP = {
@@ -97,14 +97,22 @@
         for (let k = 0; k < N_OUT; k++) { exps[k] = Math.exp((out[k] - maxO) / HP.EXPLORE_TEMP); sumE += exps[k]; }
         let r = rand() * sumE, best = N_OUT - 1;
         for (let k = 0; k < N_OUT; k++) { r -= exps[k]; if (r <= 0) { best = k; break; } }
-        // 0=left  1=right  2=jump  3=dash  4=jump+right  5=jump+left
+        // 0=left  1=right  2=jump  3=dash→right  4=jump+right  5=jump+left
         // 6=grab+climb-left  7=grab+climb-right  8=grab+wall-jump
+        // 9=dash→left  10=dash→up  11=dash→up-right  12=dash→up-left
+        // 13=dash→down  14=dash→down-right  15=dash→down-left
+        //                  0  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15
+        const DASH_DX  =  [ 0, 0, 0, 1, 0, 0, 0, 0, 0,-1, 0, 1,-1, 0, 1,-1];
+        const DASH_DY  =  [ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,-1,-1,-1, 1, 1, 1];
+        const isDash   = best === 3 || best >= 9;
         return {
-            L: best === 0 || best === 5 || best === 6,
-            R: best === 1 || best === 4 || best === 7,
-            J: best === 2 || best === 4 || best === 5 || best === 8,
-            X: best === 3,
-            G: best === 6 || best === 7 || best === 8,
+            L:  best === 0 || best === 5 || best === 6,
+            R:  best === 1 || best === 4 || best === 7,
+            J:  best === 2 || best === 4 || best === 5 || best === 8,
+            X:  isDash,
+            G:  best === 6 || best === 7 || best === 8,
+            DX: DASH_DX[best],
+            DY: DASH_DY[best],
         };
     }
 
@@ -212,32 +220,45 @@
     }
 
     // ── Sensor system (mirrors buildSensorInputs + castRay) ───────────────────
-    function castRay(cx, cy, dx, dy, platforms, goal) {
+    // castRay return value:
+    //   positive (0–1)  = distance to platform/wall    (closer → higher)
+    //   negative (−1–0) = distance to spike/hazard     (closer → more negative)
+    //   0               = goal is on this ray
+    function castRay(cx, cy, dx, dy, platforms, goal, hazards) {
         const b   = (typeof window !== 'undefined' && window.AI_BOUNDS)
                   || { minX: 0, maxX: 1600, minY: -40, maxY: 200 };
         const len = Math.hypot(dx, dy);
         const ndx = dx / len, ndy = dy / len;
         for (let t = RAY_STEP; t <= RAY_LEN; t += RAY_STEP) {
             const rx = cx + ndx * t, ry = cy + ndy * t;
+            // Platform / wall hit → positive
             for (const p of platforms)
                 if (rx > p.x && rx < p.x + p.w && ry > p.y && ry < p.y + p.h)
                     return t / RAY_LEN;
+            // Hazard hit → negative (danger signal)
+            if (hazards) {
+                for (const h of hazards)
+                    if (rx > h.x && rx < h.x + h.w && ry > h.y && ry < h.y + h.h)
+                        return -(t / RAY_LEN);
+            }
+            // Goal hit → zero
             if (goal && rx > goal.x && rx < goal.x + goal.w && ry > goal.y && ry < goal.y + goal.h)
                 return 0;
+            // World edge → wall
             if (rx < b.minX || rx > b.maxX || ry > b.maxY || ry < b.minY)
                 return t / RAY_LEN;
         }
         return 1.0;
     }
 
-    function buildSensorInputs(player, platforms, goal) {
+    function buildSensorInputs(player, platforms, goal, hazards) {
         const inp = new Float32Array(N_IN);
         const cx  = player.x + player.w / 2;
         const cy  = player.y + player.h / 2;
-        // 12 raycasts
+        // 12 raycasts — positive=wall, negative=hazard, zero=goal
         for (let i = 0; i < 12; i++) {
             const [dx, dy] = RAY_DIRS[i];
-            inp[i] = castRay(cx, cy, dx, dy, platforms, goal);
+            inp[i] = castRay(cx, cy, dx, dy, platforms, goal, hazards);
         }
         // 5 state values
         inp[12] = player.onGround ? 1 : 0;
@@ -256,7 +277,7 @@
 
     // ── Training manager ──────────────────────────────────────────────────────
     const POOL_SIZE   = 16;  // was 12 — more diversity in gene pool
-    const STORAGE_KEY = 'apexAI_bestWeights_v2';
+    const STORAGE_KEY = 'apexAI_bestWeights_v4';
 
     const NeuralAI = {
         // Public stats
@@ -316,7 +337,7 @@
         },
 
         // ── Called every frame when AI is active ─────────────────────────────
-        compute(player, platforms, goal) {
+        compute(player, platforms, goal, hazards) {
             this._maxX = Math.max(this._maxX, player.x);
             if (this._isVertical) this._minY = Math.min(this._minY, player.y);
             const fitNow = this._isVertical
@@ -332,15 +353,16 @@
 
             // Use possibly-perturbed weights for this frame
             const w      = activeWeights(this._weights, this._adaptSt);
-            const inputs = buildSensorInputs(player, platforms, goal);
+            const inputs = buildSensorInputs(player, platforms, goal, hazards);
             const action = think(w, inputs);
 
             const jumpPressed = action.J && !this._prevJ;
             this._prevJ = action.J;
 
+            const moveX = action.X ? action.DX : (action.R ? 1 : (action.L ? -1 : 0));
+            const moveY = action.X ? action.DY : ((action.G && !action.J) ? -1 : 0);
             return {
-                moveX:       action.R ? 1 : (action.L ? -1 : 0),
-                moveY:       (action.G && !action.J) ? -1 : 0,  // climb up when grabbing (not wall-jumping)
+                moveX, moveY,
                 jumpPressed,
                 jumpHeld:    action.J,
                 dashPressed: action.X,
@@ -441,7 +463,7 @@
             }
         },
 
-        computeAgent(i, player, platforms, goal) {
+        computeAgent(i, player, platforms, goal, hazards) {
             const ag = this._agentStates[i];
             if (!ag) return null;
             ag.maxX = Math.max(ag.maxX, player.x);
@@ -453,12 +475,13 @@
             ag.stuckSt.weights = ag.weights;
             ag.weights = stuckCheck(ag.stuckSt, fitNow, this._globalBest);
             const w      = activeWeights(ag.weights, ag.adaptSt);
-            const inputs = buildSensorInputs(player, platforms, goal);
+            const inputs = buildSensorInputs(player, platforms, goal, hazards);
             const action = think(w, inputs);
             const jumpPressed = action.J && !ag.prevJ;
             ag.prevJ = action.J;
-            return { moveX: action.R ? 1 : (action.L ? -1 : 0),
-                     moveY: (action.G && !action.J) ? -1 : 0,
+            const moveX2 = action.X ? action.DX : (action.R ? 1 : (action.L ? -1 : 0));
+            const moveY2 = action.X ? action.DY : ((action.G && !action.J) ? -1 : 0);
+            return { moveX: moveX2, moveY: moveY2,
                      jumpPressed, jumpHeld: action.J, dashPressed: action.X, grabHeld: !!action.G };
         },
 
