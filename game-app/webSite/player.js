@@ -168,6 +168,7 @@ class CelestePlayer {
         this.squashScale = { X: 1, Y: 1 };      // current sprite squash, lerps to (1,1)
         this.dashTrail = [];                    // [{x, y, age}, ...] for ghost trail
         this._dashTrailAccum = 0;
+        this.keysHeld = 0;
     }
 
     reset(x, y) {
@@ -189,6 +190,7 @@ class CelestePlayer {
         this.dashTrail.length = 0;
         this.wallBoostTimer = 0;
         this.wallBoostDir = 0;
+        this.keysHeld = 0;
     }
 
     // Returns true if there is a solid `dir` pixels in the X direction.
@@ -854,5 +856,84 @@ class CelestePlayer {
 
 global.CelestePlayer = CelestePlayer;
 global.CELESTE_STATES = { StNormal, StClimb, StDash };
+
+// ── Key (Celeste Key.cs pattern) ─────────────────────────────────────────────
+// Collectible key — picked up on contact, stored on player.keysHeld.
+// Resets (reappears) when the player dies.
+function makeKey(x, y) {
+    const _ox = x - 7, _oy = y - 7;
+    return {
+        type: 'key', x: _ox, y: _oy, w: 14, h: 14,
+        isSolid: false, _picked: false, _bobTimer: 0,
+        reset() { this._picked = false; this._bobTimer = 0; this.x = _ox; this.y = _oy; },
+        update(player, dt) {
+            if (this._picked) return;
+            this._bobTimer += dt;
+            if (rectsOverlap(player, this)) { this._picked = true; player.keysHeld++; }
+        },
+        draw(ctx) {
+            if (this._picked) return;
+            const bob = Math.sin(this._bobTimer * 3) * 2;
+            const cx = this.x + 7, cy = this.y + 7 + bob;
+            // Glow halo
+            ctx.fillStyle = 'rgba(255,215,0,0.22)';
+            ctx.beginPath(); ctx.arc(cx, cy, 10, 0, Math.PI * 2); ctx.fill();
+            // Key ring
+            ctx.strokeStyle = '#d4af37'; ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.arc(cx - 2, cy - 2, 4, 0, Math.PI * 2); ctx.stroke();
+            // Key shaft + teeth
+            ctx.fillStyle = '#d4af37';
+            ctx.fillRect(cx + 1, cy - 3, 2, 9);
+            ctx.fillRect(cx + 3, cy + 1, 3, 2);
+            ctx.fillRect(cx + 3, cy + 4, 3, 2);
+        }
+    };
+}
+
+// ── Key Door (Celeste LockBlock.cs pattern) ───────────────────────────────────
+// Solid barrier that unlocks when the player approaches carrying a key.
+// Fades out on unlock; resets (relocks) when the player dies.
+function makeKeyDoor(x, y, w, h) {
+    return {
+        type: 'keyDoor', x, y, w, h,
+        isSolid: true, _open: false, _openAnim: 0,
+        reset() { this._open = false; this.isSolid = true; this._openAnim = 0; },
+        update(player, dt) {
+            if (this._open) { this._openAnim = Math.min(1, this._openAnim + dt * 5); return; }
+            if (player.keysHeld > 0 && rectsOverlap(player, this)) {
+                this._open = true; this.isSolid = false; player.keysHeld--;
+            }
+        },
+        draw(ctx) {
+            if (this._open && this._openAnim >= 1) return;
+            ctx.globalAlpha = this._open ? Math.max(0, 1 - this._openAnim) : 1;
+            // Door body
+            ctx.fillStyle = '#6a3a08';
+            ctx.fillRect(this.x, this.y, this.w, this.h);
+            // Three horizontal gold bars
+            ctx.fillStyle = '#d4af37';
+            for (let i = 0; i < 3; i++) {
+                const by = this.y + Math.round(this.h * (i + 1) / 4) - 1;
+                ctx.fillRect(this.x, by, this.w, 2);
+            }
+            // Gold border outline
+            ctx.strokeStyle = '#d4af37'; ctx.lineWidth = 1;
+            ctx.strokeRect(this.x + 0.5, this.y + 0.5, this.w - 1, this.h - 1);
+            // Keyhole
+            if (!this._open) {
+                const mx = this.x + this.w / 2, my = this.y + this.h / 2;
+                ctx.fillStyle = '#d4af37';
+                ctx.beginPath(); ctx.arc(mx, my - 3, 3, 0, Math.PI * 2); ctx.fill();
+                ctx.fillStyle = '#6a3a08';
+                ctx.beginPath(); ctx.arc(mx, my - 3, 1.5, 0, Math.PI * 2); ctx.fill();
+                ctx.fillRect(mx - 1, my - 1, 2, 5);
+            }
+            ctx.globalAlpha = 1;
+        }
+    };
+}
+
+global.makeKey     = makeKey;
+global.makeKeyDoor = makeKeyDoor;
 
 })(typeof window !== 'undefined' ? window : globalThis);
