@@ -203,7 +203,8 @@
     let currentMode  = 'ai';    // 'gauntlet' | 'ai'
     let cameraX      = 0;
     let cameraY      = 0;
-    let worldH       = H;   // updated per custom level; clamps camera Y
+    let worldH       = H;    // total world height for custom levels
+    let worldMinY    = 0;    // world Y of the topmost row (can be negative)
     let respawnRoom  = 0;
     let furthestRoom = 0;
     const player = new CelestePlayer(roomSpawns[0].x, roomSpawns[0].y);
@@ -704,9 +705,9 @@
                 skies.push(room.sky || ['#1a2a4a', '#3a5a8a']);
             }
 
-            const totalCols = maxCol - minCol + 1;
-            const totalRows = maxRow - minRow + 1;
-            const wH = totalRows * H;
+            const totalCols  = maxCol - minCol + 1;
+            const wMinY      = minRow * H;          // can be negative (rooms above row 0)
+            const wH         = (maxRow - minRow + 1) * H;
             const goal = data.goal ? {
                 x: data.goal.x + data.goal.col * ROOM_W,
                 y: data.goal.y + data.goal.row * H,
@@ -723,6 +724,7 @@
                 goal,
                 entities:   allEntities,
                 _numCols:   totalCols,
+                _worldMinY: wMinY,
                 _worldH:    wH,
             };
         }
@@ -762,7 +764,7 @@
         document.querySelectorAll('.random-only').forEach(el => el.style.display = 'none');
 
         // Reset 2D world size for non-custom modes
-        worldH = H; DEATH_Y = H + 20; cameraY = 0;
+        worldH = H; worldMinY = 0; DEATH_Y = H + 20; cameraY = 0;
 
         if (mode === 'gauntlet') {
             NUM_ROOMS = 6;
@@ -781,9 +783,10 @@
             const data = JSON.parse(stored);
             const built = buildCustomLevel(data);
             NUM_ROOMS = built.roomSpawns.length;
-            worldH    = built._worldH || H;
-            DEATH_Y   = worldH + 20;
-            cameraY   = 0;
+            worldMinY = built._worldMinY || 0;
+            worldH    = built._worldH    || H;
+            DEATH_Y   = worldMinY + worldH + 20;
+            cameraY   = worldMinY;
             // Horizontal extent for custom levels = unique cols × ROOM_W
             if (built._numCols) NUM_ROOMS = built._numCols;
             applyLevel(built, -1);
@@ -936,9 +939,10 @@
         const _targetX = player.x + player.w / 2 - W / 2;
         const _maxX    = NUM_ROOMS * ROOM_W - W;
         cameraX += (Math.max(0, Math.min(_maxX, _targetX)) - cameraX) * 0.12;
-        const _targetY = player.y + player.h / 2 - H / 2;
-        const _maxY    = Math.max(0, worldH - H);
-        cameraY += (Math.max(0, Math.min(_maxY, _targetY)) - cameraY) * 0.12;
+        const _targetY  = player.y + player.h / 2 - H / 2;
+        const _camMinY  = worldMinY;
+        const _camMaxY  = Math.max(_camMinY, worldMinY + worldH - H);
+        cameraY += (Math.max(_camMinY, Math.min(_camMaxY, _targetY)) - cameraY) * 0.12;
 
         if (!won && playerOverlapsGoal()) {
             won = true; winMs = performance.now() - runStart;
@@ -948,7 +952,7 @@
                 updateAIBtn();
             }
         }
-        if (player.y > DEATH_Y) { respawn(); return; }
+        if (player.y > DEATH_Y || player.y < worldMinY - 20) { respawn(); return; }
 
         // AI stuck-death: no x movement for AI_STUCK_LIMIT frames → die and retry
         if (aiEnabled) {
