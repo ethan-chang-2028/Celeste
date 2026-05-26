@@ -98,9 +98,10 @@ EpisodeResult runEpisode(const Weights& weights, const Level& lv) {
 
         // Build PlayerInput
         PlayerInput inp;
-        inp.moveX      = (act.R ? 1 : 0) - (act.L ? 1 : 0);
-        inp.moveY      = (act.DY >  0.5f ?  1 : 0)
-                       - (act.DY < -0.5f ?  1 : 0);
+        inp.moveX = act.R ? 1 : (act.L ? -1 : 0);
+        // Match JsBridge.cpp / ai-neural.js: grab without jump → climb up (moveY=-1)
+        inp.moveY = act.X ? ((act.DY > 0.5f ? 1 : 0) - (act.DY < -0.5f ? 1 : 0))
+                          : ((act.G && !act.J) ? -1 : 0);
         inp.jumpPressed = act.J && !prevJ;
         inp.jumpHeld    = act.J;
         inp.dashPressed = act.X && !prevX;
