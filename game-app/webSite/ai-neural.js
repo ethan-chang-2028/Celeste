@@ -1,43 +1,46 @@
 // ai-neural.js  ← PRIMARY AI IMPLEMENTATION
-// Neural net: 17 inputs → 14 hidden (ReLU) → 16 outputs (softmax)
+// Neural net: 23 inputs → 20 hidden (ReLU) → 22 outputs (16 actions + 6 memory cells)
 // Training: neuroevolution (GA) + real-time ES weight adaptation + stuck detection
-// Architecture reference: game-app/Native/Engine/Ai/ai_learning.hpp
+// Memory: Elman-style recurrent cells fed back as inputs each frame
 
 (function (global) {
     'use strict';
 
-    // ── Network dimensions (mirrors ai_learning.hpp) ──────────────────────────
-    const N_IN   = 17;
-    const N_HID  = 14;
-    const N_OUT  = 16;
-    const W_SIZE = N_IN * N_HID + N_HID + N_HID * N_OUT + N_OUT; // 492
+    // ── Network dimensions ────────────────────────────────────────────────────
+    const MEM_SIZE = 6;    // recurrent memory cells (fed back as inputs, written by outputs)
+    const N_IN   = 23;    // 12 raycasts + 5 state values + 6 memory cells
+    const N_HID  = 20;    // larger hidden layer for more capacity
+    const N_OUT  = 22;    // 16 actions + 6 memory-write outputs
+    const N_ACT  = N_OUT - MEM_SIZE;  // 16 — action output count (unchanged)
+    const W_SIZE = N_IN * N_HID + N_HID + N_HID * N_OUT + N_OUT; // 942
 
     // ── Hyperparameters ───────────────────────────────────────────────────────
     const HP = {
-        ELITE_K:        2,
-        CROSS_ALPHA:    0.5,
-        MUTATE_RATE:    0.25,   // was 0.20 — explore weight space faster
-        MUTATE_STR:     0.50,   // was 0.35 — bigger jumps to escape local optima
-        MUTATE_DECAY:   0.003,
-        MUTATE_MIN_R:   0.05,   // was 0.04
-        MUTATE_MIN_S:   0.06,   // was 0.04
-        GLOBAL_BEST_P:  0.15,
-        ADAPT_INTERVAL: 40,
-        ADAPT_PERTURB:  0.10,   // was 0.08
-        ADAPT_FRAC:     0.10,   // was 0.08
-        ADAPT_LR:       0.020,  // was 0.015
-        ADAPT_ABSORB:   0.30,
-        ADAPT_WINDOW:   8,
-        STUCK_THRESH:   50,     // was 80 — detect in-run stagnation sooner
-        STUCK_NOISE:    0.20,   // was 0.15
-        STUCK_PULL_P:   0.50,   // was 0.40
-        SPAWN_NOISE_R:  0.05,
-        SPAWN_NOISE_S:  0.12,   // was 0.08
-        EXPLORE_TEMP:   0.55,   // NEW: softmax temperature (lower = greedier)
-        STAGNATE_RUNS:  20,     // NEW: inject fresh agents after this many non-improving runs
+        ELITE_K:          2,
+        CROSS_ALPHA:      0.5,
+        MUTATE_RATE:      0.25,
+        MUTATE_STR:       0.50,
+        MUTATE_DECAY:     0.003,
+        MUTATE_MIN_R:     0.05,
+        MUTATE_MIN_S:     0.06,
+        GLOBAL_BEST_P:    0.15,
+        ADAPT_INTERVAL:   40,
+        ADAPT_PERTURB:    0.10,
+        ADAPT_FRAC:       0.10,
+        ADAPT_LR:         0.020,
+        ADAPT_ABSORB:     0.30,
+        ADAPT_WINDOW:     8,
+        MEM_RESET_THRESH: 50,   // frames stuck → reset memory cells first (cheap)
+        STUCK_THRESH:     150,  // frames stuck → mutate weights (last resort)
+        STUCK_NOISE:      0.20,
+        STUCK_PULL_P:     0.50,
+        SPAWN_NOISE_R:    0.05,
+        SPAWN_NOISE_S:    0.12,
+        EXPLORE_TEMP:     0.55,
+        STAGNATE_RUNS:    20,
     };
 
-    // ── Raycast config (from sensor section) ─────────────────────────────────
+    // ── Raycast config ────────────────────────────────────────────────────────
     const RAY_LEN  = 110;
     const RAY_STEP = 5;
     const RAY_DIRS = [
@@ -69,8 +72,14 @@
     const relu    = x => x > 0 ? x : 0;
     const sigmoid = x => 1 / (1 + Math.exp(-Math.max(-10, Math.min(10, x))));
 
+    // ── Memory state ──────────────────────────────────────────────────────────
+    // Returns a zeroed Float32Array of MEM_SIZE — one per agent, reset on death.
+    function makeMemState() { return new Float32Array(MEM_SIZE); }
+
     // ── Forward pass ─────────────────────────────────────────────────────────
-    function think(weights, inputs) {
+    // inputs already includes the 6 memory cells in positions 17-22.
+    // think() updates mem in-place with new values from the output layer.
+    function think(weights, inputs, mem) {
         // Hidden layer
         const h = new Float32Array(N_HID);
         for (let j = 0; j < N_HID; j++) {
@@ -79,7 +88,7 @@
                 s += inputs[i] * weights[i * N_HID + j];
             h[j] = relu(s);
         }
-        // Output layer
+        // Output layer (all 22 outputs: 16 actions + 6 memory writes)
         const base = N_IN * N_HID + N_HID;
         const out  = new Float32Array(N_OUT);
         for (let k = 0; k < N_OUT; k++) {
@@ -88,15 +97,19 @@
                 s += h[j] * weights[base + j * N_OUT + k];
             out[k] = sigmoid(s);
         }
-        // Softmax temperature sampling — probabilistic, not deterministic argmax.
-        // Same weights → different actions → the AI explores rather than repeating.
+        // Softmax temperature sampling over ACTION outputs only (first 16)
         let maxO = out[0];
-        for (let k = 1; k < N_OUT; k++) if (out[k] > maxO) maxO = out[k];
+        for (let k = 1; k < N_ACT; k++) if (out[k] > maxO) maxO = out[k];
         let sumE = 0;
-        const exps = new Float32Array(N_OUT);
-        for (let k = 0; k < N_OUT; k++) { exps[k] = Math.exp((out[k] - maxO) / HP.EXPLORE_TEMP); sumE += exps[k]; }
-        let r = rand() * sumE, best = N_OUT - 1;
-        for (let k = 0; k < N_OUT; k++) { r -= exps[k]; if (r <= 0) { best = k; break; } }
+        const exps = new Float32Array(N_ACT);
+        for (let k = 0; k < N_ACT; k++) { exps[k] = Math.exp((out[k] - maxO) / HP.EXPLORE_TEMP); sumE += exps[k]; }
+        let r = rand() * sumE, best = N_ACT - 1;
+        for (let k = 0; k < N_ACT; k++) { r -= exps[k]; if (r <= 0) { best = k; break; } }
+        // Write new memory values from last MEM_SIZE outputs (scaled [-1,1])
+        if (mem) {
+            for (let m = 0; m < MEM_SIZE; m++)
+                mem[m] = out[N_ACT + m] * 2 - 1;
+        }
         // 0=left  1=right  2=jump  3=dash→right  4=jump+right  5=jump+left
         // 6=grab+climb-left  7=grab+climb-right  8=grab+wall-jump
         // 9=dash→left  10=dash→up  11=dash→up-right  12=dash→up-left
@@ -138,7 +151,7 @@
         return clamp(out);
     }
 
-    // ── Real-time ES adaptation (mirrors AdaptState + adaptTick) ─────────────
+    // ── Real-time ES adaptation ───────────────────────────────────────────────
     function makeAdaptState() {
         return { history: [], lastDW: null, perturbedW: null, usingPerturbed: false, windowFitStart: 0, tick: 0 };
     }
@@ -189,24 +202,31 @@
         return baseW;
     }
 
-    // ── Stuck detection (mirrors stuckCheck) ──────────────────────────────────
+    // ── Stuck detection ───────────────────────────────────────────────────────
+    // Two-stage recovery:
+    //   Stage 1 (MEM_RESET_THRESH frames): wipe memory cells — fresh context, keep weights
+    //   Stage 2 (STUCK_THRESH frames):     mutate weights — last resort if memory reset didn't help
     function makeStuckState(w) {
         return { weights: copyW(w), stuckFor: 0, lastFit: 0 };
     }
 
-    function stuckCheck(stuckSt, fitNow, globalBestW) {
+    function stuckCheck(stuckSt, fitNow, globalBestW, memState) {
         if (fitNow > stuckSt.lastFit + 0.1) stuckSt.stuckFor = 0;
         else stuckSt.stuckFor++;
         stuckSt.lastFit = fitNow;
+        // Stage 1: clear memory — agent gets a fresh context without losing learned weights
+        if (stuckSt.stuckFor === HP.MEM_RESET_THRESH && memState) memState.fill(0);
         if (stuckSt.stuckFor < HP.STUCK_THRESH) return stuckSt.weights;
+        // Stage 2: mutate weights (only after much longer stagnation)
         const noise = Math.min(0.5, 0.1 + stuckSt.stuckFor / 500);
         let w = mutateWeights(stuckSt.weights, HP.STUCK_NOISE, noise);
         if (globalBestW && rand() < HP.STUCK_PULL_P) w = crossoverWeights(w, globalBestW, 0.3);
         stuckSt.stuckFor = 0;
+        if (memState) memState.fill(0);
         return w;
     }
 
-    // ── Generational evolution (mirrors breedGeneration) ─────────────────────
+    // ── Generational evolution ────────────────────────────────────────────────
     function breedNext(pool, generation, globalBestW) {
         pool.sort((a, b) => b.fitness - a.fitness);
         const n    = pool.length;
@@ -219,11 +239,7 @@
         return spawnNoise(w);
     }
 
-    // ── Sensor system (mirrors buildSensorInputs + castRay) ───────────────────
-    // castRay return value:
-    //   positive (0–1)  = distance to platform/wall    (closer → higher)
-    //   negative (−1–0) = distance to spike/hazard     (closer → more negative)
-    //   0               = goal is on this ray
+    // ── Sensor system ─────────────────────────────────────────────────────────
     function castRay(cx, cy, dx, dy, platforms, goal, hazards) {
         const b   = (typeof window !== 'undefined' && window.AI_BOUNDS)
                   || { minX: 0, maxX: 1600, minY: -40, maxY: 200 };
@@ -231,27 +247,24 @@
         const ndx = dx / len, ndy = dy / len;
         for (let t = RAY_STEP; t <= RAY_LEN; t += RAY_STEP) {
             const rx = cx + ndx * t, ry = cy + ndy * t;
-            // Platform / wall hit → positive
             for (const p of platforms)
                 if (rx > p.x && rx < p.x + p.w && ry > p.y && ry < p.y + p.h)
                     return t / RAY_LEN;
-            // Hazard hit → negative (danger signal)
             if (hazards) {
                 for (const h of hazards)
                     if (rx > h.x && rx < h.x + h.w && ry > h.y && ry < h.y + h.h)
                         return -(t / RAY_LEN);
             }
-            // Goal hit → zero
             if (goal && rx > goal.x && rx < goal.x + goal.w && ry > goal.y && ry < goal.y + goal.h)
                 return 0;
-            // World edge → wall
             if (rx < b.minX || rx > b.maxX || ry > b.maxY || ry < b.minY)
                 return t / RAY_LEN;
         }
         return 1.0;
     }
 
-    function buildSensorInputs(player, platforms, goal, hazards) {
+    // mem is the agent's current Float32Array(MEM_SIZE) — values placed at inputs 17-22.
+    function buildSensorInputs(player, platforms, goal, hazards, mem) {
         const inp = new Float32Array(N_IN);
         const cx  = player.x + player.w / 2;
         const cy  = player.y + player.h / 2;
@@ -262,22 +275,25 @@
         }
         // 5 state values
         inp[12] = player.onGround ? 1 : 0;
-        inp[13] = player.Speed.X / 90;   // normalised by MaxRun
-        inp[14] = player.Speed.Y / 160;  // normalised by MaxFall
+        inp[13] = player.Speed.X / 90;
+        inp[14] = player.Speed.Y / 160;
         inp[15] = player.Dashes > 0 ? 1 : 0;
-        // Direction toward goal: horizontal for h-levels, vertical (up) for v-levels
         const gx = (goal.x + goal.w / 2) - cx;
         const gy = (goal.y + goal.h / 2) - cy;
         const gd = Math.hypot(gx, gy) || 1;
         inp[16] = (typeof window !== 'undefined' && window.AI_GOAL_VERTICAL)
-                ? (-gy / gd)   // positive = goal is above
-                : (gx  / gd);  // positive = goal is to the right
+                ? (-gy / gd)
+                : (gx  / gd);
+        // 6 memory cells — carry forward what the agent "remembers" from last frame
+        if (mem) {
+            for (let m = 0; m < MEM_SIZE; m++) inp[17 + m] = mem[m];
+        }
         return inp;
     }
 
     // ── Training manager ──────────────────────────────────────────────────────
-    const POOL_SIZE   = 16;  // was 12 — more diversity in gene pool
-    const STORAGE_KEY = 'apexAI_bestWeights_v4';
+    const POOL_SIZE   = 16;
+    const STORAGE_KEY = 'apexAI_bestWeights_v5';
 
     const NeuralAI = {
         // Public stats
@@ -289,32 +305,30 @@
         _weights:           null,
         _adaptSt:           null,
         _stuckSt:           null,
+        _memState:          null,   // recurrent memory for main agent
         _globalBest:        null,
         _pool:              [],
         _maxX:              0,
         _spawnX:            0,
         _goalEnd:           1600,
         _prevJ:             false,
+        _runStartMs:        0,
         _runsSinceImproved: 0,
-        N_AGENTS:      8,   // total agents (1 main + 7 ghosts)
-        _agentStates:  [],  // per-ghost state (main agent state is the top-level fields)
+        N_AGENTS:      8,
+        _agentStates:  [],
         _isVertical:        false,
         _spawnY:            0,
         _goalY:             0,
         _minY:              0,
 
-        // Expose RAY_DIRS so game.js can draw the rays
         RAY_DIRS,
         RAY_LEN,
 
-        // Speed fitness: reaching goal in <30s gives bonus fitness above 1.0.
-        // 0 ms → 2.0, 15 s → 1.5, 30 s+ → 1.0 (same as before). Death → 0..1.
         _goalFitness(timeMs) {
             const speedBonus = timeMs > 0 ? Math.max(0, 1.0 - timeMs / 30000) : 0;
             return 1.0 + speedBonus;
         },
 
-        // Best player/ghost time seen — used to benchmark speed learning.
         _bestTimeMs: Infinity,
 
         init(spawnX, goalEnd, opts) {
@@ -324,12 +338,13 @@
             this._spawnY     = (opts && opts.spawnY != null) ? opts.spawnY : 0;
             this._goalY      = (opts && opts.goalY  != null) ? opts.goalY  : 0;
             this._minY       = this._spawnY;
-            this._weights = this._load() || randWeights();
-            this._adaptSt = makeAdaptState();
-            this._stuckSt = makeStuckState(this._weights);
-            this._maxX    = this._spawnX;
-            this._pool    = [];
-            this._prevJ   = false;
+            this._weights    = this._load() || randWeights();
+            this._adaptSt    = makeAdaptState();
+            this._stuckSt    = makeStuckState(this._weights);
+            this._memState   = makeMemState();
+            this._maxX       = this._spawnX;
+            this._prevJ      = false;
+            this._pool       = [];
             this._runStartMs = performance.now();
         },
 
@@ -344,6 +359,7 @@
             this._minY    = this._spawnY;
             this._adaptSt = makeAdaptState();
             this._stuckSt = makeStuckState(this._weights);
+            this._memState = makeMemState();
             this._prevJ   = false;
             this._runStartMs = performance.now();
         },
@@ -356,17 +372,14 @@
                 ? Math.max(0, (this._spawnY - this._minY) / Math.max(1, this._spawnY - this._goalY))
                 : this._maxX / this._goalEnd;
 
-            // Real-time ES adaptation
             this._weights = adaptTick(this._weights, this._adaptSt, fitNow);
 
-            // Stuck detection
             this._stuckSt.weights = this._weights;
-            this._weights = stuckCheck(this._stuckSt, fitNow, this._globalBest);
+            this._weights = stuckCheck(this._stuckSt, fitNow, this._globalBest, this._memState);
 
-            // Use possibly-perturbed weights for this frame
             const w      = activeWeights(this._weights, this._adaptSt);
-            const inputs = buildSensorInputs(player, platforms, goal, hazards);
-            const action = think(w, inputs);
+            const inputs = buildSensorInputs(player, platforms, goal, hazards, this._memState);
+            const action = think(w, inputs, this._memState);  // updates _memState in-place
 
             const jumpPressed = action.J && !this._prevJ;
             this._prevJ = action.J;
@@ -382,7 +395,6 @@
             };
         },
 
-        // ── Called on death ───────────────────────────────────────────────────
         onDeath() {
             const fit = this._isVertical
                 ? Math.max(0, (this._spawnY - this._minY) / Math.max(1, this._spawnY - this._goalY))
@@ -390,25 +402,19 @@
             this._endRun(fit);
         },
 
-        // ── Called on goal reached — timeMs makes faster runs score higher ────
         onGoal(timeMs) {
             const ms = timeMs != null ? timeMs : (performance.now() - this._runStartMs);
             if (ms < this._bestTimeMs) this._bestTimeMs = ms;
             this._endRun(this._goalFitness(ms));
         },
 
-        // ── Feed a human player's completion into the gene pool ───────────────
-        // The player has no weights; we inject a mutated version of the current
-        // global best (or a random genome) stamped with the player's speed fitness.
-        // This applies pressure toward beating the player's time.
         learnFromRoute(timeMs) {
             if (timeMs == null || timeMs <= 0) return;
             if (timeMs < this._bestTimeMs) this._bestTimeMs = timeMs;
-            const fit = this._goalFitness(timeMs) * 1.02; // tiny bonus: human proves route is possible
+            const fit  = this._goalFitness(timeMs) * 1.02;
             const base = this._globalBest || this._weights || randWeights();
-            // Inject two candidates: one conservatively mutated, one more exploratory
-            this._poolUpdate(spawnNoise(base),                   fit);
-            this._poolUpdate(mutateWeights(base, 0.15, 0.20),    fit * 0.99);
+            this._poolUpdate(spawnNoise(base),                fit);
+            this._poolUpdate(mutateWeights(base, 0.15, 0.20), fit * 0.99);
         },
 
         _poolUpdate(weights, fitness) {
@@ -445,12 +451,13 @@
 
         _endRun(fitness) {
             this._poolUpdate(this._weights, fitness);
-            this._weights = this._breedWeights();
-            this._adaptSt = makeAdaptState();
-            this._stuckSt = makeStuckState(this._weights);
-            this._maxX    = this._spawnX;
-            this._minY    = this._spawnY;
-            this._prevJ   = false;
+            this._weights  = this._breedWeights();
+            this._adaptSt  = makeAdaptState();
+            this._stuckSt  = makeStuckState(this._weights);
+            this._memState = makeMemState();   // memory resets on death/goal
+            this._maxX     = this._spawnX;
+            this._minY     = this._spawnY;
+            this._prevJ    = false;
             this._runStartMs = performance.now();
         },
 
@@ -464,18 +471,20 @@
             this.runCount           = 0;
             this.globalBestFit      = 0;
             this._runsSinceImproved = 0;
-            this._adaptSt = makeAdaptState();
-            this._stuckSt = makeStuckState(this._weights);
+            this._adaptSt  = makeAdaptState();
+            this._stuckSt  = makeStuckState(this._weights);
+            this._memState = makeMemState();
         },
 
-        // ── Ghost agent management ────────────────────────────────────────────────
+        // ── Ghost agent management ────────────────────────────────────────────
 
         _makeGhostState() {
             const w = this._pool.length >= 3
                 ? breedNext(this._pool, this.generation, this._globalBest)
                 : (this._globalBest ? spawnNoise(this._globalBest) : randWeights());
             return { weights: w, adaptSt: makeAdaptState(), stuckSt: makeStuckState(w),
-                     prevJ: false, maxX: this._spawnX, minY: this._spawnY,
+                     memState: makeMemState(), prevJ: false,
+                     maxX: this._spawnX, minY: this._spawnY,
                      runStartMs: performance.now() };
         },
 
@@ -487,11 +496,12 @@
 
         resetAgents() {
             for (const ag of this._agentStates) {
-                ag.maxX = this._spawnX;
-                ag.minY = this._spawnY;
-                ag.prevJ = false;
+                ag.maxX    = this._spawnX;
+                ag.minY    = this._spawnY;
+                ag.prevJ   = false;
                 ag.adaptSt = makeAdaptState();
                 ag.stuckSt = makeStuckState(ag.weights);
+                ag.memState = makeMemState();   // clear memory on respawn
                 ag.runStartMs = performance.now();
             }
         },
@@ -506,10 +516,10 @@
                 : ag.maxX / this._goalEnd;
             ag.weights = adaptTick(ag.weights, ag.adaptSt, fitNow);
             ag.stuckSt.weights = ag.weights;
-            ag.weights = stuckCheck(ag.stuckSt, fitNow, this._globalBest);
+            ag.weights = stuckCheck(ag.stuckSt, fitNow, this._globalBest, ag.memState);
             const w      = activeWeights(ag.weights, ag.adaptSt);
-            const inputs = buildSensorInputs(player, platforms, goal, hazards);
-            const action = think(w, inputs);
+            const inputs = buildSensorInputs(player, platforms, goal, hazards, ag.memState);
+            const action = think(w, inputs, ag.memState);  // updates ag.memState in-place
             const jumpPressed = action.J && !ag.prevJ;
             ag.prevJ = action.J;
             const moveX2 = action.X ? action.DX : (action.R ? 1 : (action.L ? -1 : 0));
@@ -527,13 +537,12 @@
             this._poolUpdate(ag.weights, fitness);
             const newW = this._breedWeights();
             this._agentStates[i] = { weights: newW, adaptSt: makeAdaptState(),
-                                      stuckSt: makeStuckState(newW), prevJ: false,
+                                      stuckSt: makeStuckState(newW),
+                                      memState: makeMemState(), prevJ: false,
                                       maxX: this._spawnX, minY: this._spawnY,
                                       runStartMs: performance.now() };
         },
 
-        // goalAgent — ghost reached the goal; score by speed so faster ghosts
-        // propagate their weights more strongly into the next generation.
         goalAgent(i) {
             const ag = this._agentStates[i];
             if (!ag) return;
@@ -542,7 +551,8 @@
             this._poolUpdate(ag.weights, this._goalFitness(ms));
             const newW = this._breedWeights();
             this._agentStates[i] = { weights: newW, adaptSt: makeAdaptState(),
-                                      stuckSt: makeStuckState(newW), prevJ: false,
+                                      stuckSt: makeStuckState(newW),
+                                      memState: makeMemState(), prevJ: false,
                                       maxX: this._spawnX, minY: this._spawnY,
                                       runStartMs: performance.now() };
         },
@@ -557,9 +567,7 @@
                 bestFit:    this.globalBestFit,
                 savedAt:    new Date().toISOString(),
             };
-            // localStorage (instant, always works)
             try { localStorage.setItem(STORAGE_KEY, JSON.stringify(payload)); } catch (_) {}
-            // Server (fire-and-forget, works when server is running)
             this._serverSave(payload).catch(() => {});
         },
 
@@ -573,22 +581,19 @@
         },
 
         _load() {
-            // Try localStorage first (synchronous, works offline)
             try {
                 const s = localStorage.getItem(STORAGE_KEY);
                 if (s) {
                     const obj = JSON.parse(s);
-                    const arr = obj.weights || obj; // handle both formats
+                    const arr = obj.weights || obj;
                     if (Array.isArray(arr) && arr.length === W_SIZE) {
-                        if (obj.generation) this.generation  = obj.generation;
-                        if (obj.runCount)   this.runCount    = obj.runCount;
+                        if (obj.generation) this.generation    = obj.generation;
+                        if (obj.runCount)   this.runCount      = obj.runCount;
                         if (obj.bestFit)    this.globalBestFit = obj.bestFit;
                         return new Float32Array(arr);
                     }
                 }
             } catch (_) {}
-
-            // Try server async (load in background, apply once received)
             this._serverLoad();
             return null;
         },
@@ -600,17 +605,15 @@
                 const obj = await res.json();
                 const arr = obj.weights;
                 if (!arr || arr.length !== W_SIZE) return;
-                // Only apply if better than what we already have
                 if ((obj.bestFit || 0) > this.globalBestFit) {
                     this._globalBest   = new Float32Array(arr);
                     this.globalBestFit = obj.bestFit    || 0;
                     this.generation    = obj.generation || 0;
                     this.runCount      = obj.runCount   || 0;
-                    // Seed current weights from server best
-                    this._weights = spawnNoise(this._globalBest);
-                    this._stuckSt = makeStuckState(this._weights);
+                    this._weights  = spawnNoise(this._globalBest);
+                    this._stuckSt  = makeStuckState(this._weights);
+                    this._memState = makeMemState();
                     console.log(`[NeuralAI] Loaded server weights — Gen ${this.generation}, Best ${(this.globalBestFit*100).toFixed(0)}%`);
-                    // Cache locally
                     try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ weights: arr, generation: this.generation, runCount: this.runCount, bestFit: this.globalBestFit })); } catch (_) {}
                 }
             } catch (_) {}
