@@ -6,6 +6,58 @@
     <title>Apex Platformer — Game</title>
     <link rel="stylesheet" href="/game.css">
     <style>
+        /* ── Online lobby panel ── */
+        .online-lobby {
+            margin-top: 1.2rem;
+            border-top: 1px solid #2a2f42;
+            padding-top: 1rem;
+        }
+        .online-lobby h3 {
+            margin: 0 0 0.5rem;
+            font-size: 0.85rem;
+            color: #44ff99;
+            font-family: monospace;
+            letter-spacing: 0.1em;
+        }
+        .online-lobby-row {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .online-lobby-row input {
+            flex: 1;
+            min-width: 100px;
+            padding: 7px 10px;
+            border: 1px solid #2a5a3a;
+            border-radius: 5px;
+            background: #0d1a12;
+            color: #aaffcc;
+            font-family: monospace;
+            font-size: 0.85rem;
+        }
+        .online-lobby-row button {
+            background: #1a5a30;
+            color: #aaffcc;
+            border: none;
+            border-radius: 5px;
+            padding: 8px 14px;
+            font-size: 0.85rem;
+            cursor: pointer;
+            font-family: monospace;
+        }
+        .online-lobby-row button:hover { background: #2a8a50; }
+        #online-status {
+            margin-top: 6px;
+            font-family: monospace;
+            font-size: 0.78rem;
+            min-height: 1.2em;
+        }
+        .online-status-waiting { color: #ffcc44; }
+        .online-status-matched { color: #44ff99; }
+        .online-status-error   { color: #ff6644; }
+        .online-status-info    { color: #aaa; }
+
         /* ── AI panel ── */
         .ai-panel {
             display: flex;
@@ -164,6 +216,15 @@
                         <span class="menu-option__label">🏁 Race the AI</span>
                         <span class="menu-option__desc">5-room race course · same seed for you and AI · named checkpoints · live timer · new seed each race</span>
                     </button>
+                    <div class="online-lobby">
+                        <h3>🌐 Online Race — play vs another person</h3>
+                        <div class="online-lobby-row">
+                            <input id="online-name-input" type="text" placeholder="Your name" maxlength="20">
+                            <button onclick="joinOnlineRace()">Find Match</button>
+                            <button onclick="leaveOnlineRace()" style="background:#5a1010;">Leave</button>
+                        </div>
+                        <div id="online-status" class="online-status-info">Not connected — enter your name and click Find Match.</div>
+                    </div>
                     <button class="menu-option" onclick="startGame('custom')">
                         <span class="menu-option__label">▶ Custom Level</span>
                         <span class="menu-option__desc">Play the map you built in the editor</span>
@@ -203,6 +264,7 @@
                 <button class="random-only" style="display:none;" onclick="loadRandomSeed()">Load Seed</button>
                 <span   class="random-only" style="display:none;font-family:monospace;font-size:0.8rem;color:#aaa;" id="random-map-seed">Seed: —</span>
                 <button class="race-only" style="display:none;background:#7a3000;" onclick="raceGenerateMap()">&#127937; New Race</button>
+                <button class="race-only" id="p2-toggle-btn" style="display:none;background:#5a1a7a;" onclick="toggle2Player()">&#128101; 2P: OFF</button>
                 <input  class="race-only" style="display:none;" type="number" id="race-seed-input" placeholder="Seed #" min="0" max="999999">
                 <button class="race-only" style="display:none;" onclick="loadRaceSeed()">Load Seed</button>
                 <span   class="race-only" style="display:none;font-family:monospace;font-size:0.8rem;color:#ffaa66;" id="race-seed-display">Seed: —</span>
@@ -211,12 +273,17 @@
             <canvas id="game-canvas" width="320" height="180"></canvas>
 
             <div class="controls">
-                <p><strong>Controls:</strong>
-                    Arrow keys to move &middot;
+                <p><strong>P1:</strong>
+                    Arrow keys &middot;
                     <kbd>C</kbd> jump &middot;
-                    <kbd>X</kbd> dash (8-directional) &middot;
-                    <kbd>Z</kbd> / <kbd>Shift</kbd> grab walls &middot;
+                    <kbd>X</kbd> dash &middot;
+                    <kbd>Z</kbd>/<kbd>Shift</kbd> grab &middot;
                     <kbd>R</kbd> reset
+                    &nbsp;&nbsp;<strong>P2 (race):</strong>
+                    <kbd>A</kbd>/<kbd>D</kbd> move &middot;
+                    <kbd>W</kbd> jump &middot;
+                    <kbd>E</kbd> dash &middot;
+                    <kbd>S</kbd> grab
                 </p>
                 <p id="status">Ready.</p>
             </div>
@@ -225,6 +292,7 @@
     </main>
 
     <script src="/player.js"></script>
+    <script src="/online-race.js"></script>
     <script src="/ai-neural.js"></script>
     <!-- WASM AI: compiled from game-app/Native/Interop/JsBridge.cpp via Emscripten.
          These two files are only present after running the build script.

@@ -2,6 +2,7 @@
 const http = require('http');
 const fs = require('fs').promises;
 const path = require('path');
+const { WebSocketServer } = require('ws');
 
 const PORT = 3000;
 const DATA_FILE_PATH    = path.join(__dirname, 'game-app', 'Data', 'players.json');
@@ -153,12 +154,18 @@ const server = http.createServer(async (req, res) => {
             res.writeHead(200, { 'Content-Type': 'text/html' });
             return res.end(content);
         }
-        // Serve any .js/.css file directly from webSite/ — avoids manual allowlist
+        // Serve any .js/.css/.wasm file directly from webSite/ — avoids manual allowlist
+        const MIME_BINARY = { '.wasm': 'application/wasm' };
         const ext = path.extname(req.url);
-        if (req.method === 'GET' && MIME[ext]) {
+        if (req.method === 'GET' && (MIME[ext] || MIME_BINARY[ext])) {
             const fileName = path.basename(req.url);
             const filePath = path.join(__dirname, 'game-app', 'webSite', fileName);
             try {
+                if (MIME_BINARY[ext]) {
+                    const content = await fs.readFile(filePath);
+                    res.writeHead(200, { 'Content-Type': MIME_BINARY[ext] });
+                    return res.end(content);
+                }
                 const content = await fs.readFile(filePath, 'utf-8');
                 res.writeHead(200, { 'Content-Type': MIME[ext] });
                 return res.end(content);
@@ -298,6 +305,111 @@ const server = http.createServer(async (req, res) => {
         res.writeHead(500, { 'Content-Type': 'text/plain' });
         res.end('Internal Server Error');
     }
+});
+
+// ── Online race: WebSocket matchmaking + state relay ─────────────────────────
+//
+// Protocol (all messages are JSON strings):
+//
+//   Client → Server:
+//     { type:'join',    name:'Alice' }
+//     { type:'state',   x, y, vx, vy, state, dashes, cp, done, time }
+//     { type:'leave' }
+//
+//   Server → Client:
+//     { type:'waiting',  roomId }            — in queue, waiting for opponent
+//     { type:'matched',  roomId, seed, opponentName }  — race starts
+//     { type:'opponent', x, y, vx, vy, state, dashes, cp, done, time }
+//     { type:'opponentLeft' }
+
+const wss = new WebSocketServer({ server });
+
+// Each lobby room: { id, seed, players: [ws, ws] }
+const rooms   = new Map();   // roomId → room
+const waiting = [];          // queue of solo ws sockets
+
+let _roomSeq = 0;
+function nextSeed() { return Math.floor(Math.random() * 999999); }
+function nextRoomId() { return 'r' + (++_roomSeq); }
+
+function send(ws, obj) {
+    if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(obj));
+}
+
+function cleanup(ws) {
+    // Remove from waiting queue
+    const qi = waiting.indexOf(ws);
+    if (qi !== -1) waiting.splice(qi, 1);
+
+    // Remove from room and notify partner
+    if (ws._roomId) {
+        const room = rooms.get(ws._roomId);
+        if (room) {
+            for (const p of room.players) {
+                if (p !== ws) send(p, { type: 'opponentLeft' });
+            }
+            rooms.delete(ws._roomId);
+        }
+        ws._roomId = null;
+    }
+}
+
+wss.on('connection', (ws) => {
+    ws._name   = 'Player';
+    ws._roomId = null;
+
+    ws.on('message', (raw) => {
+        let msg;
+        try { msg = JSON.parse(raw); } catch { return; }
+
+        if (msg.type === 'join') {
+            ws._name = (msg.name || 'Player').substring(0, 20);
+
+            if (waiting.length > 0) {
+                // Match with the first waiting player
+                const partner = waiting.shift();
+                const roomId  = nextRoomId();
+                const seed    = nextSeed();
+                const room    = { id: roomId, seed, players: [partner, ws] };
+                rooms.set(roomId, room);
+                partner._roomId = roomId;
+                ws._roomId      = roomId;
+
+                send(partner, { type: 'matched', roomId, seed, opponentName: ws._name });
+                send(ws,      { type: 'matched', roomId, seed, opponentName: partner._name });
+            } else {
+                // No partner yet — join the queue
+                waiting.push(ws);
+                send(ws, { type: 'waiting', roomId: null });
+            }
+
+        } else if (msg.type === 'state') {
+            // Relay player state to the other member of the room
+            if (!ws._roomId) return;
+            const room = rooms.get(ws._roomId);
+            if (!room) return;
+            for (const p of room.players) {
+                if (p !== ws) {
+                    send(p, {
+                        type:   'opponent',
+                        x:      msg.x,  y:     msg.y,
+                        vx:     msg.vx, vy:    msg.vy,
+                        state:  msg.state,
+                        dashes: msg.dashes,
+                        cp:     msg.cp,
+                        done:   msg.done,
+                        time:   msg.time,
+                    });
+                }
+            }
+
+        } else if (msg.type === 'leave') {
+            cleanup(ws);
+        }
+    });
+
+    ws.on('close', () => cleanup(ws));
+    ws.on('error', () => cleanup(ws));
 });
 
 // Start the server

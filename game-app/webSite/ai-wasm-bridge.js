@@ -2,34 +2,26 @@
  * ai-wasm-bridge.js
  *
  * Loads the Emscripten-compiled C++ AI (ai-neural.wasm) and replaces the
- * pure-JS NeuralAI object with a WASM-backed version that uses the exact
- * same algorithms from ai_learning.hpp.
+ * pure-JS NeuralAI object with a WASM-backed version that exposes the same
+ * API as ai-neural.js so game.js needs no changes.
  *
- * If the WASM files haven't been compiled yet this script does nothing —
- * the pure-JS ai-neural.js implementation stays active as a fallback.
+ * Falls back to ai-neural.js silently if WASM files are absent or fail to load.
  *
- * Build instructions (requires Emscripten):
- *   cd game-app/Native
- *   emcmake cmake -DCMAKE_BUILD_TYPE=Release -B build .
- *   emmake make -C build
- *   cp build/ai-neural.wasm.js ../webSite/
- *   cp build/ai-neural.wasm    ../webSite/
+ * Build: cd game-app/Native && ./build.sh
  */
 
 (function () {
     'use strict';
 
-    // CelesteAI is the factory injected by ai-neural.wasm.js (Emscripten output).
-    // If that file wasn't loaded (WASM not yet compiled) we do nothing.
     if (typeof CelesteAI === 'undefined') return;
+
+    const STORAGE_KEY = 'apexAI_bestWeights_v5';
 
     CelesteAI().then(function (Module) {
         const mgr = new Module.AINeuralManager();
 
         // ── Helpers ───────────────────────────────────────────────────────────
 
-        // Convert a JS array of {x,y,w,h,...} rects to a flat Float32 vector
-        // that the C++ side can decode back into std::vector<Rect>.
         function toFlatVec(rects) {
             const v = new Module.VectorFloat();
             if (rects) {
@@ -41,7 +33,6 @@
             return v;
         }
 
-        // Extract player state scalars from a CelestePlayer instance.
         function playerState(p) {
             return {
                 x: p.x, y: p.y,
@@ -52,38 +43,76 @@
             };
         }
 
-        // Call mgr.compute / mgr.computeAgent and clean up temporary vectors.
-        function callCompute(fn, platData, hazardData, goalX, goalY, goalW, goalH, extraArgs) {
+        function callMgrCompute(method, args, platData, hazardData, goal) {
             const pv = toFlatVec(platData);
             const hv = toFlatVec(hazardData);
-            let result;
+            let res;
             try {
-                result = fn(pv, hv, goalX, goalY, goalW, goalH, ...extraArgs);
+                res = method(...args, pv, hv, goal.x, goal.y, goal.w, goal.h);
             } finally {
-                pv.delete();
-                hv.delete();
+                pv.delete(); hv.delete();
             }
-            // Embind value_object copies fields — no delete needed for ActionResult.
-            return {
-                moveX:       result.moveX,
-                moveY:       result.moveY,
-                jumpPressed: result.jumpPressed,
-                jumpHeld:    result.jumpHeld,
-                dashPressed: result.dashPressed,
-                grabHeld:    result.grabHeld,
-            };
+            return { moveX: res.moveX, moveY: res.moveY,
+                     jumpPressed: res.jumpPressed, jumpHeld: res.jumpHeld,
+                     dashPressed: res.dashPressed, grabHeld: res.grabHeld };
         }
 
-        // ── NeuralAI replacement ──────────────────────────────────────────────
+        // ── Persistence: load from localStorage / server ──────────────────────
+
+        function loadWeights() {
+            try {
+                const s = localStorage.getItem(STORAGE_KEY);
+                if (s) {
+                    const obj = JSON.parse(s);
+                    const arr = obj.weights || obj;
+                    if (Array.isArray(arr) && arr.length === 942) {
+                        const v = new Module.VectorFloat();
+                        for (const x of arr) v.push_back(x);
+                        mgr.setWeights(v, obj.generation || 0, obj.runCount || 0, obj.bestFit || 0);
+                        v.delete();
+                    }
+                }
+            } catch (_) {}
+            // Also try server
+            fetch('/ai-model', { signal: AbortSignal.timeout(3000) })
+                .then(r => r.ok ? r.json() : null)
+                .then(obj => {
+                    if (!obj || !obj.weights || obj.weights.length !== 942) return;
+                    const v = new Module.VectorFloat();
+                    for (const x of obj.weights) v.push_back(x);
+                    mgr.setWeights(v, obj.generation || 0, obj.runCount || 0, obj.bestFit || 0);
+                    v.delete();
+                })
+                .catch(() => {});
+        }
+
+        function saveWeights() {
+            const arr = mgr.getWeights();
+            if (!arr || arr.size() === 0) return;
+            const weights = [];
+            for (let i = 0; i < arr.size(); i++) weights.push(arr.get(i));
+            arr.delete();
+            const payload = {
+                weights, generation: mgr.generation, runCount: mgr.runCount,
+                bestFit: mgr.globalBestFit, savedAt: new Date().toISOString(),
+            };
+            try { localStorage.setItem(STORAGE_KEY, JSON.stringify(payload)); } catch (_) {}
+            fetch('/ai-model', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload), signal: AbortSignal.timeout(3000),
+            }).catch(() => {});
+        }
+
+        // ── WASM-backed NeuralAI replacement ──────────────────────────────────
 
         const wasmAI = {
-            // Stats (read by game.js for the UI)
             get generation()    { return mgr.generation;    },
             get runCount()      { return mgr.runCount;      },
             get globalBestFit() { return mgr.globalBestFit; },
-            N_AGENTS: mgr.N_AGENTS,
+            get _bestTimeMs()   { return mgr.bestTimeMs;    },
+            N_AGENTS: 8,
 
-            // Expose RAY_DIRS for ray visualisation (keep JS values — same config)
+            // Keep JS values for ray visualisation (same config as C++)
             RAY_DIRS: window.NeuralAI ? window.NeuralAI.RAY_DIRS : [],
             RAY_LEN:  window.NeuralAI ? window.NeuralAI.RAY_LEN  : 110,
 
@@ -91,83 +120,70 @@
                 const isVert = !!(opts && opts.isVertical);
                 const spawnY = (opts && opts.spawnY != null) ? opts.spawnY : 0;
                 const goalY  = (opts && opts.goalY  != null) ? opts.goalY  : 0;
-                mgr.init(spawnX, goalEnd || 1600, isVert, spawnY, goalY);
-
-                // Sync world bounds from game.js globals
+                mgr.init(spawnX || 0, goalEnd || 1600, isVert, spawnY, goalY);
                 const b = window.AI_BOUNDS;
                 if (b) mgr.setBounds(b.minX, b.maxX, b.minY, b.maxY);
-
+                loadWeights();
                 this.initAgents();
             },
 
-            reset(spawnX) {
+            reset(spawnX, opts) {
                 mgr.reset(spawnX || 0);
             },
 
-            initAgents() {
-                mgr.initAgents();
-            },
-
-            resetAgents() {
-                mgr.resetAgents();
-            },
+            initAgents()  { mgr.initAgents();  },
+            resetAgents() { mgr.resetAgents(); },
 
             compute(player, platforms, goal, hazards) {
                 if (!goal) return null;
                 const b = window.AI_BOUNDS;
                 if (b) mgr.setBounds(b.minX, b.maxX, b.minY, b.maxY);
-
-                const s  = playerState(player);
-                const pv = toFlatVec(platforms);
-                const hv = toFlatVec(hazards);
-                let res;
-                try {
-                    res = mgr.compute(
-                        s.x, s.y, s.vx, s.vy, s.onGround, s.dashes,
-                        pv, hv,
-                        goal.x, goal.y, goal.w, goal.h
-                    );
-                } finally {
-                    pv.delete(); hv.delete();
-                }
-                return { moveX: res.moveX, moveY: res.moveY,
-                         jumpPressed: res.jumpPressed, jumpHeld: res.jumpHeld,
-                         dashPressed: res.dashPressed, grabHeld: res.grabHeld };
+                const s = playerState(player);
+                return callMgrCompute(
+                    mgr.compute.bind(mgr),
+                    [s.x, s.y, s.vx, s.vy, s.onGround, s.dashes],
+                    platforms, hazards, goal
+                );
             },
 
             computeAgent(i, player, platforms, goal, hazards) {
                 if (!goal) return null;
-                const s  = playerState(player);
-                const pv = toFlatVec(platforms);
-                const hv = toFlatVec(hazards);
-                let res;
-                try {
-                    res = mgr.computeAgent(
-                        i,
-                        s.x, s.y, s.vx, s.vy, s.onGround, s.dashes,
-                        pv, hv,
-                        goal.x, goal.y, goal.w, goal.h
-                    );
-                } finally {
-                    pv.delete(); hv.delete();
-                }
-                return { moveX: res.moveX, moveY: res.moveY,
-                         jumpPressed: res.jumpPressed, jumpHeld: res.jumpHeld,
-                         dashPressed: res.dashPressed, grabHeld: res.grabHeld };
+                const s = playerState(player);
+                return callMgrCompute(
+                    (...a) => mgr.computeAgent(i, ...a),
+                    [s.x, s.y, s.vx, s.vy, s.onGround, s.dashes],
+                    platforms, hazards, goal
+                );
             },
 
-            onDeath()       { mgr.onDeath();    },
-            onGoal()        { mgr.onGoal();     },
-            killAgent(i)    { mgr.killAgent(i); },
-            goalAgent(i)    { mgr.goalAgent(i); },
+            onDeath() {
+                mgr.onDeath();
+                saveWeights();
+            },
 
-            // Stubs kept for API compatibility with game.js
-            resetWeights()  { mgr.init(0, 1600, false, 0, 0); },
+            onGoal(timeMs) {
+                mgr.onGoal(timeMs || 0);
+                saveWeights();
+            },
+
+            killAgent(i)         { mgr.killAgent(i);           },
+            goalAgent(i, timeMs) { mgr.goalAgent(i, timeMs || 0); saveWeights(); },
+
+            learnFromRoute(timeMs) {
+                mgr.learnFromRoute(timeMs || 0);
+                saveWeights();
+            },
+
+            resetWeights() {
+                try { localStorage.removeItem(STORAGE_KEY); } catch (_) {}
+                fetch('/ai-model', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({}), signal: AbortSignal.timeout(3000) }).catch(() => {});
+                mgr.resetWeights();
+            },
         };
 
-        // Replace the global NeuralAI with the WASM-backed version.
         window.NeuralAI = wasmAI;
-        console.log('[ai-wasm-bridge] C++ WASM AI active (ai_learning.hpp via Emscripten)');
+        console.log('[ai-wasm-bridge] C++ WASM AI active — 23→20→22 net with 6-cell memory');
     }).catch(function (err) {
         console.warn('[ai-wasm-bridge] WASM load failed, using pure-JS AI:', err);
     });
