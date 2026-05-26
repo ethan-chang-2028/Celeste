@@ -4,10 +4,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const loggedInUserData = sessionStorage.getItem('loggedInUser');
 
     if (!loggedInUserData) {
-        const loginUrl = window.location.protocol === 'file:'
-            ? '../webSite/index.html'
-            : '/';
-        window.location.href = loginUrl;
+        // Redirect to login page
+        if (window.location.protocol === 'file:') {
+            window.location.href = '../webSite/index.html';
+        } else {
+            window.location.href = '/index.html';
+        }
         return;
     }
 
@@ -32,9 +34,11 @@ document.addEventListener('DOMContentLoaded', () => {
         // Clear the saved user data
         sessionStorage.removeItem('loggedInUser');
 
-        const loginUrl = window.location.protocol === 'file:'
-            ? '../webSite/index.html'
-            : '/';
-        window.location.href = loginUrl;
+        // Redirect to login page
+        if (window.location.protocol === 'file:') {
+            window.location.href = '../webSite/index.html';
+        } else {
+            window.location.href = '/index.html';
+        }
     });
 });
