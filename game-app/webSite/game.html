@@ -160,6 +160,10 @@
                         <span class="menu-option__label">▶ Random AI Map</span>
                         <span class="menu-option__desc">Procedurally generated · seed-replayable · neural AI playable</span>
                     </button>
+                    <button class="menu-option menu-option--gold" onclick="startGame('race')">
+                        <span class="menu-option__label">🏁 Race the AI</span>
+                        <span class="menu-option__desc">5-room race course · same seed for you and AI · named checkpoints · live timer · new seed each race</span>
+                    </button>
                     <button class="menu-option" onclick="startGame('custom')">
                         <span class="menu-option__label">▶ Custom Level</span>
                         <span class="menu-option__desc">Play the map you built in the editor</span>
@@ -198,6 +202,10 @@
                 <input  class="random-only" style="display:none;" type="number" id="random-seed-input" placeholder="Seed #" min="0" max="999999">
                 <button class="random-only" style="display:none;" onclick="loadRandomSeed()">Load Seed</button>
                 <span   class="random-only" style="display:none;font-family:monospace;font-size:0.8rem;color:#aaa;" id="random-map-seed">Seed: —</span>
+                <button class="race-only" style="display:none;background:#7a3000;" onclick="raceGenerateMap()">&#127937; New Race</button>
+                <input  class="race-only" style="display:none;" type="number" id="race-seed-input" placeholder="Seed #" min="0" max="999999">
+                <button class="race-only" style="display:none;" onclick="loadRaceSeed()">Load Seed</button>
+                <span   class="race-only" style="display:none;font-family:monospace;font-size:0.8rem;color:#ffaa66;" id="race-seed-display">Seed: —</span>
             </div>
 
             <canvas id="game-canvas" width="320" height="180"></canvas>

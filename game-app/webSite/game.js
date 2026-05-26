@@ -660,6 +660,24 @@
     let aiProgressFrames = 0;
     let aiProgressBest   = -Infinity;
 
+    // ── Race mode state ───────────────────────────────────────────────────────
+    let raceMode        = false;
+    let raceAIPlayer    = null;    // separate CelestePlayer for the AI opponent
+    let racePlayerCP    = 0;       // highest checkpoint index player has reached
+    let raceAICP        = 0;       // highest checkpoint index AI has reached
+    let racePlayerDone  = false;
+    let raceAIDone      = false;
+    let racePlayerTime  = null;    // ms
+    let raceAITime      = null;    // ms
+    let raceStart       = 0;
+    let raceSeed        = 0;
+    // Race AI stuck detection (independent from training AI vars)
+    let raceAIStuckFrames = 0;
+    let raceAIStuckX      = 0;
+    let raceAIStuckY      = 0;
+    let raceAIProgFrames  = 0;
+    let raceAIProgBest    = -Infinity;
+
     function getRoomIdx() {
         return Math.max(0, Math.min(NUM_ROOMS - 1, Math.floor(player.x / ROOM_W)));
     }
@@ -822,7 +840,10 @@
             keys[e.code] = true;
             e.preventDefault();
         }
-        if (e.code === 'KeyR') restartRun();
+        if (e.code === 'KeyR') {
+            if (raceMode) window.raceGenerateMap(raceSeed);
+            else restartRun();
+        }
     });
     window.addEventListener('keyup', (e) => { if (tracked.has(e.code)) keys[e.code] = false; });
 
@@ -1018,6 +1039,168 @@
 
         return { platforms: p, pitShading: pits, roomSpawns: sp, roomNames: nm, roomSkies: sk, roomLabels: lb, goal, entities: ents };
     }
+
+    // ── buildRaceMap — 5-room race course with named checkpoints ─────────────
+    // Checkpoint names follow the "#-Name" format:
+    //   "1-Starting Line", "2-Gap Sprint", "3-Chimney", "4-Cliff Face", "5-Summit"
+    function buildRaceMap(seed) {
+        const rng = mkRng(seed);
+        const ri  = () => Math.floor(rng() * 1000);
+
+        const N    = 5;  // rooms in the race course
+        const MID  = ['platform', 'chimney', 'climb'];
+        const types = ['gaps', MID[ri() % MID.length], MID[ri() % MID.length], MID[ri() % MID.length], 'stair'];
+        // Ensure middle rooms have variety — if all three are identical, rotate one
+        if (types[1] === types[2] && types[2] === types[3]) types[2] = MID[(MID.indexOf(types[1]) + 1) % MID.length];
+
+        const CP_NAMES = { gaps:'Gap Sprint', platform:'Ledge Run', chimney:'Chimney', climb:'Cliff Face', stair:'Stairway' };
+
+        const p = [], pits = [], sp = [], nm = [], sk = [], lb = [], ents = [];
+        let goal = {};
+
+        for (let room = 0; room < N; room++) {
+            const ox   = room * ROOM_W;
+            const type = types[room];
+
+            // "#-Name" checkpoint label
+            const cpName = room === 0     ? '1-Starting Line' :
+                           room === N - 1 ? `${N}-Summit`      :
+                           `${room + 1}-${CP_NAMES[type]}`;
+            sp.push({ x: ox + 14, y: FLOOR_Y - 12 });
+            nm.push(cpName);
+            sk.push(PALETTES[(ri() + room) % PALETTES.length]);
+
+            if (room === 0)     p.push({ x: ox,               y: 0, w: 8, h: 180, color: '#4a5570' });
+            if (room === N - 1) p.push({ x: ox + ROOM_W - 8, y: 0, w: 8, h: 180, color: '#4a5570' });
+
+            if (type === 'gaps') {
+                const numGaps = 1 + (ri() % 2);
+                const gapW    = 28 + (ri() % 22);
+                const seg     = splitFloor(ox, FLOOR_Y, ROOM_W, numGaps, gapW, rng);
+                for (const s of seg.floors) p.push({ x: s.x, y: FLOOR_Y, w: s.w, h: FLOOR_H, color: '#3a5a3a' });
+                for (const g of seg.gaps)   { pits.push({ x: g.x, y: FLOOR_Y, w: g.w, h: FLOOR_H }); lb.push({ text: 'JUMP', x: g.x + 4, y: FLOOR_Y + 10 }); }
+
+            } else if (type === 'platform') {
+                const entryW = 50 + (ri() % 30), exitW = 40 + (ri() % 30);
+                p.push({ x: ox,                  y: FLOOR_Y, w: entryW, h: FLOOR_H, color: '#3a5a3a' });
+                p.push({ x: ox + ROOM_W - exitW, y: FLOOR_Y, w: exitW,  h: FLOOR_H, color: '#3a5a3a' });
+                pits.push({ x: ox + entryW, y: FLOOR_Y, w: ROOM_W - entryW - exitW, h: FLOOR_H });
+                const asc = rng() > 0.5, gap = (ROOM_W - entryW - exitW) / 3;
+                for (let i = 0; i < 3; i++) {
+                    const fx = ox + entryW + Math.floor(i * gap) + (ri() % 10);
+                    const fy = asc ? Math.max(25, FLOOR_Y - 45 - i * 28) : Math.max(25, FLOOR_Y - 110 + i * 28);
+                    p.push({ x: fx, y: fy, w: 42 + (ri() % 28), h: 8, color: '#5a7a5a' });
+                    lb.push({ text: 'STEP', x: fx + 4, y: fy - 2 });
+                }
+            } else if (type === 'chimney') {
+                const entryW = 70 + (ri() % 50), shaftX = ox + entryW + 10 + (ri() % 20);
+                const shaftW = 22 + (ri() % 10), shaftTop = 28 + (ri() % 35);
+                p.push({ x: ox,                  y: FLOOR_Y, w: entryW, h: FLOOR_H, color: '#3a5a3a' });
+                p.push({ x: shaftX,              y: shaftTop, w: 6, h: FLOOR_Y - shaftTop - 16, color: '#5a6b88' });
+                p.push({ x: shaftX + shaftW,     y: shaftTop, w: 6, h: FLOOR_Y - shaftTop,      color: '#5a6b88' });
+                p.push({ x: shaftX,              y: shaftTop, w: shaftW + 12, h: 6,              color: '#5a7a5a' });
+                lb.push({ text: 'WALL JUMP', x: shaftX - 8, y: FLOOR_Y - 4 });
+                const l1x = shaftX + shaftW + 18 + (ri() % 15), l1y = 72 + (ri() % 35);
+                const l2x = l1x + 48 + (ri() % 20),             l2y = 118 + (ri() % 24);
+                p.push({ x: l1x, y: l1y, w: 50, h: 8, color: '#5a7a5a' });
+                p.push({ x: l2x, y: l2y, w: 50, h: 8, color: '#5a7a5a' });
+                const exitX = Math.min(ox + ROOM_W - 10, l2x + 40);
+                if (exitX < ox + ROOM_W) p.push({ x: exitX, y: FLOOR_Y, w: ox + ROOM_W - exitX, h: FLOOR_H, color: '#3a5a3a' });
+            } else if (type === 'climb') {
+                const entryW = 50 + (ri() % 30);
+                p.push({ x: ox, y: FLOOR_Y, w: entryW, h: FLOOR_H, color: '#3a5a3a' });
+                const wallH = 120 + (ri() % 40), wallTop = FLOOR_Y - wallH;
+                const wallAX = ox + entryW + 20 + (ri() % 20);
+                p.push({ x: wallAX,     y: wallTop, w: 8,  h: wallH, color: '#7a6b8a' });
+                p.push({ x: wallAX + 8, y: wallTop, w: 62, h: 8,     color: '#5a7a5a' });
+                lb.push({ text: 'GRAB+UP', x: wallAX - 32, y: FLOOR_Y - 28 });
+                const wallBX = wallAX + 8 + 62 + 20 + (ri() % 20);
+                p.push({ x: wallBX,     y: wallTop, w: 8,  h: wallH, color: '#7a6b8a' });
+                p.push({ x: wallBX + 8, y: wallTop, w: 40, h: 8,     color: '#5a7a5a' });
+                const d1x = wallBX + 50, d2x = d1x + 50;
+                p.push({ x: d1x, y: wallTop + 55,  w: 50, h: 8, color: '#5a7a5a' });
+                p.push({ x: d2x, y: wallTop + 105, w: 40, h: 8, color: '#5a7a5a' });
+                const exitX = Math.min(ox + ROOM_W - 10, d2x + 32);
+                if (exitX < ox + ROOM_W) p.push({ x: exitX, y: FLOOR_Y, w: ox + ROOM_W - exitX, h: FLOOR_H, color: '#3a5a3a' });
+            } else { // stair — summit room
+                p.push({ x: ox, y: FLOOR_Y, w: 55, h: FLOOR_H, color: '#3a5a3a' });
+                const steps = 4 + (ri() % 2), spacing = (ROOM_W - 80) / steps;
+                for (let s = 0; s < steps; s++) {
+                    const sx = ox + 55 + Math.floor(s * spacing);
+                    const sy = FLOOR_Y - 32 - s * 30;
+                    const sw = 48 + (ri() % 18);
+                    p.push({ x: sx, y: sy, w: sw, h: 8, color: '#5a7a5a' });
+                    if (s === steps - 1) {
+                        goal = { x: sx + sw - 18, y: sy - 14, w: 12, h: 12, color: '#d4af37' };
+                        lb.push({ text: '🏁 FINISH', x: sx, y: sy - 4 });
+                    }
+                }
+            }
+        }
+
+        // Entity pass — racing-tuned: heavy on dash crystals and springs, light on spikes
+        const RACE_POOL = [
+            'crystal','crystal','crystal','crystal','crystal',
+            'spring', 'spring', 'spring',
+            'spike',  'spike',
+            'blade_h',
+        ];
+        const cands = p.filter(pl => pl.w >= 18 && pl.h <= 12 && pl.y > 8);
+        const pool  = [...cands];
+        for (let i = pool.length - 1; i > 0; i--) { const j = ri() % (i + 1); [pool[i], pool[j]] = [pool[j], pool[i]]; }
+        const used = new Set(), total = 7 + (ri() % 4);
+        for (let i = 0; i < total && i < pool.length; i++) {
+            const pl   = pool[i];
+            const pidx = cands.indexOf(pl);
+            const type = RACE_POOL[ri() % RACE_POOL.length];
+            const cx   = pl.x + Math.floor(pl.w / 2);
+            if      (type === 'spring')                         ents.push(makeSpring(cx, pl.y, 'floor'));
+            else if (type === 'crystal')                        ents.push(makeDashCrystal(cx, pl.y - 14));
+            else if (type === 'spike'  && pl.w >= 20 && !used.has(pidx)) { used.add(pidx); ents.push(makeSpike(pl.x + pl.w - 6, pl.y, 6, 'up')); }
+            else if (type === 'blade_h'&& pl.w >= 36 && !used.has(pidx)) { used.add(pidx); ents.push(makeEnticeBlade({ ax: pl.x + 8, ay: pl.y - 26, bx: pl.x + pl.w - 20, by: pl.y - 26, speed: 35 + (ri() % 20) })); }
+            else    ents.push(makeDashCrystal(cx, pl.y - 14));
+        }
+
+        return { platforms: p, pitShading: pits, roomSpawns: sp, roomNames: nm, roomSkies: sk, roomLabels: lb, goal, entities: ents };
+    }
+
+    window.raceGenerateMap = function (seedOverride) {
+        raceSeed = (seedOverride !== undefined) ? (seedOverride | 0) : Math.floor(Math.random() * 999999);
+        NUM_ROOMS = 5;
+        applyLevel(buildRaceMap(raceSeed), raceSeed);
+        // Show seed in UI
+        const el = document.getElementById('race-seed-display');
+        if (el) el.textContent = `Seed: ${raceSeed}`;
+
+        // Set AI world bounds for this map
+        window.AI_BOUNDS = { minX: -20, maxX: NUM_ROOMS * ROOM_W + 20, minY: -20, maxY: H + 20 };
+        window.AI_GOAL_VERTICAL = false;
+
+        // Create / re-spawn race AI player
+        if (!raceAIPlayer) raceAIPlayer = new CelestePlayer(roomSpawns[0].x, roomSpawns[0].y);
+        else raceAIPlayer.reset(roomSpawns[0].x, roomSpawns[0].y);
+
+        // Reset race state
+        racePlayerCP = 0; raceAICP = 0;
+        racePlayerDone = false; raceAIDone = false;
+        racePlayerTime = null; raceAITime = null;
+        raceStart = performance.now();
+        raceAIStuckFrames = 0; raceAIStuckX = roomSpawns[0].x; raceAIStuckY = roomSpawns[0].y;
+        raceAIProgFrames = 0;  raceAIProgBest = -Infinity;
+
+        if (typeof NeuralAI !== 'undefined') {
+            NeuralAI.init(roomSpawns[0].x, GOAL ? GOAL.x + GOAL.w : NUM_ROOMS * ROOM_W);
+            NeuralAI.reset(roomSpawns[0].x);
+            spawnAIGhosts();
+        }
+        bestMs = null;
+        restartRun();
+    };
+    window.loadRaceSeed = function () {
+        const input = document.getElementById('race-seed-input');
+        const val   = parseInt(input ? input.value : '', 10);
+        if (!isNaN(val)) window.raceGenerateMap(val);
+    };
 
     window.randomGenerateMap = function (seedOverride) {
         const seed = (seedOverride !== undefined) ? (seedOverride | 0) : Math.floor(Math.random() * 999999);
@@ -1738,6 +1921,7 @@
         document.querySelectorAll('.ai-only').forEach(el => el.style.display = 'none');
         document.querySelectorAll('.ai-ctrl').forEach(el => el.style.display = '');  // always show in all modes
         document.querySelectorAll('.random-only').forEach(el => el.style.display = 'none');
+        document.querySelectorAll('.race-only').forEach(el => el.style.display = 'none');
 
         // Reset 2D world size for non-custom modes
         worldH = H; worldMinY = 0; DEATH_Y = H + 20; cameraY = 0;
@@ -1793,12 +1977,25 @@
             // Horizontal extent for custom levels = unique cols × ROOM_W
             if (built._numCols) NUM_ROOMS = built._numCols;
             applyLevel(built, -1);
+        } else if (mode === 'race') {
+            raceMode = true;
+            NUM_ROOMS = 5;
+            document.querySelectorAll('.race-only').forEach(el => el.style.display = '');
+            window.raceGenerateMap();
+            // startGame for race returns after raceGenerateMap sets up everything
+            document.getElementById('level-menu').style.display = 'none';
+            document.getElementById('game-ui').style.display    = 'flex';
+            gameActive = true;
+            return;
         } else {
             NUM_ROOMS = AI_ROOMS;
             const seed = Math.floor(Math.random() * 999999);
             applyLevel(buildLevel(seed), seed);
             document.querySelectorAll('.ai-only').forEach(el => el.style.display = '');
         }
+
+        raceMode = false;
+        raceAIPlayer = null;
 
         // Set world bounds for AI raycasting and goal direction sense
         window.AI_BOUNDS = {
@@ -1821,8 +2018,11 @@
     window.showLevelMenu = function () {
         gameActive = false;
         aiEnabled  = false;
+        raceMode   = false;
+        raceAIPlayer = null;
         updateAIBtn();
         document.querySelectorAll('.ai-ctrl').forEach(el => el.style.display = 'none');
+        document.querySelectorAll('.race-only').forEach(el => el.style.display = 'none');
         document.getElementById('game-ui').style.display    = 'none';
         document.getElementById('level-menu').style.display = '';
     };
@@ -1985,6 +2185,15 @@
             ctx.globalAlpha = 1;
         }
 
+        // Race AI player (drawn behind human player)
+        if (raceMode && raceAIPlayer && !raceAIDone) {
+            const blink = Math.sin(performance.now() / 160) > 0;
+            ctx.globalAlpha = 0.82;
+            ctx.fillStyle = blink ? '#ff6622' : '#ff8844';
+            ctx.fillRect(raceAIPlayer.x, raceAIPlayer.y, raceAIPlayer.w, raceAIPlayer.h);
+            ctx.globalAlpha = 1;
+        }
+
         player.draw(ctx);
 
         // Room number watermarks (only non-maze)
@@ -2082,7 +2291,96 @@
             ctx.fillText(`Stag ${stag}/20`, W - 80, 32);
         }
 
-        if (won) {
+        // ── Race HUD ────────────────────────────────────────────────────────────
+        if (raceMode) {
+            const now = performance.now();
+            const elapsed = (racePlayerDone ? racePlayerTime : now - raceStart) / 1000;
+            // Panel background
+            ctx.fillStyle = 'rgba(0,0,0,0.55)';
+            ctx.fillRect(0, 0, W, 42);
+
+            // Timer
+            ctx.fillStyle = racePlayerDone ? '#d4af37' : '#ffffff';
+            ctx.font = 'bold 9px monospace';
+            ctx.fillText(`⏱ ${elapsed.toFixed(2)}s`, 6, 9);
+
+            // Seed
+            ctx.fillStyle = 'rgba(180,180,180,0.7)';
+            ctx.font = '6px monospace';
+            ctx.fillText(`Seed ${raceSeed}`, 6, 17);
+
+            // Checkpoint bars — one per room, named
+            const cpNames = (roomNames && roomNames.length) ? roomNames : [];
+            const barW = Math.floor((W - 12) / NUM_ROOMS) - 2;
+            for (let i = 0; i < NUM_ROOMS; i++) {
+                const bx = 6 + i * (barW + 2);
+                const by = 22;
+                const bh = 7;
+                const pDone = i <= racePlayerCP;
+                const aDone = i <= raceAICP;
+                // Background
+                ctx.fillStyle = 'rgba(60,60,60,0.7)'; ctx.fillRect(bx, by, barW, bh);
+                // Player portion (blue)
+                if (pDone) { ctx.fillStyle = '#4488ff'; ctx.fillRect(bx, by, barW, bh); }
+                // AI portion (orange, half-height top strip)
+                if (aDone) { ctx.fillStyle = '#ff6622'; ctx.fillRect(bx, by, barW, Math.ceil(bh/2)); }
+                // Checkpoint name below bar
+                ctx.fillStyle = 'rgba(220,220,220,0.65)';
+                ctx.font = '4px monospace';
+                const lbl = cpNames[i] || `${i+1}`;
+                ctx.fillText(lbl.substring(0, 10), bx, by + bh + 5);
+            }
+
+            // Leading indicator
+            const leading = racePlayerCP > raceAICP ? 'YOU LEAD' :
+                            raceAICP > racePlayerCP ? 'AI LEADS' : 'TIED';
+            const lCol    = racePlayerCP > raceAICP ? '#88ccff' :
+                            raceAICP > racePlayerCP ? '#ff8844' : '#ffffff';
+            ctx.fillStyle = lCol; ctx.font = 'bold 7px monospace';
+            ctx.fillText(leading, W - 52, 9);
+
+            // AI time badge when AI finishes
+            if (raceAIDone && raceAITime !== null) {
+                ctx.fillStyle = '#ff6622'; ctx.font = '6px monospace';
+                ctx.fillText(`AI: ${(raceAITime/1000).toFixed(2)}s`, W - 52, 17);
+            }
+
+            // Race result overlay
+            if (racePlayerDone || raceAIDone) {
+                const bothDone = racePlayerDone && raceAIDone;
+                if (racePlayerDone || raceAIDone) {
+                    ctx.fillStyle = 'rgba(0,0,0,0.70)'; ctx.fillRect(40, 58, 240, 68);
+                    if (racePlayerDone && raceAIDone) {
+                        const winner = racePlayerTime < raceAITime ? 'YOU WIN!' : raceAITime < racePlayerTime ? 'AI WINS!' : 'TIE!';
+                        const wCol   = racePlayerTime < raceAITime ? '#d4af37' : raceAITime < racePlayerTime ? '#ff6622' : '#ffffff';
+                        ctx.fillStyle = wCol; ctx.font = 'bold 13px monospace';
+                        ctx.fillText(winner, 105, 80);
+                        ctx.fillStyle = '#88ccff'; ctx.font = '7px monospace';
+                        ctx.fillText(`You : ${(racePlayerTime/1000).toFixed(2)}s`, 60, 95);
+                        ctx.fillStyle = '#ff8844';
+                        ctx.fillText(` AI : ${(raceAITime/1000).toFixed(2)}s`,    60, 105);
+                    } else if (racePlayerDone) {
+                        ctx.fillStyle = '#d4af37'; ctx.font = 'bold 11px monospace';
+                        ctx.fillText('YOU FINISHED!', 80, 80);
+                        ctx.fillStyle = '#88ccff'; ctx.font = '7px monospace';
+                        ctx.fillText(`Your time: ${(racePlayerTime/1000).toFixed(2)}s`, 90, 95);
+                        ctx.fillStyle = '#aaa';
+                        ctx.fillText('Waiting for AI...', 97, 105);
+                    } else {
+                        ctx.fillStyle = '#ff6622'; ctx.font = 'bold 11px monospace';
+                        ctx.fillText('AI FINISHED!', 85, 80);
+                        ctx.fillStyle = '#ff8844'; ctx.font = '7px monospace';
+                        ctx.fillText(`AI time: ${(raceAITime/1000).toFixed(2)}s`, 95, 95);
+                        ctx.fillStyle = '#aaa';
+                        ctx.fillText('Keep going!', 105, 105);
+                    }
+                    ctx.fillStyle = '#888'; ctx.font = '6px monospace';
+                    ctx.fillText('press R for new race', 95, 118);
+                }
+            }
+        }
+
+        if (!raceMode && won) {
             ctx.fillStyle = 'rgba(0,0,0,0.65)'; ctx.fillRect(55, 60, 210, 60);
             ctx.fillStyle = '#d4af37'; ctx.font = '12px monospace';
             ctx.fillText('CLEARED!', 100, 82);
@@ -2211,7 +2509,68 @@
             }
         }
 
-        if (!won && playerOverlapsGoal()) {
+        // ── Race AI opponent ────────────────────────────────────────────────────
+        if (raceMode && raceAIPlayer && !raceAIDone && typeof NeuralAI !== 'undefined') {
+            const allPlatsR = dynPlat.length ? platforms.concat(dynPlat) : platforms;
+            const hazardsR  = getHazardRects();
+            const raceInp   = NeuralAI.compute(raceAIPlayer, platforms, GOAL, hazardsR);
+            if (raceInp) raceAIPlayer.update(raceInp, allPlatsR, FIXED_DT);
+
+            // Checkpoint detection for AI
+            const aiRoomIdx = Math.max(0, Math.min(NUM_ROOMS - 1, Math.floor(raceAIPlayer.x / ROOM_W)));
+            if (aiRoomIdx > raceAICP) raceAICP = aiRoomIdx;
+
+            // Stuck detection
+            if (Math.abs(raceAIPlayer.x - raceAIStuckX) > 2 || Math.abs(raceAIPlayer.y - raceAIStuckY) > 2) {
+                raceAIStuckFrames = 0; raceAIStuckX = raceAIPlayer.x; raceAIStuckY = raceAIPlayer.y;
+            } else if (++raceAIStuckFrames >= AI_STUCK_LIMIT) {
+                const si = closestRespawnIdx(raceAIPlayer.x, raceAIPlayer.y);
+                const rs = roomSpawns[si] || roomSpawns[0];
+                raceAIPlayer.reset(rs.x, rs.y);
+                raceAIStuckFrames = 0; raceAIStuckX = rs.x; raceAIStuckY = rs.y;
+                raceAIProgFrames = 0;  raceAIProgBest = -Infinity;
+            }
+            // Progress check
+            const raceAIProg = raceAIPlayer.x;
+            if (raceAIProg > raceAIProgBest) { raceAIProgBest = raceAIProg; raceAIProgFrames = 0; }
+            else if (++raceAIProgFrames >= AI_PROGRESS_LIMIT) {
+                const si = closestRespawnIdx(raceAIPlayer.x, raceAIPlayer.y);
+                const rs = roomSpawns[si] || roomSpawns[0];
+                raceAIPlayer.reset(rs.x, rs.y);
+                raceAIStuckFrames = 0; raceAIStuckX = rs.x; raceAIStuckY = rs.y;
+                raceAIProgFrames = 0;  raceAIProgBest = -Infinity;
+            }
+            // Death
+            if (raceAIPlayer.y > DEATH_Y) {
+                const si = closestRespawnIdx(raceAIPlayer.x, raceAIPlayer.y);
+                const rs = roomSpawns[si] || roomSpawns[0];
+                raceAIPlayer.reset(rs.x, rs.y);
+                raceAIStuckFrames = 0; raceAIStuckX = rs.x; raceAIStuckY = rs.y;
+                raceAIProgFrames = 0;  raceAIProgBest = -Infinity;
+            }
+            // Goal
+            if (GOAL && raceAIPlayer.x < GOAL.x + GOAL.w && raceAIPlayer.x + raceAIPlayer.w > GOAL.x
+                     && raceAIPlayer.y < GOAL.y + GOAL.h && raceAIPlayer.y + raceAIPlayer.h > GOAL.y) {
+                raceAIDone = true;
+                raceAITime = performance.now() - raceStart;
+                raceAICP   = NUM_ROOMS - 1;
+            }
+        }
+
+        // ── Race: player checkpoint + finish ───────────────────────────────────
+        if (raceMode) {
+            const pRoomIdx = Math.max(0, Math.min(NUM_ROOMS - 1, Math.floor(player.x / ROOM_W)));
+            if (pRoomIdx > racePlayerCP) racePlayerCP = pRoomIdx;
+            if (!racePlayerDone && playerOverlapsGoal()) {
+                racePlayerDone = true;
+                racePlayerTime = performance.now() - raceStart;
+                racePlayerCP   = NUM_ROOMS - 1;
+                won = true; winMs = racePlayerTime;
+                if (bestMs === null || winMs < bestMs) bestMs = winMs;
+            }
+        }
+
+        if (!raceMode && !won && playerOverlapsGoal()) {
             won = true; winMs = performance.now() - runStart;
             if (bestMs === null || winMs < bestMs) bestMs = winMs;
             if (aiEnabled && typeof NeuralAI !== 'undefined') {
@@ -2263,12 +2622,20 @@
             stepCount = 0; fpsWindow = now;
         }
         const elapsed = won ? winMs : (performance.now() - runStart);
-        statusEl.textContent =
-            `${roomNames[getRoomIdx()] || ''}  ` +
-            `time=${(elapsed/1000).toFixed(2)}s  deaths=${deaths}  ` +
-            (bestMs !== null ? `best=${(bestMs/1000).toFixed(2)}s  ` : '') +
-            `${player.state}  ${measuredFps.toFixed(0)} fps` +
-            (aiEnabled ? `  [AI ${aiSpeedMult}x]` : '');
+        if (raceMode) {
+            const raceElapsed = (racePlayerDone ? racePlayerTime : performance.now() - raceStart) / 1000;
+            statusEl.textContent =
+                `RACE  time=${raceElapsed.toFixed(2)}s  ` +
+                `you:cp${racePlayerCP+1}/${NUM_ROOMS}  ai:cp${raceAICP+1}/${NUM_ROOMS}  ` +
+                `${measuredFps.toFixed(0)} fps`;
+        } else {
+            statusEl.textContent =
+                `${roomNames[getRoomIdx()] || ''}  ` +
+                `time=${(elapsed/1000).toFixed(2)}s  deaths=${deaths}  ` +
+                (bestMs !== null ? `best=${(bestMs/1000).toFixed(2)}s  ` : '') +
+                `${player.state}  ${measuredFps.toFixed(0)} fps` +
+                (aiEnabled ? `  [AI ${aiSpeedMult}x]` : '');
+        }
         requestAnimationFrame(frame);
     }
     requestAnimationFrame(frame);
