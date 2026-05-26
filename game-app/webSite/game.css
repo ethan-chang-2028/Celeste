@@ -43,13 +43,9 @@ body {
     background: linear-gradient(180deg, #2d3450 0%, #4a5a8a 100%);
     border: 2px solid #2a2f42;
     border-radius: 4px;
-    /* Native render buffer is 320×180. Scale up 3x for display while
-       keeping pixels crisp. */
     width: 960px;
     height: 540px;
     max-width: 100%;
-    image-rendering: pixelated;
-    image-rendering: crisp-edges;
 }
 
 .controls {
