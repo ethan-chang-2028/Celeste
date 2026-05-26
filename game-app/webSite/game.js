@@ -7,7 +7,12 @@
     const statusEl = document.getElementById('status');
     ctx.imageSmoothingEnabled = false;
 
-    const W = canvas.width, H = canvas.height; // 320 × 180
+    // Render at 3× native resolution so text is sharp (960×540 canvas, 320×180 game coords)
+    const SCALE = 3;
+    canvas.width  = 960;
+    canvas.height = 540;
+
+    const W = 320, H = 180;
     const FIXED_DT  = 1 / 60;
     const MAX_ACCUM = 0.25;
     let   DEATH_Y   = H + 20;
@@ -2135,6 +2140,9 @@
         const isMaze   = currentMode === 'maze' && !mountainMode;
         const isMtnOrMaze = currentMode === 'maze'; // covers both maze and mountain (mountain sets currentMode='maze')
 
+        // Apply 3× scale so all drawing uses 320×180 game coordinates
+        ctx.setTransform(SCALE, 0, 0, SCALE, 0, 0);
+
         // Sky: for mountain, use mazeRoomRow to pick per-room sky gradient
         const skyIdx = mountainMode ? mazeRoomRow : roomIdx;
         const [skyTop, skyBot] = roomSkies[skyIdx] || ['#1a2a4a','#3a5a8a'];
@@ -2421,16 +2429,18 @@
             const ai = NeuralAI;
             ctx.fillStyle = '#44ff44'; ctx.font = 'bold 7px monospace';
             const aiEngine = (typeof CelesteAI !== 'undefined') ? 'C++' : 'JS';
-            ctx.fillText(`NEURAL AI ×${NeuralAI.N_AGENTS}  ${aiSpeedMult}x  [${aiEngine}]`, W - 100, 10);
+            ctx.textAlign = 'right';
+            ctx.fillText(`NEURAL AI ×${NeuralAI.N_AGENTS}  ${aiSpeedMult}x  [${aiEngine}]`, W - 2, 10);
             ctx.font = '6px monospace';
-            ctx.fillText(`Gen ${ai.generation}  Run ${ai.runCount}`, W - 80, 18);
-            ctx.fillText(`Fit ${(ai.globalBestFit * 100).toFixed(0)}%`, W - 80, 25);
+            ctx.fillText(`Gen ${ai.generation}  Run ${ai.runCount}`, W - 2, 18);
+            ctx.fillText(`Fit ${(ai.globalBestFit * 100).toFixed(0)}%`, W - 2, 25);
             const bestT = ai._bestTimeMs;
             ctx.fillStyle = '#aaffaa';
-            ctx.fillText(bestT < Infinity ? `FastBest ${(bestT/1000).toFixed(1)}s` : 'No finish yet', W - 88, 32);
+            ctx.fillText(bestT < Infinity ? `FastBest ${(bestT/1000).toFixed(1)}s` : 'No finish yet', W - 2, 32);
             const stag = ai._runsSinceImproved || 0;
             ctx.fillStyle = stag >= 15 ? '#ff8844' : '#aaffaa';
-            ctx.fillText(`Stag ${stag}/20`, W - 80, 39);
+            ctx.fillText(`Stag ${stag}/20`, W - 2, 39);
+            ctx.textAlign = 'left';
         }
 
         // ── Race HUD ────────────────────────────────────────────────────────────
