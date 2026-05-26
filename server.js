@@ -93,8 +93,8 @@ const server = http.createServer(async (req, res) => {
     }
 
     try {
-        // 2. Serve the HTML file
-        if (req.method === 'GET' && (req.url === '/' || req.url === '/index.html')) {
+        // 2. Serve the HTML file (login page)
+        if (req.method === 'GET' && (req.url === '/' || req.url === '/index.html' || req.url === '/login' || req.url === '/login.html')) {
             const filePath = path.join(__dirname, 'game-app', 'webSite', 'index.html');
             const htmlContent = await fs.readFile(filePath, 'utf-8');
             res.writeHead(200, { 'Content-Type': 'text/html' });
@@ -154,7 +154,7 @@ const server = http.createServer(async (req, res) => {
             res.writeHead(200, { 'Content-Type': 'text/html' });
             return res.end(content);
         }
-        // Serve any .js/.css/.wasm file directly from webSite/ — avoids manual allowlist
+        // Serve any .js/.css/.wasm file directly from webSite/ â avoids manual allowlist
         // Note: Emscripten outputs <name>.wasm.wasm so we match on url ending, not just ext
         const isWasm = req.url.endsWith('.wasm') || req.url.endsWith('.wasm.wasm');
         const ext = path.extname(req.url);
@@ -249,7 +249,7 @@ const server = http.createServer(async (req, res) => {
             }
         }
 
-        // 6. AI model weights — GET loads, POST saves
+        // 6. AI model weights â GET loads, POST saves
         if (req.method === 'GET' && req.url === '/ai-model') {
             try {
                 const data = await fs.readFile(AI_MODEL_PATH, 'utf-8');
@@ -271,7 +271,7 @@ const server = http.createServer(async (req, res) => {
                     const existing = await fs.readFile(AI_MODEL_PATH, 'utf-8');
                     const parsed = JSON.parse(existing);
                     if (typeof parsed.bestFit === 'number') currentBestFit = parsed.bestFit;
-                } catch { /* no existing model — accept anything */ }
+                } catch { /* no existing model â accept anything */ }
 
                 const incomingFit = typeof data.bestFit === 'number' ? data.bestFit : 0;
                 if (incomingFit > currentBestFit) {
@@ -285,7 +285,7 @@ const server = http.createServer(async (req, res) => {
             return res.end(JSON.stringify({ message: 'Existing model is better, not overwritten.', accepted: false }));
         }
 
-        // 7. Leaderboard — GET loads, POST appends a run record
+        // 7. Leaderboard â GET loads, POST appends a run record
         if (req.method === 'GET' && req.url === '/leaderboard') {
             try {
                 const data = await fs.readFile(LEADERBOARD_PATH, 'utf-8');
@@ -304,7 +304,7 @@ const server = http.createServer(async (req, res) => {
                 const existing = await fs.readFile(LEADERBOARD_PATH, 'utf-8');
                 records = JSON.parse(existing);
                 if (!Array.isArray(records)) records = [];
-            } catch { /* file missing or corrupt — start fresh */ }
+            } catch { /* file missing or corrupt â start fresh */ }
             records.push({ ...entry, savedAt: new Date().toISOString() });
             await fs.mkdir(path.dirname(LEADERBOARD_PATH), { recursive: true });
             await fs.writeFile(LEADERBOARD_PATH, JSON.stringify(records, null, 2));
@@ -324,25 +324,25 @@ const server = http.createServer(async (req, res) => {
     }
 });
 
-// ── Online race: WebSocket matchmaking + state relay ─────────────────────────
+// ââ Online race: WebSocket matchmaking + state relay âââââââââââââââââââââââââ
 //
 // Protocol (all messages are JSON strings):
 //
-//   Client → Server:
+//   Client â Server:
 //     { type:'join',    name:'Alice' }
 //     { type:'state',   x, y, vx, vy, state, dashes, cp, done, time }
 //     { type:'leave' }
 //
-//   Server → Client:
-//     { type:'waiting',  roomId }            — in queue, waiting for opponent
-//     { type:'matched',  roomId, seed, opponentName }  — race starts
+//   Server â Client:
+//     { type:'waiting',  roomId }            â in queue, waiting for opponent
+//     { type:'matched',  roomId, seed, opponentName }  â race starts
 //     { type:'opponent', x, y, vx, vy, state, dashes, cp, done, time }
 //     { type:'opponentLeft' }
 
 const wss = new WebSocketServer({ server });
 
 // Each lobby room: { id, seed, players: [ws, ws] }
-const rooms   = new Map();   // roomId → room
+const rooms   = new Map();   // roomId â room
 const waiting = [];          // queue of solo ws sockets
 
 let _roomSeq = 0;
@@ -395,7 +395,7 @@ wss.on('connection', (ws) => {
                 send(partner, { type: 'matched', roomId, seed, opponentName: ws._name });
                 send(ws,      { type: 'matched', roomId, seed, opponentName: partner._name });
             } else {
-                // No partner yet — join the queue
+                // No partner yet â join the queue
                 waiting.push(ws);
                 send(ws, { type: 'waiting', roomId: null });
             }
