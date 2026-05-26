@@ -2420,7 +2420,8 @@
         if (aiEnabled && typeof NeuralAI !== 'undefined') {
             const ai = NeuralAI;
             ctx.fillStyle = '#44ff44'; ctx.font = 'bold 7px monospace';
-            ctx.fillText(`NEURAL AI ×${NeuralAI.N_AGENTS}  ${aiSpeedMult}x`, W - 88, 10);
+            const aiEngine = (typeof CelesteAI !== 'undefined') ? 'C++' : 'JS';
+            ctx.fillText(`NEURAL AI ×${NeuralAI.N_AGENTS}  ${aiSpeedMult}x  [${aiEngine}]`, W - 100, 10);
             ctx.font = '6px monospace';
             ctx.fillText(`Gen ${ai.generation}  Run ${ai.runCount}`, W - 80, 18);
             ctx.fillText(`Fit ${(ai.globalBestFit * 100).toFixed(0)}%`, W - 80, 25);
