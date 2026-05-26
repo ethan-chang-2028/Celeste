@@ -663,7 +663,7 @@
     // ── Race mode state ───────────────────────────────────────────────────────
     let raceMode        = false;
     let raceAIPlayer    = null;    // separate CelestePlayer for the AI opponent
-    let racePlayerCP    = 0;       // highest checkpoint index player has reached
+    let racePlayerCP    = 0;       // highest checkpoint index player 1 has reached
     let raceAICP        = 0;       // highest checkpoint index AI has reached
     let racePlayerDone  = false;
     let raceAIDone      = false;
@@ -677,6 +677,17 @@
     let raceAIStuckY      = 0;
     let raceAIProgFrames  = 0;
     let raceAIProgBest    = -Infinity;
+
+    // ── Player 2 (2-player race) ─────────────────────────────────────────────
+    // Controls: A/D = move, W = jump, E = dash, S = grab
+    let player2       = null;
+    let p2Active      = false;   // true when a second human is racing
+    let p2CP          = 0;
+    let p2Done        = false;
+    let p2Time        = null;
+    let p2StuckFrames = 0;
+    let p2StuckX      = 0;
+    let p2StuckY      = 0;
 
     function getRoomIdx() {
         return Math.max(0, Math.min(NUM_ROOMS - 1, Math.floor(player.x / ROOM_W)));
@@ -829,9 +840,12 @@
     // ── Input ────────────────────────────────────────────────────────────────
     const keys    = Object.create(null);
     const pressed = Object.create(null);
+    // p2keys / p2pressed share the same map — just different key codes
     const tracked = new Set([
         'ArrowLeft','ArrowRight','ArrowUp','ArrowDown',
         'KeyC','KeyX','KeyZ','ShiftLeft','ShiftRight','KeyR',
+        // Player 2: WASD + E(dash) + S(grab) — W doubles as jump
+        'KeyW','KeyA','KeyD','KeyS','KeyE',
     ]);
 
     window.addEventListener('keydown', (e) => {
@@ -846,6 +860,18 @@
         }
     });
     window.addEventListener('keyup', (e) => { if (tracked.has(e.code)) keys[e.code] = false; });
+
+    function readInputP2() {
+        const moveX = (keys['KeyD'] ? 1 : 0) - (keys['KeyA'] ? 1 : 0);
+        return {
+            moveX,
+            moveY:       0,
+            jumpPressed: !!pressed['KeyW'],
+            jumpHeld:    !!keys['KeyW'],
+            dashPressed: !!pressed['KeyE'],
+            grabHeld:    !!keys['KeyS'],
+        };
+    }
 
     function getHazardRects() {
         const rects = [];
@@ -1180,6 +1206,16 @@
         if (!raceAIPlayer) raceAIPlayer = new CelestePlayer(roomSpawns[0].x, roomSpawns[0].y);
         else raceAIPlayer.reset(roomSpawns[0].x, roomSpawns[0].y);
 
+        // Create / re-spawn player 2 if 2-player mode is active
+        if (p2Active) {
+            if (!player2) player2 = new CelestePlayer(roomSpawns[0].x, roomSpawns[0].y);
+            else player2.reset(roomSpawns[0].x, roomSpawns[0].y);
+            p2CP = 0; p2Done = false; p2Time = null;
+            p2StuckFrames = 0; p2StuckX = roomSpawns[0].x; p2StuckY = roomSpawns[0].y;
+        } else {
+            player2 = null;
+        }
+
         // Reset race state
         racePlayerCP = 0; raceAICP = 0;
         racePlayerDone = false; raceAIDone = false;
@@ -1200,6 +1236,13 @@
         const input = document.getElementById('race-seed-input');
         const val   = parseInt(input ? input.value : '', 10);
         if (!isNaN(val)) window.raceGenerateMap(val);
+    };
+
+    window.toggle2Player = function () {
+        p2Active = !p2Active;
+        const btn = document.getElementById('p2-toggle-btn');
+        if (btn) btn.textContent = p2Active ? '👥 2P: ON' : '👥 2P: OFF';
+        if (raceMode) window.raceGenerateMap(raceSeed);
     };
 
     window.randomGenerateMap = function (seedOverride) {
@@ -2185,16 +2228,33 @@
             ctx.globalAlpha = 1;
         }
 
-        // Race AI player (drawn behind human player)
+        // Race AI player — orange blinking rectangle
         if (raceMode && raceAIPlayer && !raceAIDone) {
             const blink = Math.sin(performance.now() / 160) > 0;
             ctx.globalAlpha = 0.82;
             ctx.fillStyle = blink ? '#ff6622' : '#ff8844';
             ctx.fillRect(raceAIPlayer.x, raceAIPlayer.y, raceAIPlayer.w, raceAIPlayer.h);
             ctx.globalAlpha = 1;
+            ctx.fillStyle = '#ffddaa'; ctx.font = '5px monospace';
+            ctx.fillText('AI', raceAIPlayer.x, raceAIPlayer.y - 2);
+        }
+
+        // Player 2 — magenta
+        if (raceMode && p2Active && player2 && !p2Done) {
+            ctx.globalAlpha = 0.88;
+            ctx.fillStyle = '#dd44ff';
+            ctx.fillRect(player2.x, player2.y, player2.w, player2.h);
+            ctx.globalAlpha = 1;
+            ctx.fillStyle = '#ffaaff'; ctx.font = '5px monospace';
+            ctx.fillText('P2', player2.x, player2.y - 2);
         }
 
         player.draw(ctx);
+        // Player 1 label in 2-player mode
+        if (raceMode && p2Active) {
+            ctx.fillStyle = '#aaddff'; ctx.font = '5px monospace';
+            ctx.fillText('P1', player.x, player.y - 2);
+        }
 
         // Room number watermarks (only non-maze)
         if (!isMaze) {
@@ -2285,97 +2345,129 @@
             ctx.fillText(`NEURAL AI ×${NeuralAI.N_AGENTS}  ${aiSpeedMult}x`, W - 88, 10);
             ctx.font = '6px monospace';
             ctx.fillText(`Gen ${ai.generation}  Run ${ai.runCount}`, W - 80, 18);
-            ctx.fillText(`Best ${(ai.globalBestFit * 100).toFixed(0)}%`, W - 80, 25);
+            ctx.fillText(`Fit ${(ai.globalBestFit * 100).toFixed(0)}%`, W - 80, 25);
+            const bestT = ai._bestTimeMs;
+            ctx.fillStyle = '#aaffaa';
+            ctx.fillText(bestT < Infinity ? `FastBest ${(bestT/1000).toFixed(1)}s` : 'No finish yet', W - 88, 32);
             const stag = ai._runsSinceImproved || 0;
             ctx.fillStyle = stag >= 15 ? '#ff8844' : '#aaffaa';
-            ctx.fillText(`Stag ${stag}/20`, W - 80, 32);
+            ctx.fillText(`Stag ${stag}/20`, W - 80, 39);
         }
 
         // ── Race HUD ────────────────────────────────────────────────────────────
         if (raceMode) {
-            const now = performance.now();
+            const now     = performance.now();
             const elapsed = (racePlayerDone ? racePlayerTime : now - raceStart) / 1000;
-            // Panel background
-            ctx.fillStyle = 'rgba(0,0,0,0.55)';
-            ctx.fillRect(0, 0, W, 42);
+            const panelH  = p2Active ? 50 : 42;
+            ctx.fillStyle = 'rgba(0,0,0,0.58)';
+            ctx.fillRect(0, 0, W, panelH);
 
-            // Timer
-            ctx.fillStyle = racePlayerDone ? '#d4af37' : '#ffffff';
-            ctx.font = 'bold 9px monospace';
-            ctx.fillText(`⏱ ${elapsed.toFixed(2)}s`, 6, 9);
+            // Timer (P1 clock)
+            ctx.fillStyle = racePlayerDone ? '#d4af37' : '#aaddff';
+            ctx.font = 'bold 8px monospace';
+            ctx.fillText(`P1 ⏱ ${elapsed.toFixed(2)}s`, 6, 9);
+
+            // P2 timer
+            if (p2Active) {
+                const p2Elapsed = (p2Done ? p2Time : now - raceStart) / 1000;
+                ctx.fillStyle = p2Done ? '#cc88ff' : '#dd44ff';
+                ctx.fillText(`P2 ⏱ ${p2Elapsed.toFixed(2)}s`, 6, 18);
+            }
 
             // Seed
-            ctx.fillStyle = 'rgba(180,180,180,0.7)';
-            ctx.font = '6px monospace';
-            ctx.fillText(`Seed ${raceSeed}`, 6, 17);
+            ctx.fillStyle = 'rgba(160,160,160,0.6)';
+            ctx.font = '5px monospace';
+            ctx.fillText(`Seed ${raceSeed}`, 6, p2Active ? 27 : 17);
 
-            // Checkpoint bars — one per room, named
+            // Checkpoint bars — three rows: P1 (blue), P2 (magenta), AI (orange)
             const cpNames = (roomNames && roomNames.length) ? roomNames : [];
             const barW = Math.floor((W - 12) / NUM_ROOMS) - 2;
+            const barBase = p2Active ? 32 : 22;
+            const barH = p2Active ? 5 : 7;
             for (let i = 0; i < NUM_ROOMS; i++) {
                 const bx = 6 + i * (barW + 2);
-                const by = 22;
-                const bh = 7;
-                const pDone = i <= racePlayerCP;
-                const aDone = i <= raceAICP;
                 // Background
-                ctx.fillStyle = 'rgba(60,60,60,0.7)'; ctx.fillRect(bx, by, barW, bh);
-                // Player portion (blue)
-                if (pDone) { ctx.fillStyle = '#4488ff'; ctx.fillRect(bx, by, barW, bh); }
-                // AI portion (orange, half-height top strip)
-                if (aDone) { ctx.fillStyle = '#ff6622'; ctx.fillRect(bx, by, barW, Math.ceil(bh/2)); }
-                // Checkpoint name below bar
-                ctx.fillStyle = 'rgba(220,220,220,0.65)';
+                ctx.fillStyle = 'rgba(60,60,60,0.7)'; ctx.fillRect(bx, barBase, barW, barH);
+                // P1 — bottom half of bar (blue)
+                if (i <= racePlayerCP) {
+                    ctx.fillStyle = '#4488ff';
+                    ctx.fillRect(bx, barBase + Math.ceil(barH / 2), barW, barH - Math.ceil(barH / 2));
+                }
+                // P2 — top third (magenta)
+                if (p2Active && i <= p2CP) {
+                    ctx.fillStyle = '#cc44ff';
+                    const third = Math.ceil(barH / 3);
+                    ctx.fillRect(bx, barBase, barW, third);
+                }
+                // AI — middle third (orange)
+                if (i <= raceAICP) {
+                    ctx.fillStyle = '#ff6622';
+                    const third = Math.ceil(barH / 3);
+                    ctx.fillRect(bx, barBase + third, barW, third);
+                }
+                // Checkpoint name
+                ctx.fillStyle = 'rgba(200,200,200,0.65)';
                 ctx.font = '4px monospace';
-                const lbl = cpNames[i] || `${i+1}`;
-                ctx.fillText(lbl.substring(0, 10), bx, by + bh + 5);
+                ctx.fillText((cpNames[i] || `${i+1}`).substring(0, 10), bx, barBase + barH + 5);
             }
 
-            // Leading indicator
-            const leading = racePlayerCP > raceAICP ? 'YOU LEAD' :
-                            raceAICP > racePlayerCP ? 'AI LEADS' : 'TIED';
-            const lCol    = racePlayerCP > raceAICP ? '#88ccff' :
-                            raceAICP > racePlayerCP ? '#ff8844' : '#ffffff';
-            ctx.fillStyle = lCol; ctx.font = 'bold 7px monospace';
-            ctx.fillText(leading, W - 52, 9);
+            // Leading indicator (top right)
+            const leaders = [];
+            const allCP = [racePlayerCP, ...(p2Active ? [p2CP] : []), raceAICP];
+            const maxCP = Math.max(...allCP);
+            if (racePlayerCP === maxCP) leaders.push('P1');
+            if (p2Active && p2CP === maxCP) leaders.push('P2');
+            if (raceAICP === maxCP) leaders.push('AI');
+            const leadStr = leaders.length === 3 || (leaders.length === 2 && leaders.includes('P1') && leaders.includes('AI')) ? 'TIED'
+                          : leaders.join('+') + ' LEAD';
+            const lCol = leaders.includes('AI') && !leaders.includes('P1') ? '#ff8844'
+                       : leaders.includes('P2') && !leaders.includes('P1') ? '#cc44ff' : '#aaddff';
+            ctx.fillStyle = lCol; ctx.font = 'bold 6px monospace';
+            ctx.fillText(leadStr, W - 50, 9);
 
-            // AI time badge when AI finishes
+            // Finish-time badges (top right, below leading)
+            let badgeY = 17;
             if (raceAIDone && raceAITime !== null) {
-                ctx.fillStyle = '#ff6622'; ctx.font = '6px monospace';
-                ctx.fillText(`AI: ${(raceAITime/1000).toFixed(2)}s`, W - 52, 17);
+                ctx.fillStyle = '#ff8844'; ctx.font = '5px monospace';
+                ctx.fillText(`AI: ${(raceAITime/1000).toFixed(2)}s`, W - 50, badgeY); badgeY += 7;
+            }
+            if (p2Active && p2Done && p2Time !== null) {
+                ctx.fillStyle = '#cc44ff'; ctx.font = '5px monospace';
+                ctx.fillText(`P2: ${(p2Time/1000).toFixed(2)}s`, W - 50, badgeY);
             }
 
-            // Race result overlay
-            if (racePlayerDone || raceAIDone) {
-                const bothDone = racePlayerDone && raceAIDone;
-                if (racePlayerDone || raceAIDone) {
-                    ctx.fillStyle = 'rgba(0,0,0,0.70)'; ctx.fillRect(40, 58, 240, 68);
-                    if (racePlayerDone && raceAIDone) {
-                        const winner = racePlayerTime < raceAITime ? 'YOU WIN!' : raceAITime < racePlayerTime ? 'AI WINS!' : 'TIE!';
-                        const wCol   = racePlayerTime < raceAITime ? '#d4af37' : raceAITime < racePlayerTime ? '#ff6622' : '#ffffff';
-                        ctx.fillStyle = wCol; ctx.font = 'bold 13px monospace';
-                        ctx.fillText(winner, 105, 80);
-                        ctx.fillStyle = '#88ccff'; ctx.font = '7px monospace';
-                        ctx.fillText(`You : ${(racePlayerTime/1000).toFixed(2)}s`, 60, 95);
-                        ctx.fillStyle = '#ff8844';
-                        ctx.fillText(` AI : ${(raceAITime/1000).toFixed(2)}s`,    60, 105);
-                    } else if (racePlayerDone) {
-                        ctx.fillStyle = '#d4af37'; ctx.font = 'bold 11px monospace';
-                        ctx.fillText('YOU FINISHED!', 80, 80);
-                        ctx.fillStyle = '#88ccff'; ctx.font = '7px monospace';
-                        ctx.fillText(`Your time: ${(racePlayerTime/1000).toFixed(2)}s`, 90, 95);
-                        ctx.fillStyle = '#aaa';
-                        ctx.fillText('Waiting for AI...', 97, 105);
-                    } else {
-                        ctx.fillStyle = '#ff6622'; ctx.font = 'bold 11px monospace';
-                        ctx.fillText('AI FINISHED!', 85, 80);
-                        ctx.fillStyle = '#ff8844'; ctx.font = '7px monospace';
-                        ctx.fillText(`AI time: ${(raceAITime/1000).toFixed(2)}s`, 95, 95);
-                        ctx.fillStyle = '#aaa';
-                        ctx.fillText('Keep going!', 105, 105);
-                    }
+            // Result overlay — show when at least one finisher is across the line
+            const anyDone = racePlayerDone || (p2Active && p2Done) || raceAIDone;
+            const allDone = racePlayerDone && (!p2Active || p2Done) && raceAIDone;
+            if (anyDone) {
+                // Collect all times into a ranked list
+                const entries = [];
+                if (racePlayerDone) entries.push({ label: 'P1', t: racePlayerTime, col: '#aaddff' });
+                if (p2Active && p2Done) entries.push({ label: 'P2', t: p2Time, col: '#dd44ff' });
+                if (raceAIDone) entries.push({ label: 'AI', t: raceAITime, col: '#ff8844' });
+                entries.sort((a, b) => a.t - b.t);
+
+                if (allDone) {
+                    ctx.fillStyle = 'rgba(0,0,0,0.72)'; ctx.fillRect(35, 55, 250, 78);
+                    const winnerCol = entries[0].col;
+                    const winnerTxt = entries[0].label === 'AI' ? 'AI WINS!'
+                                    : entries[0].label === 'P2' ? 'P2 WINS!' : 'YOU WIN!';
+                    ctx.fillStyle = winnerCol; ctx.font = 'bold 12px monospace';
+                    ctx.fillText(winnerTxt, W / 2 - ctx.measureText(winnerTxt).width / 2, 73);
+                    ctx.font = '7px monospace';
+                    entries.forEach((e, idx) => {
+                        ctx.fillStyle = e.col;
+                        ctx.fillText(`${idx+1}. ${e.label}: ${(e.t/1000).toFixed(2)}s`, 55, 87 + idx * 11);
+                    });
                     ctx.fillStyle = '#888'; ctx.font = '6px monospace';
-                    ctx.fillText('press R for new race', 95, 118);
+                    ctx.fillText('press R for new race', 88, 87 + entries.length * 11 + 6);
+                } else {
+                    // At least one done but race still ongoing — small toast top centre
+                    const fin = entries[0];
+                    ctx.fillStyle = 'rgba(0,0,0,0.60)'; ctx.fillRect(80, 44, 160, 16);
+                    ctx.fillStyle = fin.col; ctx.font = 'bold 7px monospace';
+                    const msg = `${fin.label} finished! ${(fin.t/1000).toFixed(2)}s`;
+                    ctx.fillText(msg, 84, 54);
                 }
             }
         }
@@ -2497,11 +2589,11 @@
                     gh.progressFrames = 0; gh.progressBest = -Infinity; gh.lastRow = -1;
                     continue;
                 }
-                // Goal
+                // Goal — feed speed fitness into the gene pool
                 if (GOAL && gh.p.x < GOAL.x + GOAL.w && gh.p.x + gh.p.w > GOAL.x
                          && gh.p.y < GOAL.y + GOAL.h && gh.p.y + gh.p.h > GOAL.y) {
                     const rs = roomSpawns[0];
-                    NeuralAI.goalAgent(gh.idx);
+                    NeuralAI.goalAgent(gh.idx); // timing tracked internally in _agentStates
                     gh.p.reset(rs.x, rs.y);
                     gh.stuckFrames = 0; gh.stuckX = rs.x; gh.stuckY = rs.y;
                     gh.progressFrames = 0; gh.progressBest = -Infinity; gh.lastRow = -1;
@@ -2548,16 +2640,46 @@
                 raceAIStuckFrames = 0; raceAIStuckX = rs.x; raceAIStuckY = rs.y;
                 raceAIProgFrames = 0;  raceAIProgBest = -Infinity;
             }
-            // Goal
+            // Goal — AI finishes race; feed speed fitness
             if (GOAL && raceAIPlayer.x < GOAL.x + GOAL.w && raceAIPlayer.x + raceAIPlayer.w > GOAL.x
                      && raceAIPlayer.y < GOAL.y + GOAL.h && raceAIPlayer.y + raceAIPlayer.h > GOAL.y) {
                 raceAIDone = true;
                 raceAITime = performance.now() - raceStart;
                 raceAICP   = NUM_ROOMS - 1;
+                NeuralAI.onGoal(raceAITime);
             }
         }
 
-        // ── Race: player checkpoint + finish ───────────────────────────────────
+        // ── Player 2 update ─────────────────────────────────────────────────────
+        if (raceMode && p2Active && player2 && !p2Done) {
+            const p2Inp   = readInputP2();
+            const allPlts = dynPlat.length ? platforms.concat(dynPlat) : platforms;
+            player2.update(p2Inp, allPlts, FIXED_DT);
+            // Checkpoint
+            const p2Room = Math.max(0, Math.min(NUM_ROOMS - 1, Math.floor(player2.x / ROOM_W)));
+            if (p2Room > p2CP) p2CP = p2Room;
+            // Stuck (simple position check only for human — no progress kill)
+            if (Math.abs(player2.x - p2StuckX) > 2 || Math.abs(player2.y - p2StuckY) > 2) {
+                p2StuckFrames = 0; p2StuckX = player2.x; p2StuckY = player2.y;
+            } else { p2StuckFrames++; }
+            // Death
+            if (player2.y > DEATH_Y) {
+                const si = closestRespawnIdx(player2.x, player2.y);
+                const rs = roomSpawns[si] || roomSpawns[0];
+                player2.reset(rs.x, rs.y);
+                p2StuckFrames = 0; p2StuckX = rs.x; p2StuckY = rs.y;
+            }
+            // Goal
+            if (GOAL && player2.x < GOAL.x + GOAL.w && player2.x + player2.w > GOAL.x
+                     && player2.y < GOAL.y + GOAL.h && player2.y + player2.h > GOAL.y) {
+                p2Done = true;
+                p2Time = performance.now() - raceStart;
+                p2CP   = NUM_ROOMS - 1;
+                if (typeof NeuralAI !== 'undefined') NeuralAI.learnFromRoute(p2Time);
+            }
+        }
+
+        // ── Race: player 1 checkpoint + finish ─────────────────────────────────
         if (raceMode) {
             const pRoomIdx = Math.max(0, Math.min(NUM_ROOMS - 1, Math.floor(player.x / ROOM_W)));
             if (pRoomIdx > racePlayerCP) racePlayerCP = pRoomIdx;
@@ -2567,14 +2689,17 @@
                 racePlayerCP   = NUM_ROOMS - 1;
                 won = true; winMs = racePlayerTime;
                 if (bestMs === null || winMs < bestMs) bestMs = winMs;
+                // Feed player's time into AI so it learns to race at human speed
+                if (typeof NeuralAI !== 'undefined') NeuralAI.learnFromRoute(racePlayerTime);
             }
         }
 
         if (!raceMode && !won && playerOverlapsGoal()) {
             won = true; winMs = performance.now() - runStart;
             if (bestMs === null || winMs < bestMs) bestMs = winMs;
+            if (typeof NeuralAI !== 'undefined') NeuralAI.learnFromRoute(winMs);
             if (aiEnabled && typeof NeuralAI !== 'undefined') {
-                NeuralAI.onGoal();
+                NeuralAI.onGoal(winMs);
                 updateAIBtn();
             }
         }
@@ -2624,10 +2749,10 @@
         const elapsed = won ? winMs : (performance.now() - runStart);
         if (raceMode) {
             const raceElapsed = (racePlayerDone ? racePlayerTime : performance.now() - raceStart) / 1000;
-            statusEl.textContent =
-                `RACE  time=${raceElapsed.toFixed(2)}s  ` +
-                `you:cp${racePlayerCP+1}/${NUM_ROOMS}  ai:cp${raceAICP+1}/${NUM_ROOMS}  ` +
-                `${measuredFps.toFixed(0)} fps`;
+            let st = `RACE  P1:${raceElapsed.toFixed(2)}s cp${racePlayerCP+1}/${NUM_ROOMS}`;
+            if (p2Active) st += `  P2:cp${p2CP+1}/${NUM_ROOMS}`;
+            st += `  AI:cp${raceAICP+1}/${NUM_ROOMS}  ${measuredFps.toFixed(0)} fps`;
+            statusEl.textContent = st;
         } else {
             statusEl.textContent =
                 `${roomNames[getRoomIdx()] || ''}  ` +

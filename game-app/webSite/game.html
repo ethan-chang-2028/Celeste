@@ -203,6 +203,7 @@
                 <button class="random-only" style="display:none;" onclick="loadRandomSeed()">Load Seed</button>
                 <span   class="random-only" style="display:none;font-family:monospace;font-size:0.8rem;color:#aaa;" id="random-map-seed">Seed: —</span>
                 <button class="race-only" style="display:none;background:#7a3000;" onclick="raceGenerateMap()">&#127937; New Race</button>
+                <button class="race-only" id="p2-toggle-btn" style="display:none;background:#5a1a7a;" onclick="toggle2Player()">&#128101; 2P: OFF</button>
                 <input  class="race-only" style="display:none;" type="number" id="race-seed-input" placeholder="Seed #" min="0" max="999999">
                 <button class="race-only" style="display:none;" onclick="loadRaceSeed()">Load Seed</button>
                 <span   class="race-only" style="display:none;font-family:monospace;font-size:0.8rem;color:#ffaa66;" id="race-seed-display">Seed: —</span>
@@ -211,12 +212,17 @@
             <canvas id="game-canvas" width="320" height="180"></canvas>
 
             <div class="controls">
-                <p><strong>Controls:</strong>
-                    Arrow keys to move &middot;
+                <p><strong>P1:</strong>
+                    Arrow keys &middot;
                     <kbd>C</kbd> jump &middot;
-                    <kbd>X</kbd> dash (8-directional) &middot;
-                    <kbd>Z</kbd> / <kbd>Shift</kbd> grab walls &middot;
+                    <kbd>X</kbd> dash &middot;
+                    <kbd>Z</kbd>/<kbd>Shift</kbd> grab &middot;
                     <kbd>R</kbd> reset
+                    &nbsp;&nbsp;<strong>P2 (race):</strong>
+                    <kbd>A</kbd>/<kbd>D</kbd> move &middot;
+                    <kbd>W</kbd> jump &middot;
+                    <kbd>E</kbd> dash &middot;
+                    <kbd>S</kbd> grab
                 </p>
                 <p id="status">Ready.</p>
             </div>

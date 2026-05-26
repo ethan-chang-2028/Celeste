@@ -307,6 +307,16 @@
         RAY_DIRS,
         RAY_LEN,
 
+        // Speed fitness: reaching goal in <30s gives bonus fitness above 1.0.
+        // 0 ms → 2.0, 15 s → 1.5, 30 s+ → 1.0 (same as before). Death → 0..1.
+        _goalFitness(timeMs) {
+            const speedBonus = timeMs > 0 ? Math.max(0, 1.0 - timeMs / 30000) : 0;
+            return 1.0 + speedBonus;
+        },
+
+        // Best player/ghost time seen — used to benchmark speed learning.
+        _bestTimeMs: Infinity,
+
         init(spawnX, goalEnd, opts) {
             this._spawnX     = spawnX  || 0;
             this._goalEnd    = goalEnd || 1600;
@@ -320,6 +330,7 @@
             this._maxX    = this._spawnX;
             this._pool    = [];
             this._prevJ   = false;
+            this._runStartMs = performance.now();
         },
 
         reset(spawnX, opts) {
@@ -334,6 +345,7 @@
             this._adaptSt = makeAdaptState();
             this._stuckSt = makeStuckState(this._weights);
             this._prevJ   = false;
+            this._runStartMs = performance.now();
         },
 
         // ── Called every frame when AI is active ─────────────────────────────
@@ -378,8 +390,26 @@
             this._endRun(fit);
         },
 
-        // ── Called on goal reached ────────────────────────────────────────────
-        onGoal()  { this._endRun(1.0 + 1.0 / (this.runCount + 1)); },
+        // ── Called on goal reached — timeMs makes faster runs score higher ────
+        onGoal(timeMs) {
+            const ms = timeMs != null ? timeMs : (performance.now() - this._runStartMs);
+            if (ms < this._bestTimeMs) this._bestTimeMs = ms;
+            this._endRun(this._goalFitness(ms));
+        },
+
+        // ── Feed a human player's completion into the gene pool ───────────────
+        // The player has no weights; we inject a mutated version of the current
+        // global best (or a random genome) stamped with the player's speed fitness.
+        // This applies pressure toward beating the player's time.
+        learnFromRoute(timeMs) {
+            if (timeMs == null || timeMs <= 0) return;
+            if (timeMs < this._bestTimeMs) this._bestTimeMs = timeMs;
+            const fit = this._goalFitness(timeMs) * 1.02; // tiny bonus: human proves route is possible
+            const base = this._globalBest || this._weights || randWeights();
+            // Inject two candidates: one conservatively mutated, one more exploratory
+            this._poolUpdate(spawnNoise(base),                   fit);
+            this._poolUpdate(mutateWeights(base, 0.15, 0.20),    fit * 0.99);
+        },
 
         _poolUpdate(weights, fitness) {
             this.runCount++;
@@ -421,6 +451,7 @@
             this._maxX    = this._spawnX;
             this._minY    = this._spawnY;
             this._prevJ   = false;
+            this._runStartMs = performance.now();
         },
 
         resetWeights() {
@@ -444,7 +475,8 @@
                 ? breedNext(this._pool, this.generation, this._globalBest)
                 : (this._globalBest ? spawnNoise(this._globalBest) : randWeights());
             return { weights: w, adaptSt: makeAdaptState(), stuckSt: makeStuckState(w),
-                     prevJ: false, maxX: this._spawnX, minY: this._spawnY };
+                     prevJ: false, maxX: this._spawnX, minY: this._spawnY,
+                     runStartMs: performance.now() };
         },
 
         initAgents() {
@@ -460,6 +492,7 @@
                 ag.prevJ = false;
                 ag.adaptSt = makeAdaptState();
                 ag.stuckSt = makeStuckState(ag.weights);
+                ag.runStartMs = performance.now();
             }
         },
 
@@ -495,17 +528,23 @@
             const newW = this._breedWeights();
             this._agentStates[i] = { weights: newW, adaptSt: makeAdaptState(),
                                       stuckSt: makeStuckState(newW), prevJ: false,
-                                      maxX: this._spawnX, minY: this._spawnY };
+                                      maxX: this._spawnX, minY: this._spawnY,
+                                      runStartMs: performance.now() };
         },
 
+        // goalAgent — ghost reached the goal; score by speed so faster ghosts
+        // propagate their weights more strongly into the next generation.
         goalAgent(i) {
             const ag = this._agentStates[i];
             if (!ag) return;
-            this._poolUpdate(ag.weights, 1.0 + 1.0 / (this.runCount + 1));
+            const ms = performance.now() - (ag.runStartMs || performance.now());
+            if (ms < this._bestTimeMs) this._bestTimeMs = ms;
+            this._poolUpdate(ag.weights, this._goalFitness(ms));
             const newW = this._breedWeights();
             this._agentStates[i] = { weights: newW, adaptSt: makeAdaptState(),
                                       stuckSt: makeStuckState(newW), prevJ: false,
-                                      maxX: this._spawnX, minY: this._spawnY };
+                                      maxX: this._spawnX, minY: this._spawnY,
+                                      runStartMs: performance.now() };
         },
 
         // ── Persistence: server-first, localStorage fallback ──────────────────
