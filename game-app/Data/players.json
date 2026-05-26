@@ -1,7 +1,19 @@
 [
   {
+    "id": "u-ethan001",
     "username": "ethan",
+    "email": "ethan@example.com",
     "password": "pass123",
-    "registeredAt": "2026-05-21T18:48:10.802Z"
+    "country": "",
+    "avatar": "Madeline",
+    "role": "player",
+    "bio": "",
+    "deathCount": 0,
+    "bestTimes": {},
+    "levelsCompleted": 0,
+    "achievements": [],
+    "rank": null,
+    "registeredAt": "2026-05-21T18:48:10.802Z",
+    "lastLogin": null
   }
 ]
