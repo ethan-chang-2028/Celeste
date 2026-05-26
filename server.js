@@ -263,10 +263,26 @@ const server = http.createServer(async (req, res) => {
 
         if (req.method === 'POST' && req.url === '/ai-model') {
             const data = await getRequestBody(req);
-            await fs.mkdir(path.dirname(AI_MODEL_PATH), { recursive: true });
-            await fs.writeFile(AI_MODEL_PATH, JSON.stringify(data, null, 2));
+            // Only save if incoming weights are strictly better than what's on disk.
+            // This prevents a fresh browser session from overwriting a well-trained model.
+            if (data && Array.isArray(data.weights) && data.weights.length > 0) {
+                let currentBestFit = -Infinity;
+                try {
+                    const existing = await fs.readFile(AI_MODEL_PATH, 'utf-8');
+                    const parsed = JSON.parse(existing);
+                    if (typeof parsed.bestFit === 'number') currentBestFit = parsed.bestFit;
+                } catch { /* no existing model — accept anything */ }
+
+                const incomingFit = typeof data.bestFit === 'number' ? data.bestFit : 0;
+                if (incomingFit > currentBestFit) {
+                    await fs.mkdir(path.dirname(AI_MODEL_PATH), { recursive: true });
+                    await fs.writeFile(AI_MODEL_PATH, JSON.stringify(data, null, 2));
+                    res.writeHead(200, { 'Content-Type': 'application/json' });
+                    return res.end(JSON.stringify({ message: 'AI model saved.', accepted: true }));
+                }
+            }
             res.writeHead(200, { 'Content-Type': 'application/json' });
-            return res.end(JSON.stringify({ message: 'AI model saved.' }));
+            return res.end(JSON.stringify({ message: 'Existing model is better, not overwritten.', accepted: false }));
         }
 
         // 7. Leaderboard — GET loads, POST appends a run record
