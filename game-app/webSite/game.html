@@ -254,6 +254,7 @@
                 <span class="ai-only" id="map-seed">Seed: —</span>
                 <button id="ai-control-btn" class="ai-ctrl" onclick="toggleAIControl()" style="background:#5a2a80;display:none;">&#129504; Neural AI: OFF</button>
                 <button class="ai-ctrl" onclick="resetAI()" style="background:#7a2020;display:none;" title="Wipe learned weights and start from scratch">&#128260; Reset AI</button>
+                <button id="record-demo-btn" class="ai-ctrl" onclick="window.toggleRecording && window.toggleRecording()" style="background:#20607a;display:none;" title="Record your gameplay as AI training data">&#9210; Record Demo</button>
                 <span class="ai-ctrl" style="color:#aaa;font-family:monospace;font-size:0.8rem;display:none;">Speed:</span>
                 <button class="ai-ctrl ai-speed-btn" data-speed="1"  onclick="setAISpeed(1)"  style="background:#1a6a1a;display:none;" title="1× speed">1x</button>
                 <button class="ai-ctrl ai-speed-btn" data-speed="2"  onclick="setAISpeed(2)"  style="background:#3a3a6a;display:none;" title="2× speed">2x</button>

@@ -786,6 +786,11 @@
     let aiSpeedMult = 1;
     let aiGhosts = [];  // ghost CelestePlayer instances for parallel training
 
+    // ── Demo recording (imitation learning) ──────────────────────────────────
+    let recordingActive = false;
+    let recordingFrames = [];
+    let recordingSeed   = 0;
+
     function initNeuralAI() {
         if (typeof NeuralAI === 'undefined') return;
         const spawnX = roomSpawns[0] ? roomSpawns[0].x : 0;
@@ -910,6 +915,66 @@
             grabHeld:    !!(keys['KeyZ'] || keys['ShiftLeft'] || keys['ShiftRight']),
         };
     }
+
+    // ── Demo recording helpers ────────────────────────────────────────────────
+    function humanActionIndex(inp) {
+        const dash = inp.dashPressed;
+        const jump = inp.jumpHeld;
+        const grab = inp.grabHeld;
+        const mx   = inp.moveX;   // -1, 0, 1
+        const my   = inp.moveY;   // -1, 0, 1
+        if (dash) {
+            if      (mx ===  1 && my ===  0) return 3;
+            else if (mx === -1 && my ===  0) return 9;
+            else if (mx ===  0 && my === -1) return 10;
+            else if (mx ===  1 && my === -1) return 11;
+            else if (mx === -1 && my === -1) return 12;
+            else if (mx ===  0 && my ===  1) return 13;
+            else if (mx ===  1 && my ===  1) return 14;
+            else if (mx === -1 && my ===  1) return 15;
+            return mx < 0 ? 9 : 3;
+        }
+        if (grab && jump)  return 8;
+        if (grab)          return mx > 0 ? 7 : 6;
+        if (jump && mx >  0) return 4;
+        if (jump && mx <  0) return 5;
+        if (jump)            return 2;
+        if (mx >  0) return 1;
+        if (mx <  0) return 0;
+        return -1;  // idle — skip
+    }
+
+    async function saveRecording() {
+        const payload = { seed: recordingSeed, frames: recordingFrames };
+        try {
+            const res = await fetch('/ai-recording', {
+                method:  'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body:    JSON.stringify(payload),
+                signal:  AbortSignal.timeout(5000),
+            });
+            const obj = await res.json();
+            if (statusEl) statusEl.textContent =
+                `Recording saved: ${recordingFrames.length} frames.`;
+        } catch (_) {
+            if (statusEl) statusEl.textContent = 'Recording save failed.';
+        }
+        recordingFrames = [];
+    }
+
+    window.toggleRecording = function () {
+        if (aiEnabled) return;  // only record human play
+        recordingActive = !recordingActive;
+        const btn = document.getElementById('record-demo-btn');
+        if (recordingActive) {
+            recordingFrames = [];
+            recordingSeed   = currentSeed;
+            if (btn) { btn.textContent = '⏹ Stop'; btn.style.background = '#aa2020'; }
+        } else {
+            if (btn) { btn.textContent = '⏺ Record Demo'; btn.style.background = '#20607a'; }
+            if (recordingFrames.length > 0) saveRecording();
+        }
+    };
 
     // ── Globals for buttons ───────────────────────────────────────────────────
     window.aiGenerateMap = function (seedOverride) {
@@ -2607,6 +2672,21 @@
         }
 
         const input = readInput();
+
+        // Capture human demo frame for imitation learning
+        if (recordingActive && !aiEnabled && GOAL &&
+                typeof NeuralAI !== 'undefined' && NeuralAI.readSensors) {
+            const actionIdx = humanActionIndex(input);
+            if (actionIdx >= 0) {
+                const sensors = NeuralAI.readSensors(player, platforms, GOAL, getHazardRects());
+                if (sensors) {
+                    const frame = Array.from(sensors);
+                    frame.push(actionIdx);
+                    recordingFrames.push(frame);
+                }
+            }
+        }
+
         const dynPlat = entities.filter(e => e.isSolid)
             .map(e => ({ x: e.x, y: e.y, w: e.w, h: e.h, color: e.color || '#888' }));
         // Ice surface detection (uses previous-frame position — 1-tick delay, imperceptible)

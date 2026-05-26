@@ -104,6 +104,8 @@
         }
 
         // ── WASM-backed NeuralAI replacement ──────────────────────────────────
+        // Save JS NeuralAI reference before we replace it — needed for readSensors.
+        const _jsNeuralAI = window.NeuralAI;
 
         const wasmAI = {
             get generation()    { return mgr.generation;    },
@@ -179,6 +181,10 @@
                 fetch('/ai-model', { method: 'POST', headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({}), signal: AbortSignal.timeout(3000) }).catch(() => {});
                 mgr.resetWeights();
+            },
+
+            readSensors(player, platforms, goal, hazards) {
+                return _jsNeuralAI ? _jsNeuralAI.readSensors(player, platforms, goal, hazards) : null;
             },
         };
 

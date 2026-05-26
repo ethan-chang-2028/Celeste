@@ -360,3 +360,99 @@ inline Inputs buildSensorInputs(const AgentSensorState& ag,
     for (int m = 0; m < MEM_SIZE; m++) inp[17 + m] = mem[m];
     return inp;
 }
+
+// ── IMITATION LEARNING ────────────────────────────────────────────────────
+
+struct ImitForward {
+    std::array<float, N_HID> h_pre, h;
+    std::array<float, N_OUT> o_pre, o;
+    std::array<float, N_ACT> p;     // softmax probs over action logits
+    int   best;
+    float loss;
+};
+
+inline ImitForward imitForward(const Weights& w, const Inputs& inp, int target) {
+    ImitForward fwd{};
+
+    for (int j = 0; j < N_HID; j++) {
+        float s = w[N_IN * N_HID + j];
+        for (int i = 0; i < N_IN; i++) s += inp[i] * w[i * N_HID + j];
+        fwd.h_pre[j] = s;
+        fwd.h[j]     = relu(s);
+    }
+
+    const int base = N_IN * N_HID + N_HID;
+    for (int k = 0; k < N_OUT; k++) {
+        float s = w[base + N_HID * N_OUT + k];
+        for (int j = 0; j < N_HID; j++) s += fwd.h[j] * w[base + j * N_OUT + k];
+        fwd.o_pre[k] = s;
+        fwd.o[k]     = sigmoid(s);
+    }
+
+    float maxO = fwd.o[0];
+    for (int k = 1; k < N_ACT; k++) if (fwd.o[k] > maxO) maxO = fwd.o[k];
+    float sumE = 0.f;
+    for (int k = 0; k < N_ACT; k++) {
+        fwd.p[k] = std::exp(fwd.o[k] - maxO);
+        sumE += fwd.p[k];
+    }
+    for (int k = 0; k < N_ACT; k++) fwd.p[k] /= sumE;
+
+    fwd.best = target;
+    fwd.loss = (target >= 0 && target < N_ACT) ? -std::log(fwd.p[target] + 1e-8f) : 0.f;
+    return fwd;
+}
+
+inline Weights imitGradient(const Weights& w, const Inputs& inp, const ImitForward& fwd) {
+    Weights grad{};
+    if (fwd.best < 0 || fwd.best >= N_ACT) return grad;
+
+    // Softmax CE gradient w.r.t. sigmoid outputs, then chain through sigmoid
+    std::array<float, N_OUT> dOut{};
+    for (int k = 0; k < N_ACT; k++) {
+        float dLdo = fwd.p[k] - (k == fwd.best ? 1.f : 0.f);
+        dOut[k] = dLdo * fwd.o[k] * (1.f - fwd.o[k]);
+    }
+
+    const int base = N_IN * N_HID + N_HID;
+    for (int k = 0; k < N_ACT; k++) {
+        grad[base + N_HID * N_OUT + k] = dOut[k];
+        for (int j = 0; j < N_HID; j++)
+            grad[base + j * N_OUT + k] = dOut[k] * fwd.h[j];
+    }
+
+    std::array<float, N_HID> dH{};
+    for (int j = 0; j < N_HID; j++)
+        for (int k = 0; k < N_ACT; k++)
+            dH[j] += dOut[k] * w[base + j * N_OUT + k];
+
+    for (int j = 0; j < N_HID; j++) {
+        const float dHPre = dH[j] * (fwd.h_pre[j] > 0.f ? 1.f : 0.f);
+        grad[N_IN * N_HID + j] = dHPre;
+        for (int i = 0; i < N_IN; i++)
+            grad[i * N_HID + j] = dHPre * inp[i];
+    }
+
+    return grad;
+}
+
+struct AdamImitState {
+    std::array<float, W_SIZE> m{}, v{};
+    int   t   = 0;
+    float lr  = 1e-3f;
+    float b1  = 0.9f;
+    float b2  = 0.999f;
+    float eps = 1e-8f;
+};
+
+inline void adamStep(Weights& w, const Weights& grad, AdamImitState& st) {
+    st.t++;
+    const float bc1 = 1.f - std::pow(st.b1, (float)st.t);
+    const float bc2 = 1.f - std::pow(st.b2, (float)st.t);
+    for (int i = 0; i < W_SIZE; i++) {
+        st.m[i] = st.b1 * st.m[i] + (1.f - st.b1) * grad[i];
+        st.v[i] = st.b2 * st.v[i] + (1.f - st.b2) * grad[i] * grad[i];
+        w[i] -= st.lr * (st.m[i] / bc1) / (std::sqrt(st.v[i] / bc2) + st.eps);
+    }
+    clamp(w);
+}

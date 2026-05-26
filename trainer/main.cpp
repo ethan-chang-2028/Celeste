@@ -45,6 +45,101 @@ static constexpr float W_MAX_X = LEVEL_W;
 static constexpr float W_MIN_Y = -60.f;
 static constexpr float W_MAX_Y = 210.f;
 
+// ── Imitation learning ────────────────────────────────────
+struct RecordingFrame {
+    Inputs inp;
+    int    action;
+};
+
+// Parse ai-recordings.json → flat list of (inputs, action) frames.
+// Structure: [{..., "frames": [[f0..f22, action], ...]}, ...]
+static std::vector<RecordingFrame> loadRecordings(const std::string& path) {
+    std::ifstream f(path);
+    if (!f) { std::cerr << "Cannot open recordings: " << path << '\n'; return {}; }
+    std::string content((std::istreambuf_iterator<char>(f)),
+                         std::istreambuf_iterator<char>());
+
+    std::vector<RecordingFrame> frames;
+    int    bracketDepth = 0;
+    size_t frameStart   = std::string::npos;
+
+    for (size_t i = 0; i < content.size(); i++) {
+        if (content[i] == '[') {
+            bracketDepth++;
+            if (bracketDepth == 3) frameStart = i;
+        } else if (content[i] == ']') {
+            if (bracketDepth == 3 && frameStart != std::string::npos) {
+                std::string sub = content.substr(frameStart + 1, i - frameStart - 1);
+                std::istringstream ss(sub);
+                std::string tok;
+                RecordingFrame rf{};
+                int  k  = 0;
+                bool ok = true;
+                while (std::getline(ss, tok, ',')) {
+                    if (k < N_IN) {
+                        try { rf.inp[k++] = std::stof(tok); } catch (...) { ok = false; break; }
+                    } else if (k == N_IN) {
+                        try { rf.action = std::stoi(tok); k++; } catch (...) { ok = false; break; }
+                    }
+                }
+                if (ok && k == N_IN + 1 && rf.action >= 0 && rf.action < N_ACT)
+                    frames.push_back(rf);
+                frameStart = std::string::npos;
+            }
+            bracketDepth--;
+        }
+    }
+    return frames;
+}
+
+static void runImitate(const std::string& dataPath, const std::string& outputPath,
+                       int epochs, float lr, const std::string& loadPath) {
+    auto frames = loadRecordings(dataPath);
+    if (frames.empty()) {
+        std::cerr << "No valid frames found in " << dataPath << '\n';
+        return;
+    }
+    std::cout << "Loaded " << frames.size() << " frames from " << dataPath << '\n';
+
+    Weights w{};
+    {
+        int gen = 0, runs = 0; float fit = 0.f;
+        if (!loadPath.empty() && loadModel(loadPath, w, gen, runs, fit))
+            std::cout << "Starting from " << loadPath << "  bestFit=" << fit << '\n';
+        else { w = randWeights(); std::cout << "Starting from random weights\n"; }
+    }
+
+    AdamImitState adam;
+    adam.lr = lr;
+    const int N = (int)frames.size();
+
+    for (int epoch = 0; epoch < epochs; epoch++) {
+        std::shuffle(frames.begin(), frames.end(), rng());
+        float totalLoss = 0.f;
+        int   correct   = 0;
+        for (const auto& fr : frames) {
+            auto fwd  = imitForward(w, fr.inp, fr.action);
+            auto grad = imitGradient(w, fr.inp, fwd);
+            adamStep(w, grad, adam);
+            totalLoss += fwd.loss;
+            int best = 0;
+            for (int k = 1; k < N_ACT; k++)
+                if (fwd.p[k] > fwd.p[best]) best = k;
+            if (best == fr.action) correct++;
+        }
+        if ((epoch + 1) % 10 == 0 || epoch == 0) {
+            std::cout << std::fixed << std::setprecision(4)
+                      << "Epoch " << std::setw(5) << (epoch + 1)
+                      << "  loss=" << std::setw(8) << (totalLoss / N)
+                      << "  acc="  << std::setw(7) << (100.f * correct / N) << "%\n";
+        }
+    }
+
+    saveModel(outputPath, w, 0, N * epochs, 0.f);
+    std::cout << std::defaultfloat
+              << "Imitation learning complete. Saved to " << outputPath << '\n';
+}
+
 // ── Episode result ────────────────────────────────────────
 struct EpisodeResult {
     float fitness;
@@ -190,6 +285,10 @@ int main(int argc, char* argv[]) {
     if (nThreads < 1) nThreads = 4;
     std::string outputPath = "../game-app/Data/ai-model.json";
     std::string loadPath;
+    std::string mode       = "evolve";
+    std::string dataPath   = "../game-app/Data/ai-recordings.json";
+    int         epochs     = 100;
+    float       lr         = 1e-3f;
 
     for (int i = 1; i < argc; i++) {
         auto eq = [&](const char* s){ return std::strcmp(argv[i], s) == 0; };
@@ -200,6 +299,10 @@ int main(int argc, char* argv[]) {
         else if (eq("--threads")) { nxt(); nThreads   = std::stoi(argv[i]); }
         else if (eq("--output"))  { nxt(); outputPath = argv[i]; }
         else if (eq("--load"))    { nxt(); loadPath   = argv[i]; }
+        else if (eq("--mode"))    { nxt(); mode       = argv[i]; }
+        else if (eq("--data"))    { nxt(); dataPath   = argv[i]; }
+        else if (eq("--epochs"))  { nxt(); epochs     = std::stoi(argv[i]); }
+        else if (eq("--lr"))      { nxt(); lr         = std::stof(argv[i]); }
         else if (eq("--help")) {
             std::cout <<
                 "Usage: celeste-trainer [options]\n"
@@ -208,9 +311,18 @@ int main(int argc, char* argv[]) {
                 "  --gens N      Max generations (default: run until Ctrl-C)\n"
                 "  --threads N   Worker threads (default: CPU count)\n"
                 "  --output PATH Output JSON path (default: ../game-app/Data/ai-model.json)\n"
-                "  --load PATH   Resume from this JSON file\n";
+                "  --load PATH   Resume from this JSON file\n"
+                "  --mode MODE   'evolve' (default) or 'imitate'\n"
+                "  --data PATH   Recordings JSON for imitate mode\n"
+                "  --epochs N    Epochs for imitate mode (default 100)\n"
+                "  --lr F        Learning rate for imitate mode (default 0.001)\n";
             return 0;
         }
+    }
+
+    if (mode == "imitate") {
+        runImitate(dataPath, outputPath, epochs, lr, loadPath);
+        return 0;
     }
 
     // Auto-resume from output path if it exists and --load not given

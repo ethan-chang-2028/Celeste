@@ -461,6 +461,12 @@
             this._runStartMs = performance.now();
         },
 
+        readSensors(player, platforms, goal, hazards) {
+            if (!goal) return null;
+            const mem = new Float32Array(MEM_SIZE);
+            return buildSensorInputs(player, platforms, goal, hazards, mem);
+        },
+
         resetWeights() {
             try { localStorage.removeItem(STORAGE_KEY); } catch (_) {}
             this._serverSave(null).catch(() => {});

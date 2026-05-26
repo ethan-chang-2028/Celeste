@@ -7,7 +7,8 @@ const { WebSocketServer } = require('ws');
 const PORT = 3000;
 const DATA_FILE_PATH    = path.join(__dirname, 'game-app', 'Data', 'players.json');
 const LEADERBOARD_PATH  = path.join(__dirname, 'game-app', 'Data', 'leaderboard.json');
-const AI_MODEL_PATH     = path.join(__dirname, 'game-app', 'Data', 'ai-model.json');
+const AI_MODEL_PATH      = path.join(__dirname, 'game-app', 'Data', 'ai-model.json');
+const AI_RECORDING_PATH  = path.join(__dirname, 'game-app', 'Data', 'ai-recordings.json');
 const BRIDGE_JS_PATH    = path.join(__dirname, 'translation-layer', 'js-bridge.js');
 
 // Detect whether the request came from a CelesteBridge client.
@@ -285,7 +286,42 @@ const server = http.createServer(async (req, res) => {
             return res.end(JSON.stringify({ message: 'Existing model is better, not overwritten.', accepted: false }));
         }
 
-        // 7. Leaderboard â GET loads, POST appends a run record
+        // 7. AI recordings — GET loads, POST appends a session
+        if (req.method === 'GET' && req.url === '/ai-recording') {
+            try {
+                const data = await fs.readFile(AI_RECORDING_PATH, 'utf-8');
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                return res.end(data);
+            } catch {
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                return res.end(JSON.stringify([]));
+            }
+        }
+
+        if (req.method === 'POST' && req.url === '/ai-recording') {
+            const session = await getRequestBody(req);
+            if (!session || !Array.isArray(session.frames) || session.frames.length === 0) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                return res.end(JSON.stringify({ message: 'No frames in recording.' }));
+            }
+            let recordings = [];
+            try {
+                const existing = await fs.readFile(AI_RECORDING_PATH, 'utf-8');
+                recordings = JSON.parse(existing);
+                if (!Array.isArray(recordings)) recordings = [];
+            } catch { /* file missing or corrupt — start fresh */ }
+            recordings.push({
+                seed:       session.seed || 0,
+                recordedAt: new Date().toISOString(),
+                frames:     session.frames,
+            });
+            await fs.mkdir(path.dirname(AI_RECORDING_PATH), { recursive: true });
+            await fs.writeFile(AI_RECORDING_PATH, JSON.stringify(recordings));
+            res.writeHead(201, { 'Content-Type': 'application/json' });
+            return res.end(JSON.stringify({ message: 'Recording saved.', frames: session.frames.length }));
+        }
+
+        // 8. Leaderboard — GET loads, POST appends a run record
         if (req.method === 'GET' && req.url === '/leaderboard') {
             try {
                 const data = await fs.readFile(LEADERBOARD_PATH, 'utf-8');
