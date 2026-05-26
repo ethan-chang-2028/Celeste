@@ -678,6 +678,14 @@
     let raceAIProgFrames  = 0;
     let raceAIProgBest    = -Infinity;
 
+    // ── Online race opponent rendering ────────────────────────────────────────
+    // OnlineRace (online-race.js) manages the WebSocket; game.js just reads
+    // OnlineRace.opponent each frame for rendering and HUD.
+    let onlineMode    = false;  // true while an online race is active
+    let onlineName    = '';     // opponent's display name
+    // Smooth opponent position (lerped from network snapshots)
+    let opLerpX = 0, opLerpY = 0;
+
     // ── Player 2 (2-player race) ─────────────────────────────────────────────
     // Controls: A/D = move, W = jump, E = dash, S = grab
     let player2       = null;
@@ -1243,6 +1251,50 @@
         const btn = document.getElementById('p2-toggle-btn');
         if (btn) btn.textContent = p2Active ? '👥 2P: ON' : '👥 2P: OFF';
         if (raceMode) window.raceGenerateMap(raceSeed);
+    };
+
+    // ── Online race: join matchmaking queue ───────────────────────────────────
+    window.joinOnlineRace = function () {
+        if (typeof OnlineRace === 'undefined') {
+            alert('Online race module not loaded.');
+            return;
+        }
+        const nameInput = document.getElementById('online-name-input');
+        const name = nameInput ? nameInput.value.trim() || 'Player' : 'Player';
+
+        // Ensure we're in race mode so UI is visible
+        if (!raceMode) window.startGame('race');
+
+        onlineMode = true;
+        onlineName = '';
+        opLerpX = roomSpawns[0] ? roomSpawns[0].x : 0;
+        opLerpY = roomSpawns[0] ? roomSpawns[0].y : 0;
+
+        OnlineRace.onMatched = function (seed, opponentName) {
+            onlineName = opponentName;
+            // Both players get the same seed from the server — generate the map
+            window.raceGenerateMap(seed);
+            const el = document.getElementById('online-status');
+            if (el) el.textContent = `Racing vs ${opponentName}!`;
+        };
+        OnlineRace.onOpponentLeft = function () {
+            onlineMode = false;
+            const el = document.getElementById('online-status');
+            if (el) el.textContent = 'Opponent left.';
+        };
+
+        OnlineRace.join(name);
+
+        // Show waiting UI
+        const el = document.getElementById('online-status');
+        if (el) { el.textContent = 'Connecting…'; el.className = 'online-status-waiting'; }
+    };
+
+    window.leaveOnlineRace = function () {
+        if (typeof OnlineRace !== 'undefined') OnlineRace.disconnect();
+        onlineMode = false;
+        const el = document.getElementById('online-status');
+        if (el) el.textContent = '';
     };
 
     window.randomGenerateMap = function (seedOverride) {
@@ -2059,10 +2111,12 @@
     };
 
     window.showLevelMenu = function () {
-        gameActive = false;
-        aiEnabled  = false;
-        raceMode   = false;
+        gameActive   = false;
+        aiEnabled    = false;
+        raceMode     = false;
         raceAIPlayer = null;
+        if (onlineMode && typeof OnlineRace !== 'undefined') OnlineRace.disconnect();
+        onlineMode   = false;
         updateAIBtn();
         document.querySelectorAll('.ai-ctrl').forEach(el => el.style.display = 'none');
         document.querySelectorAll('.race-only').forEach(el => el.style.display = 'none');
@@ -2249,9 +2303,33 @@
             ctx.fillText('P2', player2.x, player2.y - 2);
         }
 
+        // Online opponent — green ghost, position lerped from network snapshots
+        if (onlineMode && typeof OnlineRace !== 'undefined') {
+            const op = OnlineRace.opponent;
+            if (op && !op.done) {
+                // Lerp toward received position to smooth out packet jitter
+                opLerpX += (op.x - opLerpX) * 0.35;
+                opLerpY += (op.y - opLerpY) * 0.35;
+                const pw = 8, ph = 11; // same as CelestePlayer default size
+                ctx.globalAlpha = 0.80;
+                ctx.fillStyle = '#44ff99';
+                ctx.fillRect(opLerpX, opLerpY, pw, ph);
+                ctx.globalAlpha = 1;
+                ctx.fillStyle = '#aaffcc'; ctx.font = '5px monospace';
+                ctx.fillText(onlineName || 'NET', opLerpX, opLerpY - 2);
+            } else if (OnlineRace.isWaiting()) {
+                // Searching overlay
+                ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fillRect(60, 70, 200, 40);
+                ctx.fillStyle = '#88ffcc'; ctx.font = 'bold 8px monospace';
+                ctx.fillText('Searching for opponent…', 64, 86);
+                ctx.fillStyle = '#aaa'; ctx.font = '6px monospace';
+                ctx.fillText('Share the game URL with a friend', 64, 98);
+            }
+        }
+
         player.draw(ctx);
-        // Player 1 label in 2-player mode
-        if (raceMode && p2Active) {
+        // Player label in multi-player modes
+        if (raceMode && (p2Active || onlineMode)) {
             ctx.fillStyle = '#aaddff'; ctx.font = '5px monospace';
             ctx.fillText('P1', player.x, player.y - 2);
         }
@@ -2411,17 +2489,20 @@
                 ctx.fillText((cpNames[i] || `${i+1}`).substring(0, 10), bx, barBase + barH + 5);
             }
 
-            // Leading indicator (top right)
+            // Leading indicator (top right) — includes online opponent CP
+            const opCP = (onlineMode && OnlineRace.opponent) ? OnlineRace.opponent.cp : -1;
             const leaders = [];
-            const allCP = [racePlayerCP, ...(p2Active ? [p2CP] : []), raceAICP];
+            const allCP = [racePlayerCP, ...(p2Active ? [p2CP] : []), raceAICP, ...(onlineMode ? [opCP] : [])];
             const maxCP = Math.max(...allCP);
             if (racePlayerCP === maxCP) leaders.push('P1');
             if (p2Active && p2CP === maxCP) leaders.push('P2');
             if (raceAICP === maxCP) leaders.push('AI');
-            const leadStr = leaders.length === 3 || (leaders.length === 2 && leaders.includes('P1') && leaders.includes('AI')) ? 'TIED'
+            if (onlineMode && opCP === maxCP) leaders.push(onlineName || 'NET');
+            const leadStr = leaders.length >= 3 ? 'TIED'
                           : leaders.join('+') + ' LEAD';
             const lCol = leaders.includes('AI') && !leaders.includes('P1') ? '#ff8844'
-                       : leaders.includes('P2') && !leaders.includes('P1') ? '#cc44ff' : '#aaddff';
+                       : leaders.includes('P2') && !leaders.includes('P1') ? '#cc44ff'
+                       : (onlineMode && !leaders.includes('P1')) ? '#44ff99' : '#aaddff';
             ctx.fillStyle = lCol; ctx.font = 'bold 6px monospace';
             ctx.fillText(leadStr, W - 50, 9);
 
@@ -2433,18 +2514,24 @@
             }
             if (p2Active && p2Done && p2Time !== null) {
                 ctx.fillStyle = '#cc44ff'; ctx.font = '5px monospace';
-                ctx.fillText(`P2: ${(p2Time/1000).toFixed(2)}s`, W - 50, badgeY);
+                ctx.fillText(`P2: ${(p2Time/1000).toFixed(2)}s`, W - 50, badgeY); badgeY += 7;
+            }
+            if (onlineMode && OnlineRace.opponent && OnlineRace.opponent.done && OnlineRace.opponent.time != null) {
+                ctx.fillStyle = '#44ff99'; ctx.font = '5px monospace';
+                ctx.fillText(`${onlineName||'NET'}: ${(OnlineRace.opponent.time/1000).toFixed(2)}s`, W - 50, badgeY);
             }
 
             // Result overlay — show when at least one finisher is across the line
-            const anyDone = racePlayerDone || (p2Active && p2Done) || raceAIDone;
-            const allDone = racePlayerDone && (!p2Active || p2Done) && raceAIDone;
+            const opDone = onlineMode && OnlineRace.opponent && OnlineRace.opponent.done;
+            const anyDone = racePlayerDone || (p2Active && p2Done) || raceAIDone || opDone;
+            const allDone = racePlayerDone && (!p2Active || p2Done) && raceAIDone && (!onlineMode || opDone);
             if (anyDone) {
                 // Collect all times into a ranked list
                 const entries = [];
-                if (racePlayerDone) entries.push({ label: 'P1', t: racePlayerTime, col: '#aaddff' });
+                if (racePlayerDone) entries.push({ label: 'You', t: racePlayerTime, col: '#aaddff' });
                 if (p2Active && p2Done) entries.push({ label: 'P2', t: p2Time, col: '#dd44ff' });
                 if (raceAIDone) entries.push({ label: 'AI', t: raceAITime, col: '#ff8844' });
+                if (opDone) entries.push({ label: onlineName||'Opponent', t: OnlineRace.opponent.time, col: '#44ff99' });
                 entries.sort((a, b) => a.t - b.t);
 
                 if (allDone) {
@@ -2746,11 +2833,17 @@
             measuredFps = stepCount * 1000 / (now - fpsWindow);
             stepCount = 0; fpsWindow = now;
         }
+        // Send local player state to online opponent every frame
+        if (onlineMode && typeof OnlineRace !== 'undefined' && OnlineRace.isConnected()) {
+            OnlineRace.sendState(player, racePlayerCP, racePlayerDone, racePlayerTime);
+        }
+
         const elapsed = won ? winMs : (performance.now() - runStart);
         if (raceMode) {
             const raceElapsed = (racePlayerDone ? racePlayerTime : performance.now() - raceStart) / 1000;
             let st = `RACE  P1:${raceElapsed.toFixed(2)}s cp${racePlayerCP+1}/${NUM_ROOMS}`;
-            if (p2Active) st += `  P2:cp${p2CP+1}/${NUM_ROOMS}`;
+            if (p2Active)    st += `  P2:cp${p2CP+1}/${NUM_ROOMS}`;
+            if (onlineMode)  st += `  NET:cp${(OnlineRace.opponent ? OnlineRace.opponent.cp + 1 : 1)}/${NUM_ROOMS}`;
             st += `  AI:cp${raceAICP+1}/${NUM_ROOMS}  ${measuredFps.toFixed(0)} fps`;
             statusEl.textContent = st;
         } else {
