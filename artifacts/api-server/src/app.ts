@@ -33,7 +33,16 @@ app.use(express.urlencoded({ extended: true }));
 app.use("/api", router);
 
 const webSitePath = path.resolve(__dirname, "../../../game-app/webSite");
+const profilePath = path.resolve(__dirname, "../../../game-app/profile");
 app.use(express.static(webSitePath));
+app.use(express.static(profilePath));
+
+app.get(["/profile", "/profile.html"], (_req, res) => {
+  res.sendFile(path.join(profilePath, "profile.html"));
+});
+app.get("/profile.js", (_req, res) => {
+  res.sendFile(path.join(profilePath, "profile.js"));
+});
 
 app.get("/{*path}", (_req, res) => {
   res.sendFile(path.join(webSitePath, "index.html"));
