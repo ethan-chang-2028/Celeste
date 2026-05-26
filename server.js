@@ -155,15 +155,16 @@ const server = http.createServer(async (req, res) => {
             return res.end(content);
         }
         // Serve any .js/.css/.wasm file directly from webSite/ — avoids manual allowlist
-        const MIME_BINARY = { '.wasm': 'application/wasm' };
+        // Note: Emscripten outputs <name>.wasm.wasm so we match on url ending, not just ext
+        const isWasm = req.url.endsWith('.wasm') || req.url.endsWith('.wasm.wasm');
         const ext = path.extname(req.url);
-        if (req.method === 'GET' && (MIME[ext] || MIME_BINARY[ext])) {
+        if (req.method === 'GET' && (MIME[ext] || isWasm)) {
             const fileName = path.basename(req.url);
             const filePath = path.join(__dirname, 'game-app', 'webSite', fileName);
             try {
-                if (MIME_BINARY[ext]) {
+                if (isWasm) {
                     const content = await fs.readFile(filePath);
-                    res.writeHead(200, { 'Content-Type': MIME_BINARY[ext] });
+                    res.writeHead(200, { 'Content-Type': 'application/wasm' });
                     return res.end(content);
                 }
                 const content = await fs.readFile(filePath, 'utf-8');
