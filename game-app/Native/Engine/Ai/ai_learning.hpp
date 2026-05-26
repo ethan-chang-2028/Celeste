@@ -294,7 +294,10 @@ inline Weights breedNext(std::vector<PopMember>& pool, int generation,
 }
 
 // ── SENSOR SYSTEM ─────────────────────────────────────────
+#ifndef CELESTE_RECT_DEFINED
+#define CELESTE_RECT_DEFINED
 struct Rect { float x, y, w, h; };
+#endif
 
 struct AgentSensorState {
     float x, y, vx, vy;
