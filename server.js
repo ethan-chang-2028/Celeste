@@ -154,12 +154,18 @@ const server = http.createServer(async (req, res) => {
             res.writeHead(200, { 'Content-Type': 'text/html' });
             return res.end(content);
         }
-        // Serve any .js/.css file directly from webSite/ — avoids manual allowlist
+        // Serve any .js/.css/.wasm file directly from webSite/ — avoids manual allowlist
+        const MIME_BINARY = { '.wasm': 'application/wasm' };
         const ext = path.extname(req.url);
-        if (req.method === 'GET' && MIME[ext]) {
+        if (req.method === 'GET' && (MIME[ext] || MIME_BINARY[ext])) {
             const fileName = path.basename(req.url);
             const filePath = path.join(__dirname, 'game-app', 'webSite', fileName);
             try {
+                if (MIME_BINARY[ext]) {
+                    const content = await fs.readFile(filePath);
+                    res.writeHead(200, { 'Content-Type': MIME_BINARY[ext] });
+                    return res.end(content);
+                }
                 const content = await fs.readFile(filePath, 'utf-8');
                 res.writeHead(200, { 'Content-Type': MIME[ext] });
                 return res.end(content);
