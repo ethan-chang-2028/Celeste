@@ -44,7 +44,12 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await res.json();
             if (res.ok) {
                 sessionStorage.setItem('loggedInUser', JSON.stringify(data.user));
-                window.location.href = '/profile';
+                // Use absolute path for server mode, relative for file mode
+                if (window.location.protocol === 'file:') {
+                    window.location.href = '../profile/profile.html';
+                } else {
+                    window.location.href = '/profile.html';
+                }
                 return;
             }
             errorMessage.textContent = data.message || 'Invalid username or password.';
@@ -58,9 +63,11 @@ document.addEventListener('DOMContentLoaded', () => {
         if (user) {
             sessionStorage.setItem('loggedInUser', JSON.stringify(user));
             // Redirect: prefer server route, fall back to relative path
-            window.location.href = window.location.protocol === 'file:'
-                ? '../profile/profile.html'
-                : '/profile';
+            if (window.location.protocol === 'file:') {
+                window.location.href = '../profile/profile.html';
+            } else {
+                window.location.href = '/profile.html';
+            }
         } else {
             errorMessage.textContent = 'Invalid username or password.';
             errorMessage.style.display = 'block';
