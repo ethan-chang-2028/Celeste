@@ -210,7 +210,10 @@
                 this.x += (player.x + player.w / 2 - 6 - this.x) * 0.25;
                 this.y += (player.y - 16 - this.y) * 0.25;
                 // Lock in when player safely lands
-                if (player.onGround) this._collected = true;
+                if (player.onGround) {
+                    if (typeof window._onBerry === 'function') window._onBerry();
+                    this._collected = true;
+                }
             },
             draw(ctx) {
                 if (this._collected) return;
@@ -294,7 +297,10 @@
             update(player, dt) {
                 this._pulse = (this._pulse + dt * 4) % (Math.PI * 2);
                 if (!this._collected) {
-                    if (rectsOverlap(player, this)) this._collected = true;
+                    if (rectsOverlap(player, this)) {
+                        if (typeof window._onGoldenBerry === 'function') window._onGoldenBerry();
+                        this._collected = true;
+                    }
                 } else {
                     // Float above the player's head while held
                     this._drawX = player.x + player.w / 2 - 7;
@@ -668,6 +674,75 @@
     let won      = false;
     let winMs    = 0;
 
+    // ── Per-user lifetime stats (persisted to localStorage) ─────────────────
+    let lifetimeDashes        = 0;
+    let lifetimeDeaths        = 0;
+    let lifetimeBerries       = 0;
+    let lifetimeGoldenBerries = 0;
+
+    function _userStatsKey() {
+        try {
+            const u = JSON.parse(sessionStorage.getItem('loggedInUser') || 'null');
+            return u ? `celeste_stats_${u.id}` : null;
+        } catch (_) { return null; }
+    }
+    function loadUserStats() {
+        const key = _userStatsKey();
+        if (!key) return;
+        try {
+            const s = JSON.parse(localStorage.getItem(key) || '{}');
+            lifetimeDashes        = s.dashCount            || 0;
+            lifetimeDeaths        = s.deathCount           || 0;
+            lifetimeBerries       = s.berriesCollected     || 0;
+            lifetimeGoldenBerries = s.goldenBerriesCollected || 0;
+        } catch (_) {}
+    }
+    function saveUserStats() {
+        const key = _userStatsKey();
+        if (!key) return;
+        localStorage.setItem(key, JSON.stringify({
+            dashCount:              lifetimeDashes,
+            deathCount:             lifetimeDeaths,
+            berriesCollected:       lifetimeBerries,
+            goldenBerriesCollected: lifetimeGoldenBerries,
+            lastUpdated:            new Date().toISOString(),
+        }));
+    }
+
+    let _aiSaveThrottle = 0;
+    function saveAIGlobalStats() {
+        if (typeof NeuralAI === 'undefined') return;
+        const now = Date.now();
+        if (now - _aiSaveThrottle < 1000) return;
+        _aiSaveThrottle = now;
+        localStorage.setItem('celeste_ai_global_stats', JSON.stringify({
+            generation:   NeuralAI.generation,
+            runCount:     NeuralAI.runCount,
+            globalBestFit: NeuralAI.globalBestFit,
+            bestTimeMs:   NeuralAI._bestTimeMs < Infinity ? NeuralAI._bestTimeMs : null,
+            savedAt:      new Date().toISOString(),
+        }));
+    }
+
+    // Human-play callbacks wired to entity factories
+    window._onDash = function () {
+        if (aiEnabled) return;
+        lifetimeDashes++;
+        saveUserStats();
+    };
+    window._onBerry = function () {
+        if (aiEnabled) return;
+        lifetimeBerries++;
+        saveUserStats();
+    };
+    window._onGoldenBerry = function () {
+        if (aiEnabled) return;
+        lifetimeGoldenBerries++;
+        saveUserStats();
+    };
+
+    loadUserStats();
+
     // AI stuck-death: two checks —
     //   position: no movement > 2px in 1.5 s → instant kill
     //   progress: no improvement toward goal in 4 s → kill (catches slow wall-slides)
@@ -736,6 +811,7 @@
         if (aiEnabled && typeof NeuralAI !== 'undefined') {
             const si = closestRespawnIdx(player.x, player.y);
             NeuralAI.onDeath();
+            saveAIGlobalStats();
             respawnRoom = si;
             NeuralAI.reset(roomSpawns[si].x);
             updateAIBtn();
@@ -754,7 +830,10 @@
             cameraY = worldMinY + mazeRoomRow * H;
             RoomTrans.active = false; RoomTrans.timer = 0;
         }
-        if (!won) deaths++;
+        if (!won) {
+            if (!aiEnabled) { lifetimeDeaths++; saveUserStats(); }
+            deaths++;
+        }
     }
     function restartRun() {
         aiStuckFrames    = 0;
@@ -2806,6 +2885,7 @@
                 raceAITime = performance.now() - raceStart;
                 raceAICP   = NUM_ROOMS - 1;
                 NeuralAI.onGoal(raceAITime);
+                saveAIGlobalStats();
             }
         }
 
@@ -2861,6 +2941,7 @@
             if (typeof NeuralAI !== 'undefined') NeuralAI.learnFromRoute(winMs);
             if (aiEnabled && typeof NeuralAI !== 'undefined') {
                 NeuralAI.onGoal(winMs);
+                saveAIGlobalStats();
                 updateAIBtn();
             }
             if (!aiEnabled && recordingFrames.length > 30) saveRecording(true);

@@ -6,10 +6,15 @@
     <title>Apex Platformer - My Profile</title>
     <link rel="stylesheet" href="../webSite/style.css">
     <style>
-        /* A little bit of inline CSS just to make the profile look neat */
-        .profile-container { max-width: 600px; margin: 40px auto; padding: 20px; text-align: center; font-family: sans-serif;}
+        .profile-container { max-width: 680px; margin: 40px auto; padding: 20px; text-align: center; font-family: sans-serif; }
         .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 20px; }
         .stat-box { background: #eee; padding: 15px; border-radius: 8px; }
+        .stat-box h4 { margin: 0 0 8px; font-size: 0.85rem; color: #555; }
+        .stat-box p  { margin: 0; font-size: 1.6rem; font-weight: bold; color: #222; }
+        .ai-box { background: #1a1a2e; color: #ccc; }
+        .ai-box h4 { color: #44ff44; }
+        .ai-box p  { color: #aaffaa; }
+        .section-title { margin: 28px 0 4px; font-size: 1.1rem; }
         .logout-btn { margin-top: 30px; background: #ff4c4c; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; }
     </style>
 </head>
@@ -26,23 +31,43 @@
 
         <hr>
 
-        <h3>My Speedrun Stats</h3>
+        <h3 class="section-title">My Stats</h3>
         <div class="stats-grid">
             <div class="stat-box">
-                <h4>Total Deaths</h4>
+                <h4>Dashes</h4>
+                <p id="statDashes">0</p>
+            </div>
+            <div class="stat-box">
+                <h4>Deaths</h4>
                 <p id="statDeaths">0</p>
             </div>
             <div class="stat-box">
-                <h4>Strawberries (Collectibles)</h4>
-                <p id="statBerries">0 / 175</p>
+                <h4>Berries</h4>
+                <p id="statBerries">0</p>
             </div>
             <div class="stat-box">
-                <h4>Best Any% Time</h4>
-                <p id="statTime">--:--.---</p>
+                <h4>Golden Berries</h4>
+                <p id="statGoldenBerries">0</p>
             </div>
-            <div class="stat-box">
-                <h4>Custom Maps Cleared</h4>
-                <p id="statMaps">0</p>
+        </div>
+
+        <h3 class="section-title">AI Global Stats</h3>
+        <div class="stats-grid">
+            <div class="stat-box ai-box">
+                <h4>Generation</h4>
+                <p id="aiGeneration">--</p>
+            </div>
+            <div class="stat-box ai-box">
+                <h4>Total Runs</h4>
+                <p id="aiRunCount">--</p>
+            </div>
+            <div class="stat-box ai-box">
+                <h4>Best Time</h4>
+                <p id="aiBestTime">--</p>
+            </div>
+            <div class="stat-box ai-box">
+                <h4>Best Fitness</h4>
+                <p id="aiBestFit">--</p>
             </div>
         </div>
 
