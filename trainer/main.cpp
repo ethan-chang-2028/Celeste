@@ -418,7 +418,7 @@ int main(int argc, char* argv[]) {
             for (;;) {
                 int idx = nextIdx.fetch_add(1, std::memory_order_relaxed);
                 if (idx >= POOL_SIZE) return;
-                const Level& lv = levels[(size_t)idx % levels.size()];
+                const Level& lv = levels[(size_t)(idx + gen) % levels.size()];
                 results[idx] = runEpisode(pool[idx].weights, lv);
                 pool[idx].fitness = results[idx].fitness;
             }
