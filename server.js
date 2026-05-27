@@ -11,8 +11,6 @@ const AI_MODEL_PATH      = path.join(__dirname, 'game-app', 'Data', 'ai-model.js
 const AI_RECORDING_PATH  = path.join(__dirname, 'game-app', 'Data', 'ai-recordings.json');
 const BRIDGE_JS_PATH    = path.join(__dirname, 'translation-layer', 'js-bridge.js');
 
-// Detect whether the request came from a CelesteBridge client.
-// If so, wrap every response in the shared BridgeMessage envelope.
 function isBridgeRequest(req) {
     return !!req.headers['x-bridge-source'];
 }
@@ -30,7 +28,6 @@ function sendResponse(res, statusCode, type, payload, req) {
     return res.end(JSON.stringify(payload));
 }
 
-// --- Helper: Ensure the players.json file exists and is valid on startup ---
 async function initDataFile() {
     try {
         await fs.mkdir(path.dirname(DATA_FILE_PATH), { recursive: true });
@@ -51,24 +48,17 @@ async function initDataFile() {
 }
 initDataFile();
 
-// --- Helper: Read incoming JSON data from the browser ---
 function getRequestBody(req) {
     return new Promise((resolve, reject) => {
         let body = '';
-        req.on('data', chunk => {
-            body += chunk.toString();
-        });
+        req.on('data', chunk => { body += chunk.toString(); });
         req.on('end', () => {
-            try {
-                resolve(body ? JSON.parse(body) : {});
-            } catch (e) {
-                reject(e);
-            }
+            try { resolve(body ? JSON.parse(body) : {}); }
+            catch (e) { reject(e); }
         });
     });
 }
 
-// --- Helper: Safely read and parse players array from disk ---
 async function readPlayers() {
     try {
         const fileData = await fs.readFile(DATA_FILE_PATH, 'utf-8');
@@ -82,19 +72,16 @@ async function readPlayers() {
 // Create the server
 const server = http.createServer(async (req, res) => {
 
-    // 1. Handle CORS (Allows browser to talk to server smoothly)
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'OPTIONS, GET, POST');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Bridge-Source');
 
-    // Handle preflight requests
     if (req.method === 'OPTIONS') {
         res.writeHead(204);
         return res.end();
     }
 
     try {
-        // 2. Serve the HTML file (login page)
         if (req.method === 'GET' && (req.url === '/' || req.url === '/index.html' || req.url === '/login' || req.url === '/login.html')) {
             const filePath = path.join(__dirname, 'game-app', 'webSite', 'index.html');
             const htmlContent = await fs.readFile(filePath, 'utf-8');
@@ -102,7 +89,6 @@ const server = http.createServer(async (req, res) => {
             return res.end(htmlContent);
         }
 
-        // 3. Serve static assets from webSite folder
         const webSiteAssets = {
             '/app.js':        { file: 'app.js',        type: 'application/javascript' },
             '/register.js':   { file: 'register.js',   type: 'application/javascript' },
@@ -117,7 +103,6 @@ const server = http.createServer(async (req, res) => {
             return res.end(content);
         }
 
-        // 3a. Serve register page
         if (req.method === 'GET' && (req.url === '/register' || req.url === '/register.html')) {
             const filePath = path.join(__dirname, 'game-app', 'webSite', 'register.html');
             const htmlContent = await fs.readFile(filePath, 'utf-8');
@@ -125,7 +110,6 @@ const server = http.createServer(async (req, res) => {
             return res.end(htmlContent);
         }
 
-        // 3b. Serve profile page and its script
         if (req.method === 'GET' && (req.url === '/profile' || req.url === '/profile.html')) {
             const filePath = path.join(__dirname, 'game-app', 'profile', 'profile.html');
             const htmlContent = await fs.readFile(filePath, 'utf-8');
@@ -139,14 +123,12 @@ const server = http.createServer(async (req, res) => {
             return res.end(jsContent);
         }
 
-        // 3b. Serve the translation bridge for the browser
         if (req.method === 'GET' && req.url === '/js-bridge.js') {
             const jsContent = await fs.readFile(BRIDGE_JS_PATH, 'utf-8');
             res.writeHead(200, { 'Content-Type': 'application/javascript' });
             return res.end(jsContent);
         }
 
-        // 3c. Serve game page by name, then serve any file from webSite/ dynamically
         const MIME = {
             '.html': 'text/html', '.js': 'application/javascript', '.css': 'text/css',
         };
@@ -155,8 +137,6 @@ const server = http.createServer(async (req, res) => {
             res.writeHead(200, { 'Content-Type': 'text/html' });
             return res.end(content);
         }
-        // Serve any .js/.css/.wasm file directly from webSite/ â avoids manual allowlist
-        // Note: Emscripten outputs <name>.wasm.wasm so we match on url ending, not just ext
         const isWasm = req.url.endsWith('.wasm') || req.url.endsWith('.wasm.wasm');
         const ext = path.extname(req.url);
         if (req.method === 'GET' && (MIME[ext] || isWasm)) {
@@ -174,11 +154,9 @@ const server = http.createServer(async (req, res) => {
             } catch { /* fall through to 404 */ }
         }
 
-        // 4. Handle Registration POST Request
         if (req.method === 'POST' && req.url === '/register') {
             const data = await getRequestBody(req);
             const isBridge = isBridgeRequest(req);
-
             const payload = isBridge ? data.payload : data;
             const { username, email, password, country = '', avatar = 'Madeline' } = payload;
 
@@ -188,7 +166,6 @@ const server = http.createServer(async (req, res) => {
             }
 
             const players = await readPlayers();
-
             if (players.find(p => p.username === username)) {
                 return sendResponse(res, 400, 'auth.response',
                     { message: "Username is already taken!" }, req);
@@ -200,39 +177,25 @@ const server = http.createServer(async (req, res) => {
 
             const newUser = {
                 id: 'u-' + Math.random().toString(36).slice(2, 8),
-                username,
-                email,
-                password,
-                country,
-                avatar,
-                role: 'player',
-                bio: '',
-                deathCount: 0,
-                bestTimes: {},
-                levelsCompleted: 0,
-                achievements: [],
-                rank: null,
-                registeredAt: new Date().toISOString(),
-                lastLogin: null
+                username, email, password, country, avatar,
+                role: 'player', bio: '',
+                deathCount: 0, bestTimes: {}, levelsCompleted: 0,
+                achievements: [], rank: null,
+                registeredAt: new Date().toISOString(), lastLogin: null
             };
             players.push(newUser);
             await fs.writeFile(DATA_FILE_PATH, JSON.stringify(players, null, 2));
-
             return sendResponse(res, 201, 'auth.response',
                 { message: "Account created successfully!" }, req);
         }
 
-        // 5. Handle Login POST Request
         if (req.method === 'POST' && req.url === '/login') {
             const data = await getRequestBody(req);
             const isBridge = isBridgeRequest(req);
-
             const payload = isBridge ? data.payload : data;
             const { username, password } = payload;
 
             const players = await readPlayers();
-
-            // Match by username or email
             const validUser = players.find(
                 p => (p.username === username || p.email === username) && p.password === password
             );
@@ -240,7 +203,6 @@ const server = http.createServer(async (req, res) => {
             if (validUser) {
                 validUser.lastLogin = new Date().toISOString();
                 await fs.writeFile(DATA_FILE_PATH, JSON.stringify(players, null, 2));
-
                 const { password: _pw, ...safeUser } = validUser;
                 return sendResponse(res, 200, 'auth.response',
                     { message: "Login successful!", user: safeUser }, req);
@@ -250,7 +212,6 @@ const server = http.createServer(async (req, res) => {
             }
         }
 
-        // 6. AI model weights â GET loads, POST saves
         if (req.method === 'GET' && req.url === '/ai-model') {
             try {
                 const data = await fs.readFile(AI_MODEL_PATH, 'utf-8');
@@ -264,16 +225,13 @@ const server = http.createServer(async (req, res) => {
 
         if (req.method === 'POST' && req.url === '/ai-model') {
             const data = await getRequestBody(req);
-            // Only save if incoming weights are strictly better than what's on disk.
-            // This prevents a fresh browser session from overwriting a well-trained model.
             if (data && Array.isArray(data.weights) && data.weights.length > 0) {
                 let currentBestFit = -Infinity;
                 try {
                     const existing = await fs.readFile(AI_MODEL_PATH, 'utf-8');
                     const parsed = JSON.parse(existing);
                     if (typeof parsed.bestFit === 'number') currentBestFit = parsed.bestFit;
-                } catch { /* no existing model â accept anything */ }
-
+                } catch { /* no existing model */ }
                 const incomingFit = typeof data.bestFit === 'number' ? data.bestFit : 0;
                 if (incomingFit > currentBestFit) {
                     await fs.mkdir(path.dirname(AI_MODEL_PATH), { recursive: true });
@@ -286,7 +244,6 @@ const server = http.createServer(async (req, res) => {
             return res.end(JSON.stringify({ message: 'Existing model is better, not overwritten.', accepted: false }));
         }
 
-        // 7. AI recordings — GET loads, POST appends a session
         if (req.method === 'GET' && req.url === '/ai-recording') {
             try {
                 const data = await fs.readFile(AI_RECORDING_PATH, 'utf-8');
@@ -309,11 +266,11 @@ const server = http.createServer(async (req, res) => {
                 const existing = await fs.readFile(AI_RECORDING_PATH, 'utf-8');
                 recordings = JSON.parse(existing);
                 if (!Array.isArray(recordings)) recordings = [];
-            } catch { /* file missing or corrupt — start fresh */ }
+            } catch { /* start fresh */ }
             recordings.push({
-                seed:       session.seed || 0,
+                seed: session.seed || 0,
                 recordedAt: new Date().toISOString(),
-                frames:     session.frames,
+                frames: session.frames,
             });
             await fs.mkdir(path.dirname(AI_RECORDING_PATH), { recursive: true });
             await fs.writeFile(AI_RECORDING_PATH, JSON.stringify(recordings));
@@ -321,7 +278,6 @@ const server = http.createServer(async (req, res) => {
             return res.end(JSON.stringify({ message: 'Recording saved.', frames: session.frames.length }));
         }
 
-        // 8. Leaderboard — GET loads, POST appends a run record
         if (req.method === 'GET' && req.url === '/leaderboard') {
             try {
                 const data = await fs.readFile(LEADERBOARD_PATH, 'utf-8');
@@ -340,7 +296,7 @@ const server = http.createServer(async (req, res) => {
                 const existing = await fs.readFile(LEADERBOARD_PATH, 'utf-8');
                 records = JSON.parse(existing);
                 if (!Array.isArray(records)) records = [];
-            } catch { /* file missing or corrupt â start fresh */ }
+            } catch { /* start fresh */ }
             records.push({ ...entry, savedAt: new Date().toISOString() });
             await fs.mkdir(path.dirname(LEADERBOARD_PATH), { recursive: true });
             await fs.writeFile(LEADERBOARD_PATH, JSON.stringify(records, null, 2));
@@ -348,53 +304,80 @@ const server = http.createServer(async (req, res) => {
             return res.end(JSON.stringify({ message: 'Run saved.' }));
         }
 
-        // 8. Catch-all for files or routes not found
         res.writeHead(404, { 'Content-Type': 'text/plain' });
         res.end('404 Not Found');
 
     } catch (error) {
-        // If something crashes, send a 500 error
         console.error('Server error:', error.message);
         res.writeHead(500, { 'Content-Type': 'text/plain' });
         res.end('Internal Server Error');
     }
 });
 
-// ââ Online race: WebSocket matchmaking + state relay âââââââââââââââââââââââââ
+// ── Online race: WebSocket room-code matchmaking + state relay ────────────────
 //
 // Protocol (all messages are JSON strings):
 //
-//   Client â Server:
-//     { type:'join',    name:'Alice' }
-//     { type:'state',   x, y, vx, vy, state, dashes, cp, done, time }
+//   Client -> Server:
+//     { type:'create', name:'Alice' }              <- host creates a named room
+//     { type:'join',   name:'Bob', code:'ABC123' } <- guest joins by code
+//     { type:'join',   name:'Bob' }                <- random matchmaking (no code)
+//     { type:'state',  x, y, vx, vy, state, dashes, cp, done, time }
 //     { type:'leave' }
 //
-//   Server â Client:
-//     { type:'waiting',  roomId }            â in queue, waiting for opponent
-//     { type:'matched',  roomId, seed, opponentName }  â race starts
-//     { type:'opponent', x, y, vx, vy, state, dashes, cp, done, time }
+//   Server -> Client:
+//     { type:'created',     code:'ABC123' }         <- room ready; share with friend
+//     { type:'waiting',     roomId }                <- in random queue
+//     { type:'matched',     roomId, seed, opponentName }
+//     { type:'opponent',    x, y, vx, vy, state, dashes, cp, done, time }
 //     { type:'opponentLeft' }
+//     { type:'error',       message }
 
 const wss = new WebSocketServer({ server });
 
-// Each lobby room: { id, seed, players: [ws, ws] }
-const rooms   = new Map();   // roomId â room
-const waiting = [];          // queue of solo ws sockets
+// Active rooms: roomId -> { id, seed, players:[ws, ws] }
+const rooms      = new Map();
+// Random-match queue
+const waiting    = [];
+// Named rooms waiting for a joiner: code -> { ws, seed }
+const namedRooms = new Map();
 
 let _roomSeq = 0;
-function nextSeed() { return Math.floor(Math.random() * 999999); }
+function nextSeed()   { return Math.floor(Math.random() * 999999); }
 function nextRoomId() { return 'r' + (++_roomSeq); }
+
+function makeRoomCode() {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let code = '';
+    for (let i = 0; i < 6; i++) code += chars[Math.floor(Math.random() * chars.length)];
+    return code;
+}
 
 function send(ws, obj) {
     if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(obj));
 }
 
+function matchPair(hostWs, guestWs, seed) {
+    const roomId = nextRoomId();
+    rooms.set(roomId, { id: roomId, seed, players: [hostWs, guestWs] });
+    hostWs._roomId  = roomId;
+    guestWs._roomId = roomId;
+    send(hostWs,  { type: 'matched', roomId, seed, opponentName: guestWs._name });
+    send(guestWs, { type: 'matched', roomId, seed, opponentName: hostWs._name  });
+}
+
 function cleanup(ws) {
-    // Remove from waiting queue
+    // Remove from random-match queue
     const qi = waiting.indexOf(ws);
     if (qi !== -1) waiting.splice(qi, 1);
 
-    // Remove from room and notify partner
+    // Remove named room if this socket was the host waiting for a joiner
+    if (ws._namedCode) {
+        namedRooms.delete(ws._namedCode);
+        ws._namedCode = null;
+    }
+
+    // Remove from active room and notify partner
     if (ws._roomId) {
         const room = rooms.get(ws._roomId);
         if (room) {
@@ -408,36 +391,52 @@ function cleanup(ws) {
 }
 
 wss.on('connection', (ws) => {
-    ws._name   = 'Player';
-    ws._roomId = null;
+    ws._name      = 'Player';
+    ws._roomId    = null;
+    ws._namedCode = null;
 
     ws.on('message', (raw) => {
         let msg;
         try { msg = JSON.parse(raw); } catch { return; }
 
-        if (msg.type === 'join') {
+        // ── Create a named room (host waits for a friend's join) ──────────────
+        if (msg.type === 'create') {
             ws._name = (msg.name || 'Player').substring(0, 20);
+            let code, attempts = 0;
+            do { code = makeRoomCode(); } while (namedRooms.has(code) && ++attempts < 20);
+            namedRooms.set(code, { ws, seed: nextSeed() });
+            ws._namedCode = code;
+            send(ws, { type: 'created', code });
 
-            if (waiting.length > 0) {
-                // Match with the first waiting player
-                const partner = waiting.shift();
-                const roomId  = nextRoomId();
-                const seed    = nextSeed();
-                const room    = { id: roomId, seed, players: [partner, ws] };
-                rooms.set(roomId, room);
-                partner._roomId = roomId;
-                ws._roomId      = roomId;
+        // ── Join by room code or random queue ─────────────────────────────────
+        } else if (msg.type === 'join') {
+            ws._name = (msg.name || 'Player').substring(0, 20);
+            const code = msg.code ? msg.code.toUpperCase().trim() : null;
 
-                send(partner, { type: 'matched', roomId, seed, opponentName: ws._name });
-                send(ws,      { type: 'matched', roomId, seed, opponentName: partner._name });
+            if (code) {
+                const entry = namedRooms.get(code);
+                if (!entry) {
+                    send(ws, { type: 'error', message: 'Room "' + code + '" not found. Check the code and try again.' });
+                    return;
+                }
+                if (entry.ws === ws) {
+                    send(ws, { type: 'error', message: 'You cannot join your own room.' });
+                    return;
+                }
+                namedRooms.delete(code);
+                entry.ws._namedCode = null;
+                matchPair(entry.ws, ws, entry.seed);
             } else {
-                // No partner yet â join the queue
-                waiting.push(ws);
-                send(ws, { type: 'waiting', roomId: null });
+                if (waiting.length > 0) {
+                    matchPair(waiting.shift(), ws, nextSeed());
+                } else {
+                    waiting.push(ws);
+                    send(ws, { type: 'waiting', roomId: null });
+                }
             }
 
+        // ── Relay state to room partner ───────────────────────────────────────
         } else if (msg.type === 'state') {
-            // Relay player state to the other member of the room
             if (!ws._roomId) return;
             const room = rooms.get(ws._roomId);
             if (!room) return;
@@ -467,5 +466,5 @@ wss.on('connection', (ws) => {
 
 // Start the server
 server.listen(PORT, () => {
-    console.log(`Server is running! Open your browser to http://localhost:${PORT}`);
+    console.log('Server is running! Open your browser to http://localhost:' + PORT);
 });
