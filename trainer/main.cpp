@@ -33,7 +33,7 @@ namespace fs = std::filesystem;
 // ── Training constants ────────────────────────────────────
 static constexpr int   POOL_SIZE   = 24;
 static constexpr int   ELITE_K     = 3;
-static constexpr int   MAX_FRAMES  = 3600;    // 60 s at 60 fps per episode
+static constexpr int   MAX_FRAMES  = 1800;    // 30 s at 60 fps — agents that need more are usually stuck
 static constexpr float DT          = 1.f / 60.f;
 static constexpr float DEAD_Y      = 205.f;
 static constexpr int   SAVE_EVERY  = 100;
@@ -44,6 +44,10 @@ static constexpr float W_MIN_X = 0.f;
 static constexpr float W_MAX_X = LEVEL_W;
 static constexpr float W_MIN_Y = -60.f;
 static constexpr float W_MAX_Y = 210.f;
+
+// Forward declarations (defined after runEpisode)
+void saveModel(const std::string&, const Weights&, int, int, float);
+bool loadModel(const std::string&, Weights&, int&, int&, float&);
 
 // ── Imitation learning ────────────────────────────────────
 struct RecordingFrame {
@@ -151,11 +155,16 @@ struct EpisodeResult {
 EpisodeResult runEpisode(const Weights& weights, const Level& lv) {
     Player player(lv.spawnX, lv.spawnY);
     Memory mem = {};
-    float maxX  = lv.spawnX;
+    float maxX       = lv.spawnX;
+    float minY       = lv.spawnY;   // minimum Y reached (top of climb)
+    float lastChkX   = lv.spawnX;  // X at last stuck-check
+    int   stuckCount = 0;           // how many consecutive stuck checks
+    int   lastFrame  = MAX_FRAMES;  // actual frame the episode ended on
     bool  prevJ = false;
     bool  prevX = false;
 
     for (int frame = 0; frame < MAX_FRAMES; frame++) {
+        lastFrame = frame;
         // Death: fell off bottom or hit hazard
         if (player.y > DEAD_Y) break;
         bool dead = false;
@@ -174,6 +183,18 @@ EpisodeResult runEpisode(const Weights& weights, const Level& lv) {
         }
 
         if (player.x > maxX) maxX = player.x;
+        if (player.y < minY) minY = player.y;
+
+        // Early termination: if agent hasn't moved 4px in 1 second, it's stuck.
+        // Bail after 3 consecutive stuck seconds rather than wasting the full episode.
+        if (frame > 0 && frame % 60 == 0) {
+            if (maxX - lastChkX < 4.f) {
+                if (++stuckCount >= 3) break;
+            } else {
+                stuckCount = 0;
+            }
+            lastChkX = maxX;
+        }
 
         // Sensor inputs
         AgentSensorState sensor{
@@ -210,7 +231,16 @@ EpisodeResult runEpisode(const Weights& weights, const Level& lv) {
     float progress = std::max(0.f, maxX - lv.spawnX)
                    / std::max(1.f, lv.goalEnd - lv.spawnX);
     progress = std::min(progress, 0.9999f);  // below 1 so goal reward stands out
-    return {progress, (float)MAX_FRAMES * DT * 1000.f, false};
+    // Small speed bonus: agents that reach the same X faster score slightly higher.
+    // Breaks ties in the gene pool so selection pressure doesn't stall.
+    float elapsed = (float)lastFrame * DT;
+    float speedBonus = progress * std::max(0.f, 1.f - elapsed / 30.f) * 0.05f;
+    // Height bonus: rewards climbing when horizontally stuck (chimney/climb rooms).
+    // Only active when not yet making good horizontal progress.
+    float climbDist  = std::max(0.f, lv.spawnY - minY - 10.f);
+    float heightBonus = (climbDist / std::max(1.f, lv.spawnY - 20.f)) * 0.08f
+                      * std::max(0.f, 1.f - progress * 2.f);
+    return {progress + speedBonus + heightBonus, elapsed * 1000.f, false};
 }
 
 // ── JSON persistence ──────────────────────────────────────
@@ -366,7 +396,9 @@ int main(int argc, char* argv[]) {
               << "  Output:  " << outputPath << "\n\n";
 
     auto wallStart = std::chrono::steady_clock::now();
-    int  bestGoalGen = -1;
+    int  bestGoalGen        = -1;
+    int  gensSinceImproved  = 0;
+    float lastSavedBest     = globalBestFit;
 
     for (int gen = startGen; gen < startGen + maxGens; gen++) {
         // ── Evaluate pool in parallel ──────────────────────
@@ -397,8 +429,10 @@ int main(int argc, char* argv[]) {
                 globalBestFit = results[i].fitness;
                 globalBest    = pool[i].weights;
                 if (results[i].reached) bestGoalGen = gen;
+                gensSinceImproved = 0;
             }
         }
+        gensSinceImproved++;
 
         // ── Print progress ────────────────────────────────
         if ((gen - startGen) % PRINT_EVERY == 0) {
@@ -431,6 +465,22 @@ int main(int argc, char* argv[]) {
             gen > startGen && globalBest) {
             saveModel(outputPath, *globalBest, gen, totalRuns, globalBestFit);
             std::cout << "  → saved " << outputPath << '\n';
+        }
+
+        // ── Diversity injection — break out of local optima ──
+        // If global best hasn't improved in 200 gens, replace 80% of pool
+        // with high-mutation variants of the best known weights.
+        if (gensSinceImproved > 0 && gensSinceImproved % 200 == 0 && globalBest) {
+            int replaced = 0;
+            for (int i = ELITE_K; i < POOL_SIZE; i++) {
+                if (randF() < 0.8f) {
+                    float noiseStr = randF() < 0.4f ? 1.2f : 0.6f;
+                    pool[i] = {mutateWeights(*globalBest, 0.5f, noiseStr), 0.f};
+                    replaced++;
+                }
+            }
+            std::cout << "  [diversity injection: " << replaced
+                      << " members reset at gen " << gen << "]\n";
         }
 
         // ── Breed next generation ─────────────────────────
