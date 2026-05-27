@@ -56,7 +56,7 @@ static SplitResult splitFloor(float ox, float roomW, int numGaps, float gapW, Mu
 }
 
 // ── buildLevel — port of buildLevel() from game.js ───────────────────────────
-static Level buildLevel(int seed) {
+static Level buildLevel(int seed, bool easyMode = false) {
     MulberryRng rng(seed);
     auto ri = [&]() { return rng.nextInt(1000); };
 
@@ -65,11 +65,12 @@ static Level buildLevel(int seed) {
     lv.spawnY = FLOOR_Y - 12.f;
 
     const char* midTypes[] = {"gaps","platform","chimney","climb"};
+    const char* easyTypes[] = {"gaps","platform"};
     const char* chosen[NUM_ROOMS];
     chosen[0] = "gaps";
-    chosen[1] = midTypes[ri() % 4];
-    chosen[2] = midTypes[ri() % 4];
-    chosen[3] = midTypes[ri() % 4];
+    chosen[1] = easyMode ? easyTypes[ri() % 2] : midTypes[ri() % 4];
+    chosen[2] = easyMode ? easyTypes[ri() % 2] : midTypes[ri() % 4];
+    chosen[3] = easyMode ? easyTypes[ri() % 2] : midTypes[ri() % 4];
     chosen[4] = "stair";
 
     auto& p = lv.platforms;

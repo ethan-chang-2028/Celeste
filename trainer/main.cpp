@@ -324,6 +324,7 @@ int main(int argc, char* argv[]) {
     std::string dataPath   = "../game-app/Data/ai-recordings.json";
     int         epochs     = 100;
     float       lr         = 1e-3f;
+    bool        easyMode   = false;
 
     for (int i = 1; i < argc; i++) {
         auto eq = [&](const char* s){ return std::strcmp(argv[i], s) == 0; };
@@ -338,6 +339,7 @@ int main(int argc, char* argv[]) {
         else if (eq("--data"))    { nxt(); dataPath   = argv[i]; }
         else if (eq("--epochs"))  { nxt(); epochs     = std::stoi(argv[i]); }
         else if (eq("--lr"))      { nxt(); lr         = std::stof(argv[i]); }
+        else if (eq("--easy"))    { easyMode = true; }
         else if (eq("--help")) {
             std::cout <<
                 "Usage: celeste-trainer [options]\n"
@@ -367,7 +369,7 @@ int main(int argc, char* argv[]) {
     // Build training levels
     std::vector<Level> levels;
     for (int s = 0; s < numSeeds; s++)
-        levels.push_back(buildLevel(baseSeed + s));
+        levels.push_back(buildLevel(baseSeed + s, easyMode));
 
     // Initialise pool
     std::vector<PopMember> pool(POOL_SIZE);
@@ -396,6 +398,7 @@ int main(int argc, char* argv[]) {
 
     std::cout << "Offline trainer\n"
               << "  Seeds:   " << numSeeds << " (base=" << baseSeed << ")\n"
+              << "  Rooms:   " << (easyMode ? "easy (gaps/platform only)" : "full random") << '\n'
               << "  Pool:    " << POOL_SIZE << "  Elites: " << ELITE_K << '\n'
               << "  Threads: " << nThreads << '\n'
               << "  Frames:  " << MAX_FRAMES << " (" << MAX_FRAMES/60 << " s/episode)\n"
