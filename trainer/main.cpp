@@ -149,6 +149,7 @@ struct EpisodeResult {
     float fitness;
     float timeMs;
     bool  reached;
+    float progress;   // raw horizontal progress 0-1 (for diagnostics)
 };
 
 // ── Run one episode (no rendering, no frame cap) ──────────
@@ -181,7 +182,7 @@ EpisodeResult runEpisode(const Weights& weights, const Level& lv) {
         if (rectsOverlap(player.x, player.y, Player::w, Player::h, lv.goal)) {
             float timeMs  = (float)frame * DT * 1000.f;
             float bonus   = std::max(0.f, 1.f - timeMs / 30000.f);
-            return {1.f + bonus, timeMs, true};
+            return {1.f + bonus, timeMs, true, 1.f};
         }
 
         if (player.x > maxX) maxX = player.x;
@@ -244,7 +245,7 @@ EpisodeResult runEpisode(const Weights& weights, const Level& lv) {
     // Capped at 1x map height so it never outweighs horizontal progress.
     float mapH       = std::max(1.f, lv.spawnY - 20.f);
     float heightBonus = std::min(totalClimb / mapH, 1.f) * 0.06f;
-    return {progress + speedBonus + heightBonus, elapsed * 1000.f, false};
+    return {progress + speedBonus + heightBonus, elapsed * 1000.f, false, progress};
 }
 
 // ── JSON persistence ──────────────────────────────────────
@@ -371,7 +372,8 @@ int main(int argc, char* argv[]) {
     // Initialise pool
     std::vector<PopMember> pool(POOL_SIZE);
     std::optional<Weights> globalBest;
-    float globalBestFit = 0.f;
+    float globalBestFit      = 0.f;
+    float globalBestProgress = 0.f;
     int   startGen = 0, totalRuns = 0;
 
     if (!loadPath.empty()) {
@@ -430,8 +432,9 @@ int main(int argc, char* argv[]) {
         // ── Track best ────────────────────────────────────
         for (int i = 0; i < POOL_SIZE; i++) {
             if (results[i].fitness > globalBestFit) {
-                globalBestFit = results[i].fitness;
-                globalBest    = pool[i].weights;
+                globalBestFit     = results[i].fitness;
+                globalBestProgress= results[i].progress;
+                globalBest        = pool[i].weights;
                 if (results[i].reached) bestGoalGen = gen;
                 gensSinceImproved = 0;
             }
@@ -445,16 +448,20 @@ int main(int argc, char* argv[]) {
             double gps = (gen - startGen + 1) / el;
 
             int   reached = 0;
-            float sumFit  = 0.f, genBest = 0.f;
+            float sumFit  = 0.f, genBest = 0.f, genBestProg = 0.f;
             for (int i = 0; i < POOL_SIZE; i++) {
                 sumFit  += results[i].fitness;
                 if (results[i].reached) reached++;
-                if (results[i].fitness > genBest) genBest = results[i].fitness;
+                if (results[i].fitness > genBest) {
+                    genBest     = results[i].fitness;
+                    genBestProg = results[i].progress;
+                }
             }
 
             std::cout << std::fixed << std::setprecision(4)
                       << "gen="     << std::setw(7) << gen
                       << "  best="  << std::setw(7) << globalBestFit
+                      << "  x="     << std::setw(6) << globalBestProgress
                       << "  gBest=" << std::setw(7) << genBest
                       << "  avg="   << std::setw(7) << (sumFit / POOL_SIZE)
                       << "  goals=" << reached << "/" << POOL_SIZE
