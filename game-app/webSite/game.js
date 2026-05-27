@@ -285,23 +285,35 @@
     function makeGoldenStrawberry(x, y) {
         return {
             type: 'goldenStrawberry', x: x - 7, y: y - 7, w: 14, h: 14,
-            isSolid: false, _collected: false, _pulse: 0,
-            reset() { this._collected = false; this._pulse = 0; },
+            isSolid: false, _collected: false, _pulse: 0, _drawX: x - 7, _drawY: y - 7,
+            reset() {
+                this._collected = false; this._pulse = 0;
+                this.x = x - 7; this.y = y - 7;
+                this._drawX = x - 7; this._drawY = y - 7;
+            },
             update(player, dt) {
                 this._pulse = (this._pulse + dt * 4) % (Math.PI * 2);
-                if (this._collected || !rectsOverlap(player, this)) return;
-                this._collected = true;
+                if (!this._collected) {
+                    if (rectsOverlap(player, this)) this._collected = true;
+                } else {
+                    // Float above the player's head while held
+                    this._drawX = player.x + player.w / 2 - 7;
+                    this._drawY = player.y - 16 + Math.sin(this._pulse * 2) * 2;
+                }
             },
             draw(ctx) {
-                if (this._collected) return;
-                const alpha = 0.6 + 0.4 * Math.sin(this._pulse);
-                const cx = this.x + 7, cy = this.y + 7;
+                const dx = this._collected ? this._drawX : this.x;
+                const dy = this._collected ? this._drawY : this.y;
+                const alpha = 0.7 + 0.3 * Math.sin(this._pulse);
+                const cx = dx + 7, cy = dy + 7;
                 ctx.save(); ctx.globalAlpha = alpha;
                 ctx.fillStyle = '#d4af37'; ctx.beginPath(); ctx.arc(cx, cy, 7, 0, Math.PI * 2); ctx.fill();
                 ctx.fillStyle = '#f0d060'; ctx.beginPath(); ctx.arc(cx - 2, cy - 2, 3, 0, Math.PI * 2); ctx.fill();
                 ctx.restore();
-                ctx.fillStyle = 'rgba(255,215,0,0.4)';
-                ctx.beginPath(); ctx.arc(cx, cy, 11 + 2 * Math.sin(this._pulse), 0, Math.PI * 2); ctx.fill();
+                if (!this._collected) {
+                    ctx.fillStyle = 'rgba(255,215,0,0.4)';
+                    ctx.beginPath(); ctx.arc(cx, cy, 11 + 2 * Math.sin(this._pulse), 0, Math.PI * 2); ctx.fill();
+                }
             }
         };
     }
@@ -958,101 +970,160 @@
         if (!isNaN(val)) window.aiGenerateMap(val);
     };
 
-    // ── Random level with entities (guaranteed clearable) ────────────────────
+    // ── Random level: room-based layout, all entity types, random length ─────
     function buildRandomLevel(seed) {
         const rng = mkRng(seed);
         const ri  = () => Math.floor(rng() * 1000);
         const p = [], pits = [], sp = [], nm = [], sk = [], lb = [];
+        const ents = [];
         let goal = {};
 
-        // ── Pass 1: Freeform stepping-stone geometry ──────────────────────
-        const ROOM_NAMES = ['VALLEY','RIDGE','CAVERN','PEAK','GORGE','LEDGE',
-            'ASCENT','DESCENT','VAULT','CLIFF','HOLLOW','SPIRE'];
+        // Random room count 3–8
+        const N = 3 + (ri() % 6);
+        NUM_ROOMS = N;
 
-        for (let room = 0; room < NUM_ROOMS; room++) {
-            const ox = room * ROOM_W;
+        const TYPE_LABEL_R = {
+            gaps: 'RUN & JUMP', platform: 'PLATFORMS',
+            chimney: 'CHIMNEY', climb: 'CLIFF FACE', stair: 'SUMMIT',
+        };
+
+        // Last room is always the summit/goal; rooms before it are random
+        const MID = ['gaps', 'platform', 'chimney', 'climb'];
+        const chosen = [];
+        for (let i = 0; i < N - 1; i++) chosen.push(MID[ri() % MID.length]);
+        chosen.push('stair');
+        // Break up runs of 3+ identical consecutive rooms
+        for (let i = 1; i < N - 2; i++) {
+            if (chosen[i] === chosen[i - 1] && chosen[i] === chosen[i + 1])
+                chosen[i] = MID[(MID.indexOf(chosen[i]) + 1) % MID.length];
+        }
+
+        for (let room = 0; room < N; room++) {
+            const ox   = room * ROOM_W;
+            const type = chosen[room];
+
             sk.push(PALETTES[(ri() + room) % PALETTES.length]);
-            nm.push(`ROOM ${room + 1} — ${ROOM_NAMES[ri() % ROOM_NAMES.length]}`);
+            nm.push(`ROOM ${room + 1} — ${TYPE_LABEL_R[type]}`);
             sp.push({ x: ox + 14, y: FLOOR_Y - 12 });
 
-            if (room === 0)             p.push({ x: ox,               y: 0, w: 8, h: 180, color: '#4a5570' });
-            if (room === NUM_ROOMS - 1) p.push({ x: ox + ROOM_W - 8, y: 0, w: 8, h: 180, color: '#4a5570' });
+            if (room === 0)     p.push({ x: ox,               y: 0, w: 8, h: 180, color: '#4a5570' });
+            if (room === N - 1) p.push({ x: ox + ROOM_W - 8, y: 0, w: 8, h: 180, color: '#4a5570' });
 
-            const entryW = 28 + (ri() % 32);
-            const exitW  = 28 + (ri() % 32);
-            p.push({ x: ox,                  y: FLOOR_Y, w: entryW, h: FLOOR_H, color: '#3a5a3a' });
-            p.push({ x: ox + ROOM_W - exitW, y: FLOOR_Y, w: exitW,  h: FLOOR_H, color: '#3a5a3a' });
-            pits.push({ x: ox + entryW, y: FLOOR_Y, w: ROOM_W - entryW - exitW, h: FLOOR_H });
+            if (type === 'gaps') {
+                const numGaps = 1 + (ri() % 2);
+                const gapW    = 32 + (ri() % 20);
+                const seg     = splitFloor(ox, FLOOR_Y, ROOM_W, numGaps, gapW, rng);
+                for (const s of seg.floors) p.push({ x: s.x, y: FLOOR_Y, w: s.w, h: FLOOR_H, color: '#3a5a3a' });
+                for (const g of seg.gaps) {
+                    pits.push({ x: g.x, y: FLOOR_Y, w: g.w, h: FLOOR_H });
+                    lb.push({ text: 'JUMP', x: g.x + 4, y: FLOOR_Y + 10 });
+                    // Crumble block bridging the gap as optional shortcut
+                    if (rng() > 0.45 && g.w >= 28) {
+                        const bw = Math.min(g.w - 8, 36 + (ri() % 20));
+                        ents.push(makeCrumbleBlock(g.x + Math.floor((g.w - bw) / 2), FLOOR_Y - 28, bw));
+                    }
+                }
 
-            const numStones = 2 + (ri() % 3);
-            let cx = ox + entryW;
-            let cy = FLOOR_Y;
-            const stones = [];
+            } else if (type === 'platform') {
+                const entryW = 50 + (ri() % 30), exitW = 40 + (ri() % 30);
+                p.push({ x: ox,                  y: FLOOR_Y, w: entryW, h: FLOOR_H, color: '#3a5a3a' });
+                p.push({ x: ox + ROOM_W - exitW, y: FLOOR_Y, w: exitW,  h: FLOOR_H, color: '#3a5a3a' });
+                pits.push({ x: ox + entryW, y: FLOOR_Y, w: ROOM_W - entryW - exitW, h: FLOOR_H });
+                const asc = rng() > 0.5;
+                const gap = (ROOM_W - entryW - exitW) / 3;
+                for (let i = 0; i < 3; i++) {
+                    const fx = ox + entryW + Math.floor(i * gap) + (ri() % 10);
+                    const fy = asc ? Math.max(25, FLOOR_Y - 45 - i * 28) : Math.max(25, FLOOR_Y - 110 + i * 28);
+                    const fw = 42 + (ri() % 28);
+                    // Middle platform has a chance to be a falling block
+                    if (i === 1 && rng() > 0.55) {
+                        ents.push(makeFallingBlock(fx, fy, fw, 8));
+                    } else {
+                        p.push({ x: fx, y: fy, w: fw, h: 8, color: '#5a7a5a' });
+                    }
+                    lb.push({ text: 'STEP', x: fx + 4, y: fy - 2 });
+                }
 
-            for (let s = 0; s < numStones; s++) {
-                const sw     = 26 + (ri() % 36);
-                const rawGap = 10 + (ri() % 56);
-                const goUp   = rng() > 0.38;
-                const dy     = goUp ? -(14 + ri() % 52) : (8 + ri() % 42);
-                const newY   = Math.max(18, Math.min(FLOOR_Y - 18, cy + dy));
-                const rise   = cy - newY;
-                const maxGap = rise > 42 ? 46 : rise > 14 ? 60 : 76;
-                const gap    = Math.min(rawGap, maxGap);
-                let sx = cx + gap;
-                sx = Math.max(ox + entryW + 4, Math.min(ox + ROOM_W - exitW - sw - 4, sx));
-                if (sx <= cx) sx = cx + 8;
-                p.push({ x: sx, y: newY, w: sw, h: 8, color: '#5a7a5a' });
-                stones.push({ x: sx, y: newY, w: sw });
-                cx = sx + sw;
-                cy = newY;
-            }
+            } else if (type === 'chimney') {
+                const entryW   = 70 + (ri() % 50);
+                const shaftX   = ox + entryW + 10 + (ri() % 20);
+                const shaftW   = 22 + (ri() % 10);
+                const shaftTop = 28 + (ri() % 35);
+                const gapBot   = 16;
+                p.push({ x: ox, y: FLOOR_Y, w: entryW, h: FLOOR_H, color: '#3a5a3a' });
+                p.push({ x: shaftX,          y: shaftTop, w: 6, h: FLOOR_Y - shaftTop - gapBot, color: '#5a6b88' });
+                p.push({ x: shaftX + shaftW, y: shaftTop, w: 6, h: FLOOR_Y - shaftTop,           color: '#5a6b88' });
+                p.push({ x: shaftX, y: shaftTop, w: shaftW + 12, h: 6, color: '#5a7a5a' });
+                lb.push({ text: 'WALL JUMP', x: shaftX - 8, y: FLOOR_Y - 4 });
+                const l1x = shaftX + shaftW + 18 + (ri() % 15);
+                const l1y = 72 + (ri() % 35);
+                const l2x = l1x + 48 + (ri() % 20);
+                const l2y = 118 + (ri() % 24);
+                p.push({ x: l1x, y: l1y, w: 50, h: 8, color: '#5a7a5a' });
+                p.push({ x: l2x, y: l2y, w: 50, h: 8, color: '#5a7a5a' });
+                const exitX = Math.min(ox + ROOM_W - 10, l2x + 40);
+                if (exitX < ox + ROOM_W) p.push({ x: exitX, y: FLOOR_Y, w: ox + ROOM_W - exitX, h: FLOOR_H, color: '#3a5a3a' });
 
-            const exitStart = ox + ROOM_W - exitW;
-            let safety = 0;
-            while (exitStart - cx > 75 && safety++ < 4) {
-                const bw   = 26 + (ri() % 22);
-                const bGap = 10 + (ri() % Math.max(1, Math.min(55, exitStart - cx - bw - 5)));
-                const bx   = Math.min(cx + bGap, exitStart - bw - 4);
-                if (bx <= cx) break;
-                const by = Math.max(18, Math.min(FLOOR_Y - 18, cy + (ri() % 40) - 20));
-                p.push({ x: bx, y: by, w: bw, h: 8, color: '#5a7a5a' });
-                stones.push({ x: bx, y: by, w: bw });
-                cx = bx + bw;
-                cy = by;
-            }
+            } else if (type === 'climb') {
+                const entryW = 50 + (ri() % 30);
+                p.push({ x: ox, y: FLOOR_Y, w: entryW, h: FLOOR_H, color: '#3a5a3a' });
+                const wallH   = 120 + (ri() % 40);
+                const wallTop = FLOOR_Y - wallH;
+                const wallAX  = ox + entryW + 20 + (ri() % 20);
+                p.push({ x: wallAX,     y: wallTop, w: 8,  h: wallH, color: '#7a6b8a' });
+                p.push({ x: wallAX + 8, y: wallTop, w: 62, h: 8,     color: '#5a7a5a' });
+                lb.push({ text: 'GRAB+UP', x: wallAX - 32, y: FLOOR_Y - 28 });
+                lb.push({ text: 'DASH->',  x: wallAX + 14, y: wallTop - 4 });
+                const wallBX = wallAX + 8 + 62 + 20 + (ri() % 20);
+                p.push({ x: wallBX,     y: wallTop, w: 8,  h: wallH, color: '#7a6b8a' });
+                p.push({ x: wallBX + 8, y: wallTop, w: 40, h: 8,     color: '#5a7a5a' });
+                lb.push({ text: 'GRAB+UP', x: wallBX - 32, y: FLOOR_Y - 28 });
+                const d1x = Math.min(wallBX + 50, ox + ROOM_W - 130);
+                const d2x = Math.min(d1x + 50,    ox + ROOM_W - 80);
+                p.push({ x: d1x, y: wallTop + 55,  w: 50, h: 8, color: '#5a7a5a' });
+                p.push({ x: d2x, y: wallTop + 105, w: 40, h: 8, color: '#5a7a5a' });
+                const exitX = Math.min(ox + ROOM_W - 40, d2x + 32);
+                p.push({ x: exitX, y: FLOOR_Y, w: ox + ROOM_W - exitX, h: FLOOR_H, color: '#3a5a3a' });
 
-            if (room === NUM_ROOMS - 1 && stones.length > 0) {
-                const top = stones.reduce((a, b) => a.y < b.y ? a : b);
-                goal = { x: top.x + top.w - 18, y: top.y - 14, w: 12, h: 12, color: '#d4af37' };
-                lb.push({ text: 'GOAL', x: top.x + 4, y: top.y - 4 });
+            } else { // stair — summit / goal room
+                p.push({ x: ox, y: FLOOR_Y, w: 55, h: FLOOR_H, color: '#3a5a3a' });
+                const steps   = 4 + (ri() % 2);
+                const spacing = (ROOM_W - 80) / steps;
+                for (let s = 0; s < steps; s++) {
+                    const sx = ox + 55 + Math.floor(s * spacing);
+                    const sy = FLOOR_Y - 32 - s * 30;
+                    const sw = 48 + (ri() % 18);
+                    p.push({ x: sx, y: sy, w: sw, h: 8, color: '#5a7a5a' });
+                    if (s === steps - 1) {
+                        goal = { x: sx + sw - 18, y: sy - 14, w: 12, h: 12, color: '#d4af37' };
+                        lb.push({ text: 'SUMMIT', x: sx + 4, y: sy - 4 });
+                    }
+                }
             }
         }
 
-        // ── Pass 2: Random entity placement across ALL platforms ──────────
-        // Candidates: horizontal (h≤12), wide enough (w≥18), not boundary walls
+        // ── Entity pass: place all entity types on suitable platforms ─────────
         const cands = p.filter(pl => pl.w >= 18 && pl.h <= 12 && pl.y > 8);
-
-        // Seeded Fisher-Yates shuffle so entity spread is deterministic
-        const pool = [...cands];
+        const pool  = [...cands];
         for (let i = pool.length - 1; i > 0; i--) {
             const j = ri() % (i + 1);
             [pool[i], pool[j]] = [pool[j], pool[i]];
         }
 
-        // Weighted type pool — more copies = higher chance
+        // All entity types the game supports, weighted by how fun/common they are
         const typePool = [
-            'crystal', 'crystal', 'crystal', 'crystal',
+            'crystal', 'crystal', 'crystal',
             'spring',  'spring',
             'bumper',  'bumper',
             'spike',   'spike',   'spike',
             'blade_h', 'blade_h',
             'blade_c',
+            'kevin',
             'berry',   'berry',
         ];
 
-        const ents  = [];
-        const used  = new Set(); // one lethal entity per platform index
-        const total = 10 + (ri() % 7); // 10–16 entities spread across the whole level
+        const used  = new Set();
+        const total = Math.min(4 + N * 2 + (ri() % 4), pool.length);
 
         for (let i = 0; i < total && i < pool.length; i++) {
             const pl   = pool[i];
@@ -1072,42 +1143,39 @@
             } else if (type === 'berry') {
                 ents.push(makeStrawberry(cx, pl.y - 15));
 
+            } else if (type === 'kevin' && pl.w >= 36 && !used.has(pidx)) {
+                used.add(pidx);
+                ents.push(makeKevinBlock(cx - 11, pl.y - 16, 22, 16));
+
             } else if (type === 'spike' && pl.w >= 20 && !used.has(pidx)) {
                 used.add(pidx);
-                // Right-edge spike: player approaching from the left can land safely
-                // on the left 80 % of the platform and jump off before reaching the spike
                 ents.push(makeSpike(pl.x + pl.w - 6, pl.y, 6, 'up'));
 
             } else if (type === 'blade_h' && pl.w >= 36 && !used.has(pidx)) {
                 used.add(pidx);
-                // Horizontal patrol above the platform. Blade centre is 26 px above surface.
-                // Player height is 11 px, so blade bottom (centre+6 = pl.y-20) sits 9 px
-                // above the player's head (pl.y-11) — safe to stand; must TIME crossing.
                 ents.push(makeEnticeBlade({
-                    ax: pl.x + 8,       ay: pl.y - 26,
+                    ax: pl.x + 8,         ay: pl.y - 26,
                     bx: pl.x + pl.w - 20, by: pl.y - 26,
                     speed: 38 + (ri() % 28),
                 }));
 
             } else if (type === 'blade_c' && !used.has(pidx)) {
                 used.add(pidx);
-                // Circular blade orbiting 28 px above the platform surface
                 ents.push(makeEnticeBlade({
                     path: 'circular',
-                    cx: cx, cy: pl.y - 28,
+                    cx, cy: pl.y - 28,
                     radius: 12 + (ri() % 12),
                     startAngle: rng() * Math.PI * 2,
                     speed: 1.4 + rng() * 1.6,
                 }));
 
             } else {
-                // Fallback for failed conditions: always-safe crystal
                 ents.push(makeDashCrystal(cx, pl.y - 14));
             }
         }
 
-        // Golden strawberry always spawns near the goal
-        if (goal.x !== undefined) ents.push(makeGoldenStrawberry(goal.x + 6, goal.y - 14));
+        // Golden strawberry at the start — collecting it means finishing without dying
+        if (sp[0]) ents.push(makeGoldenStrawberry(sp[0].x + 16, sp[0].y - 14));
 
         return { platforms: p, pitShading: pits, roomSpawns: sp, roomNames: nm, roomSkies: sk, roomLabels: lb, goal, entities: ents };
     }
@@ -2622,8 +2690,8 @@
                 mazeRoomRow = RoomTrans.pendingRow;
                 cameraX = RoomTrans.toX;
                 cameraY = RoomTrans.toY;
-                // Mountain: refill dash on room entry (matches Celeste Core chapter feel)
-                if (mountainMode) player.Dashes = player.MaxDashes;
+                // Refill dash on every maze room entry (Mountain and Mirror Temple)
+                player.Dashes = player.MaxDashes;
             }
             return;
         }
@@ -2797,7 +2865,10 @@
             }
             if (!aiEnabled && recordingFrames.length > 30) saveRecording(true);
         }
-        if (player.y > DEATH_Y || player.y < worldMinY - 20) { respawn(); return; }
+        if (player.y > DEATH_Y || player.y < worldMinY - 20) {
+            if (entities.some(e => e.type === 'goldenStrawberry' && e._collected)) { restartRun(); return; }
+            respawn(); return;
+        }
 
         // AI stuck-death: two independent kill conditions
         if (aiEnabled) {
