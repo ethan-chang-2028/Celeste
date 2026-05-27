@@ -1395,9 +1395,13 @@
         window.AI_BOUNDS = { minX: -20, maxX: NUM_ROOMS * ROOM_W + 20, minY: -20, maxY: H + 20 };
         window.AI_GOAL_VERTICAL = false;
 
-        // Create / re-spawn race AI player
-        if (!raceAIPlayer) raceAIPlayer = new CelestePlayer(roomSpawns[0].x, roomSpawns[0].y);
-        else raceAIPlayer.reset(roomSpawns[0].x, roomSpawns[0].y);
+        // Create / re-spawn race AI player — skipped in online PvP (two humans, no AI)
+        if (!onlineMode) {
+            if (!raceAIPlayer) raceAIPlayer = new CelestePlayer(roomSpawns[0].x, roomSpawns[0].y);
+            else raceAIPlayer.reset(roomSpawns[0].x, roomSpawns[0].y);
+        } else {
+            raceAIPlayer = null;
+        }
 
         // Create / re-spawn player 2 if 2-player mode is active
         if (p2Active) {
@@ -1417,7 +1421,7 @@
         raceAIStuckFrames = 0; raceAIStuckX = roomSpawns[0].x; raceAIStuckY = roomSpawns[0].y;
         raceAIProgFrames = 0;  raceAIProgBest = -Infinity;
 
-        if (typeof NeuralAI !== 'undefined') {
+        if (!onlineMode && typeof NeuralAI !== 'undefined') {
             NeuralAI.init(roomSpawns[0].x, GOAL ? GOAL.x + GOAL.w : NUM_ROOMS * ROOM_W);
             NeuralAI.reset(roomSpawns[0].x);
         }
@@ -1441,18 +1445,30 @@
     function _onlineSharedCallbacks() {
         OnlineRace.onMatched = function (seed, opponentName) {
             onlineName = opponentName;
+            // Start the race now with the shared seed.
+            // onlineMode is already true so raceGenerateMap will skip the AI.
+            currentMode = 'race';
+            aiEnabled   = false;
+            raceMode    = true;
+            NUM_ROOMS   = 5;
+            document.querySelectorAll('.ai-only').forEach(el => el.style.display = 'none');
+            document.querySelectorAll('.random-only').forEach(el => el.style.display = 'none');
+            document.querySelectorAll('.race-only').forEach(el => el.style.display = '');
             window.raceGenerateMap(seed);
+            opLerpX = roomSpawns[0] ? roomSpawns[0].x : 0;
+            opLerpY = roomSpawns[0] ? roomSpawns[0].y : 0;
+            document.getElementById('level-menu').style.display = 'none';
+            document.getElementById('game-ui').style.display    = 'flex';
+            gameActive = true;
             const el = document.getElementById('online-status');
-            if (el) el.textContent = `Racing vs ${opponentName}!`;
+            if (el) { el.textContent = `Racing vs ${opponentName}!`; el.className = 'online-status-matched'; }
             const codeBox = document.getElementById('room-code-display');
             if (codeBox) codeBox.style.display = 'none';
         };
         OnlineRace.onOpponentLeft = function () {
             onlineMode = false;
             const el = document.getElementById('online-status');
-            if (el) el.textContent = 'Opponent left.';
-            const codeBox = document.getElementById('room-code-display');
-            if (codeBox) codeBox.style.display = 'none';
+            if (el) { el.textContent = 'Opponent left the race.'; el.className = 'online-status-error'; }
         };
         OnlineRace.onError = function (message) {
             const el = document.getElementById('online-status');
@@ -1462,11 +1478,10 @@
 
     function _onlineInit(name) {
         if (typeof OnlineRace === 'undefined') { alert('Online race module not loaded.'); return false; }
-        if (!raceMode) window.startGame('race');
+        // Do NOT start the race yet — stay on the lobby screen so the room code is visible.
+        // The race starts inside onMatched once both players are connected.
         onlineMode = true;
         onlineName = '';
-        opLerpX = roomSpawns[0] ? roomSpawns[0].x : 0;
-        opLerpY = roomSpawns[0] ? roomSpawns[0].y : 0;
         _onlineSharedCallbacks();
         return true;
     }
@@ -1501,9 +1516,11 @@
         if (typeof OnlineRace !== 'undefined') OnlineRace.disconnect();
         onlineMode = false;
         const el = document.getElementById('online-status');
-        if (el) { el.textContent = ''; el.className = 'online-status-info'; }
+        if (el) { el.textContent = 'Enter your name, then create a room or join one with a code.'; el.className = 'online-status-info'; }
         const codeBox = document.getElementById('room-code-display');
         if (codeBox) codeBox.style.display = 'none';
+        // If the race was already in progress, go back to the level menu
+        if (gameActive && raceMode) window.showLevelMenu();
     };
 
     window.randomGenerateMap = function (seedOverride) {
@@ -2484,8 +2501,8 @@
             }
         }
 
-        // Race AI player — orange blinking rectangle
-        if (raceMode && raceAIPlayer && !raceAIDone) {
+        // Race AI player — orange blinking rectangle (solo race only)
+        if (raceMode && !onlineMode && raceAIPlayer && !raceAIDone) {
             const blink = Math.sin(performance.now() / 160) > 0;
             ctx.globalAlpha = 0.82;
             ctx.fillStyle = blink ? '#ff6622' : '#ff8844';
@@ -2682,8 +2699,8 @@
                     const third = Math.ceil(barH / 3);
                     ctx.fillRect(bx, barBase, barW, third);
                 }
-                // AI — middle third (orange)
-                if (i <= raceAICP) {
+                // AI — middle third (orange) — solo race only
+                if (!onlineMode && i <= raceAICP) {
                     ctx.fillStyle = '#ff6622';
                     const third = Math.ceil(barH / 3);
                     ctx.fillRect(bx, barBase + third, barW, third);
@@ -2697,11 +2714,11 @@
             // Leading indicator (top right) — includes online opponent CP
             const opCP = (onlineMode && OnlineRace.opponent) ? OnlineRace.opponent.cp : -1;
             const leaders = [];
-            const allCP = [racePlayerCP, ...(p2Active ? [p2CP] : []), raceAICP, ...(onlineMode ? [opCP] : [])];
+            const allCP = [racePlayerCP, ...(p2Active ? [p2CP] : []), ...(!onlineMode ? [raceAICP] : []), ...(onlineMode ? [opCP] : [])];
             const maxCP = Math.max(...allCP);
             if (racePlayerCP === maxCP) leaders.push('P1');
             if (p2Active && p2CP === maxCP) leaders.push('P2');
-            if (raceAICP === maxCP) leaders.push('AI');
+            if (!onlineMode && raceAICP === maxCP) leaders.push('AI');
             if (onlineMode && opCP === maxCP) leaders.push(onlineName || 'NET');
             const leadStr = leaders.length >= 3 ? 'TIED'
                           : leaders.join('+') + ' LEAD';
@@ -2713,7 +2730,7 @@
 
             // Finish-time badges (top right, below leading)
             let badgeY = 17;
-            if (raceAIDone && raceAITime !== null) {
+            if (!onlineMode && raceAIDone && raceAITime !== null) {
                 ctx.fillStyle = '#ff8844'; ctx.font = '5px monospace';
                 ctx.fillText(`AI: ${(raceAITime/1000).toFixed(2)}s`, W - 50, badgeY); badgeY += 7;
             }
@@ -2728,14 +2745,15 @@
 
             // Result overlay — show when at least one finisher is across the line
             const opDone = onlineMode && OnlineRace.opponent && OnlineRace.opponent.done;
-            const anyDone = racePlayerDone || (p2Active && p2Done) || raceAIDone || opDone;
-            const allDone = racePlayerDone && (!p2Active || p2Done) && raceAIDone && (!onlineMode || opDone);
+            const anyDone = racePlayerDone || (p2Active && p2Done) || (!onlineMode && raceAIDone) || opDone;
+            // In online mode: all done = both players finished. In solo: all done = player + AI finished.
+            const allDone = racePlayerDone && (!p2Active || p2Done) && (onlineMode ? opDone : raceAIDone);
             if (anyDone) {
                 // Collect all times into a ranked list
                 const entries = [];
                 if (racePlayerDone) entries.push({ label: 'You', t: racePlayerTime, col: '#aaddff' });
                 if (p2Active && p2Done) entries.push({ label: 'P2', t: p2Time, col: '#dd44ff' });
-                if (raceAIDone) entries.push({ label: 'AI', t: raceAITime, col: '#ff8844' });
+                if (!onlineMode && raceAIDone) entries.push({ label: 'AI', t: raceAITime, col: '#ff8844' });
                 if (opDone) entries.push({ label: onlineName||'Opponent', t: OnlineRace.opponent.time, col: '#44ff99' });
                 entries.sort((a, b) => a.t - b.t);
 
@@ -2864,8 +2882,8 @@
         }
         transitionFlash = Math.max(0, transitionFlash - FIXED_DT);
 
-        // ── Race AI opponent ────────────────────────────────────────────────────
-        if (raceMode && raceAIPlayer && !raceAIDone && typeof NeuralAI !== 'undefined') {
+        // ── Race AI opponent (solo race only — not used in online PvP) ──────────
+        if (raceMode && !onlineMode && raceAIPlayer && !raceAIDone && typeof NeuralAI !== 'undefined') {
             const allPlatsR = dynPlat.length ? platforms.concat(dynPlat) : platforms;
             const hazardsR  = getHazardRects();
             const raceInp   = NeuralAI.compute(raceAIPlayer, platforms, GOAL, hazardsR);
@@ -3026,9 +3044,10 @@
         if (raceMode) {
             const raceElapsed = (racePlayerDone ? racePlayerTime : performance.now() - raceStart) / 1000;
             let st = `RACE  P1:${raceElapsed.toFixed(2)}s cp${racePlayerCP+1}/${NUM_ROOMS}`;
-            if (p2Active)    st += `  P2:cp${p2CP+1}/${NUM_ROOMS}`;
-            if (onlineMode)  st += `  NET:cp${(OnlineRace.opponent ? OnlineRace.opponent.cp + 1 : 1)}/${NUM_ROOMS}`;
-            st += `  AI:cp${raceAICP+1}/${NUM_ROOMS}  ${measuredFps.toFixed(0)} fps`;
+            if (p2Active)     st += `  P2:cp${p2CP+1}/${NUM_ROOMS}`;
+            if (onlineMode)   st += `  NET:cp${(OnlineRace.opponent ? OnlineRace.opponent.cp + 1 : 1)}/${NUM_ROOMS}`;
+            if (!onlineMode)  st += `  AI:cp${raceAICP+1}/${NUM_ROOMS}`;
+            st += `  ${measuredFps.toFixed(0)} fps`;
             statusEl.textContent = st;
         } else {
             statusEl.textContent =
