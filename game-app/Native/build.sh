@@ -21,8 +21,8 @@ echo "[build] Compiling..."
 emmake make -C "$BUILD_DIR" -j"$(nproc 2>/dev/null || echo 4)"
 
 echo "[build] Copying output to webSite/..."
-cp "$BUILD_DIR/ai-neural.wasm.js" "$OUT_DIR/"
-cp "$BUILD_DIR/ai-neural.wasm"    "$OUT_DIR/"
+cp "$BUILD_DIR/ai-neural.wasm.js"   "$OUT_DIR/"
+cp "$BUILD_DIR/ai-neural.wasm.wasm" "$OUT_DIR/ai-neural.wasm"
 
 echo "[build] Done — C++ AI (ai_learning.hpp) compiled to WASM."
 echo "        Serve game.html and the WASM AI will activate automatically."
