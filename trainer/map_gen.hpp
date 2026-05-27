@@ -64,14 +64,18 @@ static Level buildLevel(int seed, bool easyMode = false) {
     lv.spawnX = 14.f;
     lv.spawnY = FLOOR_Y - 12.f;
 
-    const char* midTypes[] = {"gaps","platform","chimney","climb"};
+    const char* midTypes[]  = {"gaps","platform","chimney","climb"};
     const char* easyTypes[] = {"gaps","platform"};
     const char* chosen[NUM_ROOMS];
-    chosen[0] = "gaps";
-    chosen[1] = easyMode ? easyTypes[ri() % 2] : midTypes[ri() % 4];
-    chosen[2] = easyMode ? easyTypes[ri() % 2] : midTypes[ri() % 4];
-    chosen[3] = easyMode ? easyTypes[ri() % 2] : midTypes[ri() % 4];
-    chosen[4] = "stair";
+    if (easyMode) {
+        // Easy mode: gaps/platform only, stair always last
+        for (int i = 0; i < NUM_ROOMS - 1; i++) chosen[i] = easyTypes[ri() % 2];
+        chosen[NUM_ROOMS - 1] = "stair";
+    } else {
+        // Full random: all rooms random, stair guaranteed exactly once
+        for (int i = 0; i < NUM_ROOMS; i++) chosen[i] = midTypes[ri() % 4];
+        chosen[ri() % NUM_ROOMS] = "stair";   // overwrite one slot with stair (goal room)
+    }
 
     auto& p = lv.platforms;
 
@@ -133,11 +137,13 @@ static Level buildLevel(int seed, bool easyMode = false) {
             float wallBX = wallAX + 8.f + 62.f + 20.f + (ri() % 20);
             p.push_back({wallBX,    wallTop, 8,  wallH});
             p.push_back({wallBX+8,  wallTop, 40, 8});
-            float d1x = wallBX + 50.f, d2x = d1x + 50.f;
-            p.push_back({d1x, wallTop + 55.f, 50, 8});
+            // Cap d1/d2 inside the room, leave at least 40px exit floor
+            float d1x = std::min(wallBX + 50.f, ox + ROOM_W - 130.f);
+            float d2x = std::min(d1x + 50.f,    ox + ROOM_W - 80.f);
+            p.push_back({d1x, wallTop + 55.f,  50, 8});
             p.push_back({d2x, wallTop + 105.f, 40, 8});
-            float exitX = std::min(ox + ROOM_W - 10.f, d2x + 32.f);
-            if (exitX < ox + ROOM_W) p.push_back({exitX, FLOOR_Y, ox + ROOM_W - exitX, FLOOR_H});
+            float exitX = std::min(ox + ROOM_W - 40.f, d2x + 32.f);
+            p.push_back({exitX, FLOOR_Y, ox + ROOM_W - exitX, FLOOR_H});
 
         } else if (strcmp(type, "stair") == 0) {
             p.push_back({ox, FLOOR_Y, 55, FLOOR_H});

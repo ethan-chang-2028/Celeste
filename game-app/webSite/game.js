@@ -486,11 +486,11 @@
         let goal = {};
 
         const mid = ['gaps','platform','chimney','climb'];
-        const chosen = [
-            'gaps',
-            mid[ri() % mid.length], mid[ri() % mid.length], mid[ri() % mid.length],
-            'stair',
-        ];
+        const all = [...mid, 'stair'];
+        // All 5 rooms fully random — stair is guaranteed exactly once as the goal room.
+        // Shuffle: pick a random position for 'stair', fill others from mid types.
+        const chosen = [mid[ri()%4], mid[ri()%4], mid[ri()%4], mid[ri()%4], mid[ri()%4]];
+        chosen[ri() % NUM_ROOMS] = 'stair';   // at least one stair (goal room)
 
         for (let room = 0; room < NUM_ROOMS; room++) {
             const ox = room * ROOM_W;
@@ -561,11 +561,13 @@
                 p.push({ x: wallBX,     y: wallTop, w: 8,  h: wallH, color: '#7a6b8a' });
                 p.push({ x: wallBX + 8, y: wallTop, w: 40, h: 8,     color: '#5a7a5a' });
                 lb.push({ text: 'GRAB+UP', x: wallBX - 32, y: FLOOR_Y - 28 });
-                const d1x = wallBX + 50, d2x = d1x + 50;
-                p.push({ x: d1x, y: wallTop + 55, w: 50, h: 8, color: '#5a7a5a' });
+                // Cap d1/d2 so they stay inside the room and leave a 40px exit floor
+                const d1x = Math.min(wallBX + 50, ox + ROOM_W - 130);
+                const d2x = Math.min(d1x + 50,    ox + ROOM_W - 80);
+                p.push({ x: d1x, y: wallTop + 55,  w: 50, h: 8, color: '#5a7a5a' });
                 p.push({ x: d2x, y: wallTop + 105, w: 40, h: 8, color: '#5a7a5a' });
-                const exitX = Math.min(ox + ROOM_W - 10, d2x + 32);
-                if (exitX < ox + ROOM_W) p.push({ x: exitX, y: FLOOR_Y, w: ox + ROOM_W - exitX, h: FLOOR_H, color: '#3a5a3a' });
+                const exitX = Math.min(ox + ROOM_W - 40, d2x + 32);
+                p.push({ x: exitX, y: FLOOR_Y, w: ox + ROOM_W - exitX, h: FLOOR_H, color: '#3a5a3a' });
             }
 
             else if (type === 'stair') {
@@ -2700,6 +2702,13 @@
             respawnRoom  = getRoomIdx();
             furthestRoom = Math.max(furthestRoom, respawnRoom);
         }
+        // Refill dash when entering a new room (random mode) — prevents chimney/climb
+        // rooms draining the dash before the player even starts the obstacle.
+        if (currentMode !== 'maze') {
+            const _curRoom = Math.max(0, Math.min(NUM_ROOMS - 1, Math.floor(player.x / ROOM_W)));
+            if (_curRoom !== (step._lastRoom ?? _curRoom)) player.Dashes = player.MaxDashes;
+            step._lastRoom = _curRoom;
+        }
         if (currentMode === 'maze') {
             const newCol = Math.max(0, Math.min(NUM_ROOMS - 1, Math.floor(player.x / ROOM_W)));
             const _rows  = Math.round(worldH / H);
@@ -2736,10 +2745,14 @@
                 const inp2 = NeuralAI.computeAgent(gh.idx, gh.p, platforms, GOAL, hazardRects);
                 if (!inp2) continue;
                 gh.p.update(inp2, allPlats, FIXED_DT);
-                // Mountain: dash refill on room change
+                // Dash refill on room change (mountain: by row; random: by column)
                 if (mountainMode) {
                     const ghRow = Math.max(0, Math.floor((gh.p.y - worldMinY) / H));
                     if (ghRow !== gh.lastRow) { gh.p.Dashes = gh.p.MaxDashes; gh.lastRow = ghRow; }
+                } else {
+                    const ghCol = Math.max(0, Math.min(NUM_ROOMS - 1, Math.floor(gh.p.x / ROOM_W)));
+                    if (ghCol !== (gh.lastRow ?? ghCol)) gh.p.Dashes = gh.p.MaxDashes;
+                    gh.lastRow = ghCol;
                 }
                 // Stuck detection — position and progress checks
                 if (Math.abs(gh.p.x - gh.stuckX) > 2 || Math.abs(gh.p.y - gh.stuckY) > 2) {
