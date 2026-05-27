@@ -325,6 +325,7 @@ int main(int argc, char* argv[]) {
     int         epochs     = 100;
     float       lr         = 1e-3f;
     bool        easyMode   = false;
+    int         evalRounds = 1;    // evaluate each agent on this many seeds, take average
 
     for (int i = 1; i < argc; i++) {
         auto eq = [&](const char* s){ return std::strcmp(argv[i], s) == 0; };
@@ -339,7 +340,8 @@ int main(int argc, char* argv[]) {
         else if (eq("--data"))    { nxt(); dataPath   = argv[i]; }
         else if (eq("--epochs"))  { nxt(); epochs     = std::stoi(argv[i]); }
         else if (eq("--lr"))      { nxt(); lr         = std::stof(argv[i]); }
-        else if (eq("--easy"))    { easyMode = true; }
+        else if (eq("--easy"))       { easyMode = true; }
+        else if (eq("--eval-rounds")) { nxt(); evalRounds = std::stoi(argv[i]); }
         else if (eq("--help")) {
             std::cout <<
                 "Usage: celeste-trainer [options]\n"
@@ -398,6 +400,7 @@ int main(int argc, char* argv[]) {
 
     std::cout << "Offline trainer\n"
               << "  Seeds:   " << numSeeds << " (base=" << baseSeed << ")\n"
+              << "  Rounds:  " << evalRounds << " per agent\n"
               << "  Rooms:   " << (easyMode ? "easy (gaps/platform only)" : "full random") << '\n'
               << "  Pool:    " << POOL_SIZE << "  Elites: " << ELITE_K << '\n'
               << "  Threads: " << nThreads << '\n'
@@ -418,8 +421,21 @@ int main(int argc, char* argv[]) {
             for (;;) {
                 int idx = nextIdx.fetch_add(1, std::memory_order_relaxed);
                 if (idx >= POOL_SIZE) return;
-                const Level& lv = levels[(size_t)(idx + gen) % levels.size()];
-                results[idx] = runEpisode(pool[idx].weights, lv);
+                // Evaluate on evalRounds seeds and average fitness/progress
+                float sumFit = 0.f, sumProg = 0.f;
+                float bestRoundFit = 0.f; float bestRoundProg = 0.f;
+                bool anyReached = false;
+                for (int r = 0; r < evalRounds; r++) {
+                    const Level& lv = levels[(size_t)(idx + gen + r * POOL_SIZE) % levels.size()];
+                    EpisodeResult er = runEpisode(pool[idx].weights, lv);
+                    sumFit  += er.fitness;
+                    sumProg += er.progress;
+                    if (er.fitness > bestRoundFit) {
+                        bestRoundFit = er.fitness; bestRoundProg = er.progress;
+                    }
+                    if (er.reached) anyReached = true;
+                }
+                results[idx] = { sumFit / evalRounds, 0.f, anyReached, sumProg / evalRounds };
                 pool[idx].fitness = results[idx].fitness;
             }
         };
