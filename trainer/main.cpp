@@ -422,20 +422,18 @@ int main(int argc, char* argv[]) {
                 int idx = nextIdx.fetch_add(1, std::memory_order_relaxed);
                 if (idx >= POOL_SIZE) return;
                 // Evaluate on evalRounds seeds and average fitness/progress
-                float sumFit = 0.f, sumProg = 0.f;
-                float bestRoundFit = 0.f; float bestRoundProg = 0.f;
+                float bestRoundFit = 0.f, bestRoundProg = 0.f;
                 bool anyReached = false;
                 for (int r = 0; r < evalRounds; r++) {
                     const Level& lv = levels[(size_t)(idx + gen + r * POOL_SIZE) % levels.size()];
                     EpisodeResult er = runEpisode(pool[idx].weights, lv);
-                    sumFit  += er.fitness;
-                    sumProg += er.progress;
                     if (er.fitness > bestRoundFit) {
                         bestRoundFit = er.fitness; bestRoundProg = er.progress;
                     }
                     if (er.reached) anyReached = true;
                 }
-                results[idx] = { sumFit / evalRounds, 0.f, anyReached, sumProg / evalRounds };
+                // Use best score across rounds: preserves goal-completion specialisation
+                results[idx] = { bestRoundFit, 0.f, anyReached, bestRoundProg };
                 pool[idx].fitness = results[idx].fitness;
             }
         };
