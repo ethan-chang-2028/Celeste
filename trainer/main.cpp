@@ -155,11 +155,13 @@ struct EpisodeResult {
 EpisodeResult runEpisode(const Weights& weights, const Level& lv) {
     Player player(lv.spawnX, lv.spawnY);
     Memory mem = {};
-    float maxX       = lv.spawnX;
-    float minY       = lv.spawnY;   // minimum Y reached (top of climb)
-    float lastChkX   = lv.spawnX;  // X at last stuck-check
-    int   stuckCount = 0;           // how many consecutive stuck checks
-    int   lastFrame  = MAX_FRAMES;  // actual frame the episode ended on
+    float maxX        = lv.spawnX;
+    float totalClimb  = 0.f;        // accumulated upward movement across entire episode
+    float prevPlayerY = lv.spawnY;  // player Y from previous frame (for climb delta)
+    float lastChkX    = lv.spawnX;  // X at last stuck-check
+    float lastChkClimb= 0.f;        // totalClimb at last stuck-check
+    int   stuckCount  = 0;
+    int   lastFrame   = MAX_FRAMES;
     bool  prevJ = false;
     bool  prevX = false;
 
@@ -183,17 +185,20 @@ EpisodeResult runEpisode(const Weights& weights, const Level& lv) {
         }
 
         if (player.x > maxX) maxX = player.x;
-        if (player.y < minY) minY = player.y;
+        if (player.y < prevPlayerY) totalClimb += prevPlayerY - player.y;
+        prevPlayerY = player.y;
 
-        // Early termination: if agent hasn't moved 4px in 1 second, it's stuck.
-        // Bail after 3 consecutive stuck seconds rather than wasting the full episode.
+        // Early termination: stuck if no horizontal OR vertical progress in 1 second.
         if (frame > 0 && frame % 60 == 0) {
-            if (maxX - lastChkX < 4.f) {
+            const float hMove = maxX - lastChkX;
+            const float vMove = totalClimb - lastChkClimb;
+            if (hMove < 4.f && vMove < 4.f) {
                 if (++stuckCount >= 3) break;
             } else {
                 stuckCount = 0;
             }
-            lastChkX = maxX;
+            lastChkX     = maxX;
+            lastChkClimb = totalClimb;
         }
 
         // Sensor inputs
@@ -235,11 +240,10 @@ EpisodeResult runEpisode(const Weights& weights, const Level& lv) {
     // Breaks ties in the gene pool so selection pressure doesn't stall.
     float elapsed = (float)lastFrame * DT;
     float speedBonus = progress * std::max(0.f, 1.f - elapsed / 30.f) * 0.05f;
-    // Height bonus: rewards climbing when horizontally stuck (chimney/climb rooms).
-    // Only active when not yet making good horizontal progress.
-    float climbDist  = std::max(0.f, lv.spawnY - minY - 10.f);
-    float heightBonus = (climbDist / std::max(1.f, lv.spawnY - 20.f)) * 0.08f
-                      * std::max(0.f, 1.f - progress * 2.f);
+    // Height bonus: rewards ALL upward movement across the episode (multi-room aware).
+    // Capped at 1x map height so it never outweighs horizontal progress.
+    float mapH       = std::max(1.f, lv.spawnY - 20.f);
+    float heightBonus = std::min(totalClimb / mapH, 1.f) * 0.06f;
     return {progress + speedBonus + heightBonus, elapsed * 1000.f, false};
 }
 
