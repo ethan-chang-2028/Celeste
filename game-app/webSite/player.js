@@ -637,6 +637,7 @@ class CelestePlayer {
         this.dashCooldownTimer = DashCooldown;
         this.dashRefillCooldownTimer = DashRefillCooldown;
         this.Dashes--;
+        if (typeof window._onDash === 'function') window._onDash();
 
         // Game-feel: 50 ms hit-stop and an initial trail ghost. Player.cs:3449.
         this.freezeTimer = DashFreezeTime;
