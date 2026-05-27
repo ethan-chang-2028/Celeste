@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Apex Platformer — Stats</title>
+    <link rel="stylesheet" href="/game.css">
+    <style>
+        .stats-page {
+            max-width: 760px;
+            margin: 0 auto;
+            padding: 2rem 1.5rem 3rem;
+        }
+
+        /* ── Player header ── */
+        .player-header {
+            display: flex;
+            align-items: center;
+            gap: 1.2rem;
+            background: #11131c;
+            border: 1px solid #2a2f42;
+            border-radius: 10px;
+            padding: 1.2rem 1.6rem;
+            margin-bottom: 2rem;
+        }
+        .avatar-badge {
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #5a2a80, #7aa2ff);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.6rem;
+            flex-shrink: 0;
+        }
+        .player-info h2 { margin: 0 0 4px; font-size: 1.3rem; }
+        .player-info p  { margin: 0; font-size: 0.85rem; color: #7aa2ff; }
+
+        /* ── Section labels ── */
+        .section-label {
+            font-size: 0.72rem;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            color: #7aa2ff;
+            margin: 0 0 0.75rem;
+            padding-left: 2px;
+        }
+
+        /* ── Stat grid ── */
+        .stat-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 14px;
+            margin-bottom: 2rem;
+        }
+        @media (min-width: 520px) {
+            .stat-grid { grid-template-columns: repeat(4, 1fr); }
+        }
+
+        .stat-card {
+            background: #11131c;
+            border: 1px solid #2a2f42;
+            border-radius: 10px;
+            padding: 1.1rem 1rem 1rem;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 3px;
+            background: var(--accent, #7aa2ff);
+            border-radius: 10px 10px 0 0;
+        }
+        .stat-icon  { font-size: 1.6rem; line-height: 1; margin-bottom: 6px; }
+        .stat-label { font-size: 0.72rem; color: #7aa2ff; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 6px; }
+        .stat-value { font-size: 2rem; font-weight: 700; font-family: monospace; color: #e6e8ef; line-height: 1; }
+        .stat-value.zero { color: #4a5070; }
+
+        /* accent colours per stat */
+        .card-dashes  { --accent: #7aa2ff; }
+        .card-deaths  { --accent: #ff6644; }
+        .card-berries { --accent: #d84070; }
+        .card-golden  { --accent: #d4af37; }
+
+        /* ── AI section ── */
+        .ai-section { margin-bottom: 2rem; }
+        .ai-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 14px;
+        }
+        @media (min-width: 520px) {
+            .ai-grid { grid-template-columns: repeat(4, 1fr); }
+        }
+        .ai-card {
+            background: #0d1117;
+            border: 1px solid #1a3a2a;
+            border-radius: 10px;
+            padding: 1.1rem 1rem 1rem;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+        .ai-card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 3px;
+            background: var(--accent, #44ff44);
+            border-radius: 10px 10px 0 0;
+        }
+        .ai-card .stat-label { color: #44ff44; }
+        .ai-card .stat-value { color: #aaffaa; }
+        .ai-card .stat-value.zero { color: #1a3a2a; }
+
+        .card-gen   { --accent: #44ff44; }
+        .card-runs  { --accent: #44ff99; }
+        .card-time  { --accent: #aaffaa; }
+        .card-fit   { --accent: #d4af37; }
+
+        /* ── Tip banner ── */
+        .tip {
+            background: #11131c;
+            border: 1px solid #2a2f42;
+            border-radius: 8px;
+            padding: 0.9rem 1.2rem;
+            font-size: 0.82rem;
+            color: #7a82a6;
+            text-align: center;
+        }
+        .tip a { color: #7aa2ff; }
+
+        /* ── Nav links ── */
+        .nav-row {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+    </style>
+</head>
+<body>
+
+<header class="game-header">
+    <h1>Apex Platformer</h1>
+    <nav class="nav-row">
+        <a href="/game.html" class="back-link">Play</a>
+        <a href="/profile.html" class="back-link">Profile</a>
+        <a href="/" class="back-link">&larr; Menu</a>
+    </nav>
+</header>
+
+<main class="stats-page">
+
+    <!-- Player header -->
+    <div class="player-header">
+        <div class="avatar-badge" id="avatarBadge">?</div>
+        <div class="player-info">
+            <h2 id="displayUsername">Loading…</h2>
+            <p id="displayRole">—</p>
+        </div>
+    </div>
+
+    <!-- My stats -->
+    <p class="section-label">My Stats</p>
+    <div class="stat-grid">
+        <div class="stat-card card-dashes">
+            <div class="stat-icon">⚡</div>
+            <div class="stat-label">Dashes</div>
+            <div class="stat-value zero" id="statDashes">0</div>
+        </div>
+        <div class="stat-card card-deaths">
+            <div class="stat-icon">💀</div>
+            <div class="stat-label">Deaths</div>
+            <div class="stat-value zero" id="statDeaths">0</div>
+        </div>
+        <div class="stat-card card-berries">
+            <div class="stat-icon">🍓</div>
+            <div class="stat-label">Berries</div>
+            <div class="stat-value zero" id="statBerries">0</div>
+        </div>
+        <div class="stat-card card-golden">
+            <div class="stat-icon">🌟</div>
+            <div class="stat-label">Golden Berries</div>
+            <div class="stat-value zero" id="statGolden">0</div>
+        </div>
+    </div>
+
+    <!-- AI global stats -->
+    <div class="ai-section">
+        <p class="section-label">Neural AI — Global</p>
+        <div class="ai-grid">
+            <div class="ai-card card-gen">
+                <div class="stat-icon">🧬</div>
+                <div class="stat-label">Generation</div>
+                <div class="stat-value zero" id="aiGen">--</div>
+            </div>
+            <div class="ai-card card-runs">
+                <div class="stat-icon">🔄</div>
+                <div class="stat-label">Total Runs</div>
+                <div class="stat-value zero" id="aiRuns">--</div>
+            </div>
+            <div class="ai-card card-time">
+                <div class="stat-icon">⏱</div>
+                <div class="stat-label">Best Time</div>
+                <div class="stat-value zero" id="aiTime">--</div>
+            </div>
+            <div class="ai-card card-fit">
+                <div class="stat-icon">🏆</div>
+                <div class="stat-label">Best Fitness</div>
+                <div class="stat-value zero" id="aiFit">--</div>
+            </div>
+        </div>
+    </div>
+
+    <p class="tip">
+        Stats update while you play.
+        <a href="/game.html">Jump in</a> to earn more.
+    </p>
+
+</main>
+
+<script src="stats.js"></script>
+</body>
+</html>

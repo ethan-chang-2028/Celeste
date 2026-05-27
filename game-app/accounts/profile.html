@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login & Register System</title>
+</head>
+<body>
+    <div id="profile-container">
+        <div class="profile-card">
+            <h2>Player Profile</h2>
+            <div id="avatar-container">
+                <img id="display-avatar" src="/avatars/default.png" alt="Player Avatar" width="150">
+            </div>
+
+            <div id="view-mode">
+                <h3 id="display-username">Loading...</h3>
+                <p><strong>Country:</strong> <span id="display-country">-</span></p>
+                <p><strong>Bio:</strong></p>
+                <p id="display-bio">No bio written yet.</p>
+                <button id="edit-btn">Edit Profile</button>
+            </div>
+
+            <form id="edit-form" class="hidden">
+                <label for="edit-username">Username:</label>
+                <input type="text" id="edit-username" required>
+
+                <label for="edit-avatar">Select Avatar:</label>
+                <select id="edit-avatar">
+                    <option value="/avatars/Madeline.png">Madeline</option>
+                    <option value="/avatars/Badeline.webp">Badeline</option>
+                </select>
+
+                <label for="edit-country">Country:</label>
+                <select id="edit-country">
+                    <option value="United States">United States</option>
+                    <option value="Australia">Australia</option>
+                    <option value="Canada">Canada</option>
+                </select>
+
+                <label for="edit-bio">Bio (Max 300 chars):</label>
+                <textarea id="edit-bio" maxlength="300"></textarea>
+
+                <div class="form-buttons">
+                    <button type="submit" id="save-btn">Save Changes</button>
+                    <button type="button" id="cancel-btn">Cancel</button>
+                </div>
+            </form>
+        </div>
+
+        <div class="stats-card">
+            <h3>Game Records</h3>
+            <p><strong>Global Rank:</strong> #<span id="stat-rank">-</span></p>
+            <p><strong>Lifetime Deaths:</strong> <span id="stat-deaths">0</span></p>
+            <p><strong>Levels Completed:</strong> <span id="stat-completed">0</span></p>
+
+            <h4>Best Times</h4>
+            <ul id="best-times-list">
+                </ul>
+
+            <h4>Achievement Badges</h4>
+            <div id="badge-gallery">
+                </div>
+        </div>
+    </div>
+
+    <script src="/webSite/profile.js"></script>
+</body>
+</html>

@@ -1437,48 +1437,73 @@
         if (raceMode) window.raceGenerateMap(raceSeed);
     };
 
-    // ── Online race: join matchmaking queue ───────────────────────────────────
-    window.joinOnlineRace = function () {
-        if (typeof OnlineRace === 'undefined') {
-            alert('Online race module not loaded.');
-            return;
-        }
-        const nameInput = document.getElementById('online-name-input');
-        const name = nameInput ? nameInput.value.trim() || 'Player' : 'Player';
-
-        // Ensure we're in race mode so UI is visible
-        if (!raceMode) window.startGame('race');
-
-        onlineMode = true;
-        onlineName = '';
-        opLerpX = roomSpawns[0] ? roomSpawns[0].x : 0;
-        opLerpY = roomSpawns[0] ? roomSpawns[0].y : 0;
-
+    // ── Online race helpers ───────────────────────────────────────────────────
+    function _onlineSharedCallbacks() {
         OnlineRace.onMatched = function (seed, opponentName) {
             onlineName = opponentName;
-            // Both players get the same seed from the server — generate the map
             window.raceGenerateMap(seed);
             const el = document.getElementById('online-status');
             if (el) el.textContent = `Racing vs ${opponentName}!`;
+            const codeBox = document.getElementById('room-code-display');
+            if (codeBox) codeBox.style.display = 'none';
         };
         OnlineRace.onOpponentLeft = function () {
             onlineMode = false;
             const el = document.getElementById('online-status');
             if (el) el.textContent = 'Opponent left.';
+            const codeBox = document.getElementById('room-code-display');
+            if (codeBox) codeBox.style.display = 'none';
+        };
+        OnlineRace.onError = function (message) {
+            const el = document.getElementById('online-status');
+            if (el) { el.textContent = message || 'Error.'; el.className = 'online-status-error'; }
+        };
+    }
+
+    function _onlineInit(name) {
+        if (typeof OnlineRace === 'undefined') { alert('Online race module not loaded.'); return false; }
+        if (!raceMode) window.startGame('race');
+        onlineMode = true;
+        onlineName = '';
+        opLerpX = roomSpawns[0] ? roomSpawns[0].x : 0;
+        opLerpY = roomSpawns[0] ? roomSpawns[0].y : 0;
+        _onlineSharedCallbacks();
+        return true;
+    }
+
+    // Create a named room — show code to host, wait for a friend
+    window.createOnlineRoom = function () {
+        const nameInput = document.getElementById('online-name-input');
+        const name = nameInput ? nameInput.value.trim() || 'Player' : 'Player';
+        if (!_onlineInit(name)) return;
+
+        OnlineRace.onRoomCreated = function (code) {
+            const codeText = document.getElementById('room-code-text');
+            const codeBox  = document.getElementById('room-code-display');
+            if (codeText) codeText.textContent = code;
+            if (codeBox)  codeBox.style.display = 'block';
         };
 
-        OnlineRace.join(name);
+        OnlineRace.create(name);
+    };
 
-        // Show waiting UI
-        const el = document.getElementById('online-status');
-        if (el) { el.textContent = 'Connecting…'; el.className = 'online-status-waiting'; }
+    // Join by room code (if code input has a value) or random queue
+    window.joinOnlineRace = function () {
+        const nameInput = document.getElementById('online-name-input');
+        const codeInput = document.getElementById('online-code-input');
+        const name = nameInput ? nameInput.value.trim() || 'Player' : 'Player';
+        const code = codeInput ? codeInput.value.trim() : '';
+        if (!_onlineInit(name)) return;
+        OnlineRace.join(name, code || null);
     };
 
     window.leaveOnlineRace = function () {
         if (typeof OnlineRace !== 'undefined') OnlineRace.disconnect();
         onlineMode = false;
         const el = document.getElementById('online-status');
-        if (el) el.textContent = '';
+        if (el) { el.textContent = ''; el.className = 'online-status-info'; }
+        const codeBox = document.getElementById('room-code-display');
+        if (codeBox) codeBox.style.display = 'none';
     };
 
     window.randomGenerateMap = function (seedOverride) {
