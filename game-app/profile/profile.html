@@ -4,34 +4,46 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Apex Platformer - My Profile</title>
-    <link rel="stylesheet" href="../webSite/style.css">
+    <link rel="stylesheet" href="../webSite/game.css">
     <style>
-        .profile-container { max-width: 680px; margin: 40px auto; padding: 20px; text-align: center; font-family: sans-serif; }
+        .profile-container { max-width: 680px; margin: 40px auto; padding: 20px; text-align: center; }
         .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 20px; }
-        .stat-box { background: #eee; padding: 15px; border-radius: 8px; }
-        .stat-box h4 { margin: 0 0 8px; font-size: 0.85rem; color: #555; }
-        .stat-box p  { margin: 0; font-size: 1.6rem; font-weight: bold; color: #222; }
-        .ai-box { background: #1a1a2e; color: #ccc; }
+        .stat-box { background: #11131c; border: 1px solid #2a2f42; padding: 15px; border-radius: 10px; }
+        .stat-box h4 { margin: 0 0 8px; font-size: 0.8rem; color: #7aa2ff; text-transform: uppercase; letter-spacing: .07em; }
+        .stat-box p  { margin: 0; font-size: 1.8rem; font-weight: bold; font-family: monospace; color: #e6e8ef; }
+        .ai-box { background: #0d1117; border-color: #1a3a2a; }
         .ai-box h4 { color: #44ff44; }
         .ai-box p  { color: #aaffaa; }
-        .section-title { margin: 28px 0 4px; font-size: 1.1rem; }
-        .logout-btn { margin-top: 30px; background: #ff4c4c; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; }
+        .section-title { margin: 28px 0 8px; font-size: 0.72rem; letter-spacing: .12em; text-transform: uppercase; color: #7aa2ff; text-align: left; }
+        .logout-btn { margin-top: 30px; background: #8b1a1a; color: white; padding: 10px 22px; border: none; border-radius: 6px; cursor: pointer; font-size: 0.9rem; }
+        .logout-btn:hover { background: #b02020; }
+        .stats-link { display: inline-block; margin-top: 18px; padding: 10px 22px; background: #5a2a80; color: #fff; border-radius: 6px; text-decoration: none; font-size: 0.9rem; }
+        .stats-link:hover { background: #7a3aaa; }
+        .user-info-block { background: #11131c; border: 1px solid #2a2f42; border-radius: 10px; padding: 1.2rem 1.6rem; margin-bottom: 1.5rem; text-align: left; }
+        .user-info-block h2 { margin: 0 0 6px; }
+        .user-info-block p  { margin: 3px 0; font-size: 0.9rem; color: #aab1c6; }
+        .nav-row { display: flex; gap: 1rem; justify-content: flex-end; }
     </style>
 </head>
 <body>
 
-    <main class="profile-container">
-        <h1>Player Profile</h1>
+<header class="game-header">
+    <h1>Apex Platformer</h1>
+    <nav class="nav-row">
+        <a href="/stats.html" class="back-link">Stats</a>
+        <a href="/game.html" class="back-link">Play</a>
+        <a href="/" class="back-link">&larr; Menu</a>
+    </nav>
+</header>
 
-        <div id="userInfo">
-            <h2 id="displayUsername">Loading...</h2>
-            <p><strong>Email:</strong> <span id="displayEmail">...</span></p>
-            <p><strong>Role:</strong> <span id="displayRole">...</span></p>
+    <main class="profile-container">
+        <div class="user-info-block" id="userInfo">
+            <h2 id="displayUsername">Loading…</h2>
+            <p><strong>Email:</strong> <span id="displayEmail">…</span></p>
+            <p><strong>Role:</strong> <span id="displayRole">…</span></p>
         </div>
 
-        <hr>
-
-        <h3 class="section-title">My Stats</h3>
+        <p class="section-title">My Stats</p>
         <div class="stats-grid">
             <div class="stat-box">
                 <h4>Dashes</h4>
@@ -51,7 +63,7 @@
             </div>
         </div>
 
-        <h3 class="section-title">AI Global Stats</h3>
+        <p class="section-title">AI Global Stats</p>
         <div class="stats-grid">
             <div class="stat-box ai-box">
                 <h4>Generation</h4>
@@ -71,6 +83,8 @@
             </div>
         </div>
 
+        <a href="/stats.html" class="stats-link">View Full Stats Page</a>
+        <br>
         <button id="logoutButton" class="logout-btn">Log Out</button>
     </main>
 
