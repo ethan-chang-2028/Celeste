@@ -1,0 +1,3 @@
+html, body { margin:0; padding:0; background:#000; color:#ddd; }
+#app { font-family: monospace; }
+canvas { outline: 1px solid #333; }

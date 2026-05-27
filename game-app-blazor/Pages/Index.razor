@@ -1,0 +1,367 @@
+@page "/"
+@inject IJSRuntime JS
+@implements IDisposable
+@using Celeste
+@using Monocle
+@using Microsoft.Xna.Framework
+
+<PageTitle>Celeste</PageTitle>
+
+<div style="font-family:monospace;color:#ddd;background:#1a1a2a;min-height:100vh;padding:16px;user-select:none;">
+
+@if (mode == "menu")
+{
+    <h2 style="margin:0 0 6px 0;color:#e8c87a;letter-spacing:2px;">CELESTE</h2>
+    <p style="margin:0 0 24px 0;font-size:12px;opacity:.6;">Player.cs running as WebAssembly · C# physics in-browser</p>
+
+    <div style="display:flex;gap:12px;flex-wrap:wrap;">
+        <button @onclick='() => StartLevel("gauntlet")' style="@BtnStyle">▶ The Gauntlet</button>
+        <button @onclick='() => StartLevel("sample")'   style="@BtnStyle">▶ Sample Level</button>
+        <button @onclick='() => StartLevel("sandbox")'  style="@BtnStyle">▶ Sandbox</button>
+    </div>
+
+    <div style="margin-top:24px;font-size:12px;opacity:.7;line-height:2;">
+        <b style="color:#e8c87a;">Controls</b><br/>
+        Arrow keys &nbsp;— move / aim dash<br/>
+        <b>X</b> — jump &nbsp;·&nbsp; <b>C</b> — dash &nbsp;·&nbsp; <b>Z</b> — grab / climb<br/>
+        <b>R</b> — respawn
+    </div>
+
+    <div style="margin-top:20px;font-size:11px;opacity:.45;line-height:1.8;">
+        <b>The Gauntlet</b> — 6-room vertical climb using every entity type.<br/>
+        <b>Sample Level</b> — single room with all 20 entities.<br/>
+        <b>Sandbox</b> — small practice room.
+    </div>
+}
+else
+{
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px;flex-wrap:wrap;">
+        <button @onclick="BackToMenu" style="padding:4px 12px;background:#2a2a3a;color:#ddd;border:1px solid #555;cursor:pointer;font-family:monospace;">← Menu</button>
+        <span style="font-size:14px;font-weight:bold;color:#e8c87a;">@levelName</span>
+        @if (!string.IsNullOrEmpty(roomName))
+        {
+            <span style="font-size:12px;opacity:.6;">· @roomName</span>
+        }
+    </div>
+
+    <canvas id="celeste-canvas" width="320" height="180"
+            style="image-rendering:pixelated;width:960px;height:540px;background:#0d0d1a;display:block;border:1px solid #2a2a4a;"></canvas>
+
+    <div style="margin-top:6px;display:flex;gap:16px;flex-wrap:wrap;font-size:12px;">
+        <span>State: <b style="color:#e8c87a;">@stateLabel</b></span>
+        <span>Pos: (@posX, @posY)</span>
+        <span>Speed: (@spdX, @spdY)</span>
+        <span>Dashes: <b>@dashes</b></span>
+        <span>Stamina: @stam</span>
+    </div>
+    <div style="margin-top:3px;font-size:11px;opacity:.5;">
+        Arrows=move &nbsp;X=jump &nbsp;C=dash &nbsp;Z=grab &nbsp;R=respawn
+    </div>
+    @if (isDead)
+    {
+        <div style="margin-top:8px;color:#e06060;font-size:13px;">✖ You died!  Press <b>R</b> to respawn.</div>
+    }
+    @if (!string.IsNullOrEmpty(errorMsg))
+    {
+        <div style="margin-top:6px;color:#e08060;font-size:11px;word-break:break-all;">⚠ @errorMsg</div>
+    }
+}
+
+</div>
+
+@code {
+    // ── UI state ──────────────────────────────────────────────────────────────
+    private string mode      = "menu";
+    private string levelName = "";
+    private string roomName  = "";
+    private bool   isDead;
+    private string errorMsg;
+
+    private string stateLabel = "Normal";
+    private int posX, posY, spdX, spdY, dashes, stam;
+
+    private string BtnStyle =>
+        "padding:10px 22px;background:#1e1e30;color:#e8c87a;border:1px solid #4a4a7a;" +
+        "cursor:pointer;font-family:monospace;font-size:13px;letter-spacing:1px;";
+
+    // ── Game state ────────────────────────────────────────────────────────────
+    private LevelManager mgr;
+    private System.Threading.Timer tickTimer;
+    private DateTime lastTick;
+
+    // ── Lifecycle ─────────────────────────────────────────────────────────────
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+            await JS.InvokeVoidAsync("celesteInput.attach", DotNetObjectReference.Create(this));
+    }
+
+    private void StartLevel(string which)
+    {
+        // Dispose old manager (unsubscribes its static event handlers)
+        mgr?.Dispose();
+        RoomTransition.OnTransition -= OnRoomTransitionUI;
+        errorMsg = null;
+        isDead   = false;
+
+        switch (which)
+        {
+            case "gauntlet":
+                mgr       = LevelManager.CreateGauntletManager();
+                levelName = "The Gauntlet";
+                roomName  = "Room 1 — Entry Hall";
+                break;
+
+            case "sample":
+                mgr = new LevelManager();
+                mgr.LoadLevel(LevelManager.CreateSampleLevel());
+                levelName = "Sample Level";
+                roomName  = "";
+                break;
+
+            default: // sandbox
+                mgr = new LevelManager();
+                mgr.LoadLevel(BuildSandbox());
+                levelName = "Sandbox";
+                roomName  = "";
+                break;
+        }
+
+        RoomTransition.OnTransition += OnRoomTransitionUI;
+        mode = "playing";
+
+        if (tickTimer == null)
+        {
+            lastTick  = DateTime.UtcNow;
+            tickTimer = new System.Threading.Timer(_ => InvokeAsync(Tick), null, 0, 16);
+        }
+    }
+
+    private void BackToMenu()
+    {
+        mode = "menu";
+        RoomTransition.OnTransition -= OnRoomTransitionUI;
+        mgr?.Dispose();
+        mgr = null;
+    }
+
+    private void OnRoomTransitionUI(string targetRoom, Vector2 _)
+    {
+        // Pretty-print "Room3_LockRoom" → "Room 3 — Lock Room"
+        var parts = targetRoom.Split('_');
+        roomName = parts.Length >= 2
+            ? parts[0].Replace("Room", "Room ") + " — " +
+              string.Join(" ", parts[1..])
+            : targetRoom;
+        InvokeAsync(StateHasChanged);
+    }
+
+    private static Level BuildSandbox()
+    {
+        return new LevelBuilder(320, 180)
+            .AddPlatform(0,   168, 320, 12)
+            .AddPlatform(0,     0,   8, 180)
+            .AddPlatform(312,   0,   8, 180)
+            .AddPlatform(60,  130,  80, 10)
+            .AddPlatform(200, 100,  80, 10)
+            .AddJumpThrough(100, 90, 60)
+            .AddSpike(8, 165, 32, SpikeHazard.Directions.Up)
+            .AddSpring(100, 168, Spring.Orientations.Floor)
+            .AddBumper(200, 145)
+            .AddDashCrystal(150, 120)
+            .AddStrawberry(165, 40)
+            .AddPlayer(20, 155)
+            .Build();
+    }
+
+    // ── Input ─────────────────────────────────────────────────────────────────
+
+    [JSInvokable]
+    public void OnKey(string key, bool down)
+    {
+        switch (key)
+        {
+            case "ArrowLeft":
+                Input.MoveX.Value = down ? -1 : (Input.MoveX.Value == -1 ? 0 : Input.MoveX.Value);
+                break;
+            case "ArrowRight":
+                Input.MoveX.Value = down ?  1 : (Input.MoveX.Value ==  1 ? 0 : Input.MoveX.Value);
+                break;
+            case "ArrowUp":
+                Input.MoveY.Value = down ? -1 : (Input.MoveY.Value == -1 ? 0 : Input.MoveY.Value);
+                break;
+            case "ArrowDown":
+                Input.MoveY.Value = down ?  1 : (Input.MoveY.Value ==  1 ? 0 : Input.MoveY.Value);
+                break;
+            case "x": case "X":
+                Input.Jump.Check = down;
+                if (down) Input.Jump.Pressed = true;
+                break;
+            case "c": case "C":
+                Input.Dash.Check = down;
+                if (down) Input.Dash.Pressed = true;
+                break;
+            case "z": case "Z":
+                Input.Grab.Check = down;
+                break;
+            case "r": case "R":
+                if (down && mode == "playing") mgr?.RespawnPlayer();
+                break;
+        }
+    }
+
+    // ── Game loop ─────────────────────────────────────────────────────────────
+
+    private async Task Tick()
+    {
+        if (mode != "playing" || mgr?.Current == null) return;
+
+        var now = DateTime.UtcNow;
+        float dt = (float)(now - lastTick).TotalSeconds;
+        if (dt > 0.1f) dt = 0.1f;
+        lastTick = now;
+
+        try
+        {
+            mgr.Update(dt);
+            errorMsg = null;
+        }
+        catch (Exception ex)
+        {
+            errorMsg = ex.GetType().Name + ": " + ex.Message;
+        }
+
+        Input.Jump.Pressed = false;
+        Input.Dash.Pressed = false;
+
+        var currentLevel = mgr.Current;
+        var player = currentLevel?.Tracker.GetEntity<Player>();
+
+        if (player != null)
+        {
+            posX  = (int)player.Position.X;
+            posY  = (int)player.Position.Y;
+            spdX  = (int)player.Speed.X;
+            spdY  = (int)player.Speed.Y;
+            dashes = player.Dashes;
+            stam  = (int)player.Stamina;
+            isDead = player.Dead;
+
+            if (errorMsg == null)
+            {
+                stateLabel = player.StateMachine?.State switch
+                {
+                    Player.StNormal  => "Normal",
+                    Player.StClimb   => "Climb",
+                    Player.StDash    => "Dash",
+                    Player.StDead    => "Dead",
+                    Player.StStarFly => "StarFly",
+                    Player.StRedDash => "RedDash",
+                    Player.StBoost   => "Boost",
+                    _                => "?"
+                };
+            }
+        }
+
+        float camX = currentLevel?.Camera.Position.X ?? 0f;
+        float camY = currentLevel?.Camera.Position.Y ?? 0f;
+
+        await JS.InvokeVoidAsync("celesteRender.draw",
+            BuildRenderData(currentLevel, player, camX, camY));
+
+        StateHasChanged();
+    }
+
+    // ── Render data serialization ─────────────────────────────────────────────
+
+    private static object BuildRenderData(Level level, Player player, float camX, float camY)
+    {
+        var solids    = new System.Collections.Generic.List<object>();
+        var jumpThrus = new System.Collections.Generic.List<object>();
+        var entities  = new System.Collections.Generic.List<object>();
+
+        if (level != null)
+        {
+            foreach (var e in level.Entities)
+            {
+                if (!e.Visible || e is Player) continue;
+                if (e.Width == 0 && e.Height == 0) continue;
+
+                float ex = e.Left  - camX;
+                float ey = e.Top   - camY;
+                float ew = e.Width;
+                float eh = e.Height;
+
+                if (e is JumpThru)
+                {
+                    jumpThrus.Add(new { x = ex, y = ey, w = ew, h = eh });
+                    continue;
+                }
+
+                if (e is Solid)
+                {
+                    string solidType = e switch
+                    {
+                        DashBlock        => e.Collidable ? "dashblock"    : null,
+                        CrumbleBlock     => e.Collidable ? "crumbleblock" : null,
+                        FallingBlock     => "fallingblock",
+                        Kevin            => "kevin",
+                        Lock             => e.Collidable ? "lock"         : null,
+                        TouchSwitchGate tsg => tsg.Collidable ? "gate"   : null,
+                        _                => "solid"
+                    };
+                    if (solidType == null) continue;
+                    if (solidType == "solid")
+                        solids.Add(new { x = ex, y = ey, w = ew, h = eh });
+                    else
+                        entities.Add(new { type = solidType, x = ex, y = ey, w = ew, h = eh });
+                    continue;
+                }
+
+                string type = e switch
+                {
+                    Spring sp          => "spring_" + sp.Orientation.ToString().ToLower(),
+                    Bumper             => "bumper",
+                    SpikeHazard sh     => "spike_" + sh.SpikeDir.ToString().ToLower(),
+                    DashCrystal dc     => dc.Collidable ? "dashcrystal"    : "dashcrystal_empty",
+                    FlyFeatherPickup f => f.Collidable  ? "flyfeather"     : null,
+                    StrawberryPickup s => s.Collidable  ? "strawberry"     : null,
+                    GoldenStrawberry g => (g.Collidable && !g.FlewAway) ? "golden" : null,
+                    Key k              => k.Collidable  ? "key"            : null,
+                    RedBooster         => "redbooster",
+                    EnticeBlade        => "blade",
+                    BlueTorch bt       => bt.Lit         ? "torch_lit"      : "torch_unlit",
+                    TouchSwitch ts     => ts.Activated   ? "touchswitch_on" : "touchswitch",
+                    DashSwitch ds      => ds.Activated   ? "dashswitch_on"  : "dashswitch",
+                    RoomTransition     => "transition",
+                    _                  => null
+                };
+                if (type == null) continue;
+                entities.Add(new { type, x = ex, y = ey, w = ew, h = eh });
+            }
+        }
+
+        object playerData = null;
+        if (player != null)
+        {
+            playerData = new
+            {
+                x      = player.Position.X - camX,
+                y      = player.Position.Y - camY,
+                facing = (int)player.Facing,
+                dead   = player.Dead,
+                state  = player.StateMachine?.State ?? 0
+            };
+        }
+
+        return new { solids, jumpThrus, entities, player = playerData };
+    }
+
+    public void Dispose()
+    {
+        tickTimer?.Dispose();
+        RoomTransition.OnTransition -= OnRoomTransitionUI;
+        mgr?.Dispose();
+    }
+}

@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Apex Platformer — Game</title>
+    <link rel="stylesheet" href="/game.css">
+    <style>
+        /* ── Online lobby panel ── */
+        .online-lobby {
+            margin-top: 1.2rem;
+            border-top: 1px solid #2a2f42;
+            padding-top: 1rem;
+        }
+        .online-lobby h3 {
+            margin: 0 0 0.7rem;
+            font-size: 0.85rem;
+            color: #44ff99;
+            font-family: monospace;
+            letter-spacing: 0.1em;
+        }
+        .online-lobby-row {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            flex-wrap: wrap;
+            margin-bottom: 6px;
+        }
+        .online-lobby-row input {
+            flex: 1;
+            min-width: 90px;
+            padding: 7px 10px;
+            border: 1px solid #2a5a3a;
+            border-radius: 5px;
+            background: #0d1a12;
+            color: #aaffcc;
+            font-family: monospace;
+            font-size: 0.85rem;
+        }
+        .online-lobby-row input.code-input {
+            flex: 0 0 90px;
+            text-transform: uppercase;
+            letter-spacing: 0.12em;
+        }
+        .online-lobby-row button {
+            background: #1a5a30;
+            color: #aaffcc;
+            border: none;
+            border-radius: 5px;
+            padding: 8px 14px;
+            font-size: 0.85rem;
+            cursor: pointer;
+            font-family: monospace;
+            white-space: nowrap;
+        }
+        .online-lobby-row button:hover { background: #2a8a50; }
+        .online-divider {
+            color: #3a4258;
+            font-size: 0.75rem;
+            padding: 0 2px;
+        }
+        #room-code-display {
+            display: none;
+            margin: 6px 0;
+            padding: 8px 12px;
+            background: #051a0d;
+            border: 1px solid #1a5a2a;
+            border-radius: 6px;
+            font-family: monospace;
+            font-size: 0.85rem;
+            color: #aaffcc;
+        }
+        #room-code-text {
+            font-size: 1.3rem;
+            letter-spacing: 0.18em;
+            color: #44ff99;
+        }
+        .code-hint {
+            display: block;
+            font-size: 0.72rem;
+            color: #5a8a6a;
+            margin-top: 2px;
+        }
+        #online-status {
+            margin-top: 6px;
+            font-family: monospace;
+            font-size: 0.78rem;
+            min-height: 1.2em;
+        }
+        .online-status-waiting { color: #ffcc44; }
+        .online-status-matched { color: #44ff99; }
+        .online-status-error   { color: #ff6644; }
+        .online-status-info    { color: #aaa; }
+
+        /* ── AI panel ── */
+        .ai-panel {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin: 10px 0;
+            flex-wrap: wrap;
+        }
+        .ai-panel button {
+            background: #5a2a80;
+            color: #fff;
+            border: none;
+            border-radius: 5px;
+            padding: 8px 16px;
+            font-size: 0.85rem;
+            cursor: pointer;
+            font-family: monospace;
+        }
+        .ai-panel button:hover { background: #7a3aaa; }
+        .ai-panel input[type="number"] {
+            width: 90px;
+            padding: 7px 8px;
+            border: 1px solid #555;
+            border-radius: 5px;
+            background: #1a1a2a;
+            color: #ddd;
+            font-family: monospace;
+            font-size: 0.85rem;
+        }
+        #map-seed {
+            font-family: monospace;
+            font-size: 0.8rem;
+            color: #aaa;
+        }
+        .ai-speed-btn {
+            padding: 7px 10px !important;
+            min-width: 36px;
+        }
+
+        /* ── Level-select menu ── */
+        #level-menu {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 420px;
+            width: 100%;
+            padding: 2rem 1rem;
+        }
+        .menu-card {
+            background: #11131c;
+            border: 1px solid #2a2f42;
+            border-radius: 10px;
+            padding: 2.5rem 2.5rem 2rem;
+            max-width: 560px;
+            width: 100%;
+            text-align: center;
+        }
+        .menu-title {
+            margin: 0 0 6px;
+            font-size: 2.2rem;
+            letter-spacing: 0.25em;
+            color: #e8c87a;
+            font-family: monospace;
+        }
+        .menu-sub {
+            margin: 0 0 1.8rem;
+            color: #7aa2ff;
+            font-size: 0.9rem;
+        }
+        .menu-options {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+            margin-bottom: 1.75rem;
+        }
+        .menu-option {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 5px;
+            padding: 1rem 1.25rem;
+            background: #1a1d29;
+            border: 1px solid #3a4258;
+            border-radius: 6px;
+            cursor: pointer;
+            text-align: left;
+            font-family: monospace;
+            transition: border-color 0.15s, background 0.15s;
+        }
+        .menu-option:hover { background: #1e2233; border-color: #5a6288; }
+        .menu-option--gold { border-color: #7a6030; }
+        .menu-option--gold:hover { border-color: #d4af37; }
+        .menu-option__label {
+            font-size: 1rem;
+            color: #e6e8ef;
+            font-weight: bold;
+        }
+        .menu-option--gold .menu-option__label { color: #e8c87a; }
+        .menu-option__desc {
+            font-size: 0.75rem;
+            color: #7aa2ff;
+            font-family: sans-serif;
+            line-height: 1.4;
+        }
+        .menu-keys {
+            font-size: 0.78rem;
+            color: #555;
+            font-family: monospace;
+            margin: 0;
+        }
+        /* game-ui is a flex column; display toggled by JS */
+        #game-ui {
+            flex-direction: column;
+            align-items: center;
+            gap: 1rem;
+            width: 100%;
+        }
+    </style>
+</head>
+<body>
+    <header class="game-header">
+        <h1>Apex Platformer</h1>
+        <nav style="display:flex;gap:1rem;align-items:center;">
+            <a href="/stats.html" class="back-link">Stats</a>
+            <a href="/profile.html" class="back-link">Profile</a>
+            <a href="/" class="back-link">&larr; Menu</a>
+        </nav>
+    </header>
+
+    <main class="game-main">
+
+        <!-- ── Level-select menu (shown on load) ──────────────────────── -->
+        <div id="level-menu">
+            <div class="menu-card">
+                <h2 class="menu-title">CELESTE</h2>
+                <p class="menu-sub">Select a level to play</p>
+                <div class="menu-options">
+                    <button class="menu-option menu-option--gold" onclick="startGame('gauntlet')">
+                        <span class="menu-option__label">▶ The Gauntlet</span>
+                        <span class="menu-option__desc">6-room hand-crafted challenge — Entry Hall → Pillar Hall → Lock Room → Crush Zone → Fly Zone → Summit</span>
+                    </button>
+                    <button class="menu-option menu-option--gold" onclick="startGame('maze')">
+                        <span class="menu-option__label">🪞 Mirror Temple</span>
+                        <span class="menu-option__desc">8-room ice maze — explore 4 columns × 3 rows · dead ends · hidden strawberries · find the summit</span>
+                    </button>
+                    <button class="menu-option menu-option--gold" onclick="startGame('mountain')">
+                        <span class="menu-option__label">🔥 Heart of the Mountain</span>
+                        <span class="menu-option__desc">5-room vertical ascent — fireballs · ice floors · no dash refill from landing · climb from the volcano to the summit</span>
+                    </button>
+                    <button class="menu-option" onclick="startGame('random')">
+                        <span class="menu-option__label">▶ Random Level</span>
+                        <span class="menu-option__desc">Fully random rooms with entities — springs · blades · crystals · spikes · always clearable · seed-replayable</span>
+                    </button>
+                    <button class="menu-option" onclick="startGame('ai')">
+                        <span class="menu-option__label">▶ Random AI Map</span>
+                        <span class="menu-option__desc">Procedurally generated · seed-replayable · neural AI playable</span>
+                    </button>
+                    <button class="menu-option menu-option--gold" onclick="startGame('race')">
+                        <span class="menu-option__label">🏁 Race the AI</span>
+                        <span class="menu-option__desc">5-room race course · same seed for you and AI · named checkpoints · live timer · new seed each race</span>
+                    </button>
+                    <div class="online-lobby">
+                        <h3>🌐 Online Race — play vs a friend</h3>
+
+                        <!-- Row 1: name -->
+                        <div class="online-lobby-row">
+                            <input id="online-name-input" type="text" placeholder="Your name" maxlength="20" style="flex:1;">
+                        </div>
+
+                        <!-- Row 2: create or join -->
+                        <div class="online-lobby-row">
+                            <button onclick="createOnlineRoom()" style="background:#1a3a7a;" title="Create a private room and share the code with a friend">+ Create Room</button>
+                            <span class="online-divider">or</span>
+                            <input id="online-code-input" class="code-input" type="text" placeholder="CODE" maxlength="6" title="Enter a 6-letter room code">
+                            <button onclick="joinOnlineRace()" title="Join by code above, or find a random opponent if blank">Join</button>
+                            <button onclick="leaveOnlineRace()" style="background:#5a1010;">Leave</button>
+                        </div>
+
+                        <!-- Room code display (shown after host creates a room) -->
+                        <div id="room-code-display">
+                            Room code: <strong id="room-code-text">------</strong>
+                            <span class="code-hint">Share this code with your friend — they enter it in the box above and click Join</span>
+                        </div>
+
+                        <div id="online-status" class="online-status-info">Enter your name, then create a room or join one with a code.</div>
+                    </div>
+                    <button class="menu-option" onclick="startGame('custom')">
+                        <span class="menu-option__label">▶ Custom Level</span>
+                        <span class="menu-option__desc">Play the map you built in the editor</span>
+                    </button>
+                    <a class="menu-option" href="/editor.html" style="text-decoration:none;">
+                        <span class="menu-option__label" style="color:#7aa2ff;">🔧 Map Editor</span>
+                        <span class="menu-option__desc">Draw platforms · place entities · save and play your own levels</span>
+                    </a>
+                </div>
+                <p class="menu-keys">
+                    Arrows = move &nbsp;·&nbsp;
+                    <kbd>C</kbd> jump &nbsp;·&nbsp;
+                    <kbd>X</kbd> dash &nbsp;·&nbsp;
+                    <kbd>Z</kbd>/<kbd>Shift</kbd> grab &nbsp;·&nbsp;
+                    <kbd>R</kbd> reset
+                </p>
+            </div>
+        </div>
+
+        <!-- ── Game UI (hidden until a level is chosen) ───────────────── -->
+        <div id="game-ui" style="display:none;">
+            <div class="ai-panel">
+                <button onclick="showLevelMenu()" style="background:#1a3060;" title="Return to level select">☰ Levels</button>
+                <button class="ai-only" onclick="aiGenerateMap()">&#x2728; Generate AI Map</button>
+                <input class="ai-only" type="number" id="seed-input" placeholder="Seed #" min="0" max="999999">
+                <button class="ai-only" onclick="loadSeed()">Load Seed</button>
+                <span class="ai-only" id="map-seed">Seed: —</span>
+                <button id="ai-control-btn" class="ai-ctrl" onclick="toggleAIControl()" style="background:#5a2a80;display:none;">&#129504; Neural AI: OFF</button>
+                <button class="ai-ctrl" onclick="resetAI()" style="background:#7a2020;display:none;" title="Wipe learned weights and start from scratch">&#128260; Reset AI</button>
+                <button id="record-demo-btn" class="ai-ctrl" onclick="window.toggleRecording && window.toggleRecording()" style="background:#20607a;display:none;" title="Record your gameplay as AI training data">&#9210; Record Demo</button>
+                <span class="ai-ctrl" style="color:#aaa;font-family:monospace;font-size:0.8rem;display:none;">Speed:</span>
+                <button class="ai-ctrl ai-speed-btn" data-speed="1"  onclick="setAISpeed(1)"  style="background:#1a6a1a;display:none;" title="1× speed">1x</button>
+                <button class="ai-ctrl ai-speed-btn" data-speed="2"  onclick="setAISpeed(2)"  style="background:#3a3a6a;display:none;" title="2× speed">2x</button>
+                <button class="ai-ctrl ai-speed-btn" data-speed="4"  onclick="setAISpeed(4)"  style="background:#3a3a6a;display:none;" title="4× speed">4x</button>
+                <button class="ai-ctrl ai-speed-btn" data-speed="8"  onclick="setAISpeed(8)"  style="background:#3a3a6a;display:none;" title="8× speed">8x</button>
+                <button class="random-only" style="display:none;background:#1a5a30;" onclick="randomGenerateMap()">&#127922; New Map</button>
+                <input  class="random-only" style="display:none;" type="number" id="random-seed-input" placeholder="Seed #" min="0" max="999999">
+                <button class="random-only" style="display:none;" onclick="loadRandomSeed()">Load Seed</button>
+                <span   class="random-only" style="display:none;font-family:monospace;font-size:0.8rem;color:#aaa;" id="random-map-seed">Seed: —</span>
+                <button class="race-only" style="display:none;background:#7a3000;" onclick="raceGenerateMap()">&#127937; New Race</button>
+                <button class="race-only" id="p2-toggle-btn" style="display:none;background:#5a1a7a;" onclick="toggle2Player()">&#128101; 2P: OFF</button>
+                <input  class="race-only" style="display:none;" type="number" id="race-seed-input" placeholder="Seed #" min="0" max="999999">
+                <button class="race-only" style="display:none;" onclick="loadRaceSeed()">Load Seed</button>
+                <span   class="race-only" style="display:none;font-family:monospace;font-size:0.8rem;color:#ffaa66;" id="race-seed-display">Seed: —</span>
+            </div>
+
+            <canvas id="game-canvas" width="320" height="180"></canvas>
+
+            <div class="controls">
+                <p><strong>P1:</strong>
+                    Arrow keys &middot;
+                    <kbd>C</kbd> jump &middot;
+                    <kbd>X</kbd> dash &middot;
+                    <kbd>Z</kbd>/<kbd>Shift</kbd> grab &middot;
+                    <kbd>R</kbd> reset
+                    &nbsp;&nbsp;<strong>P2 (race):</strong>
+                    <kbd>A</kbd>/<kbd>D</kbd> move &middot;
+                    <kbd>W</kbd> jump &middot;
+                    <kbd>E</kbd> dash &middot;
+                    <kbd>S</kbd> grab
+                </p>
+                <p id="status">Ready.</p>
+            </div>
+        </div>
+
+    </main>
+
+    <script src="/player.js"></script>
+    <script src="/online-race.js"></script>
+    <script src="/ai-neural.js"></script>
+    <!-- WASM AI: compiled from game-app/Native/Interop/JsBridge.cpp via Emscripten.
+         These two files are only present after running the build script.
+         If absent the pure-JS ai-neural.js above is used automatically. -->
+    <script src="/ai-neural.wasm.js" onerror="void 0"></script>
+    <script src="/ai-wasm-bridge.js"></script>
+    <script src="/game.js"></script>
+    <script>
+        // Auto-start if arriving from the editor via ?mode=custom
+        (function () {
+            const m = new URLSearchParams(window.location.search).get('mode');
+            if (m) window.startGame(m);
+        })();
+    </script>
+</body>
+</html>

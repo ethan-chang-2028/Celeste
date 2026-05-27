@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Celeste — Map Editor</title>
+    <link rel="stylesheet" href="/game.css">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { display: flex; flex-direction: column; height: 100vh; overflow: hidden;
+               background: #0d0e14; color: #dde; font-family: monospace; }
+
+        /* ── Header toolbar ── */
+        .ed-header {
+            display: flex; align-items: center; flex-wrap: nowrap;
+            gap: 4px; padding: 5px 8px;
+            background: #11131c; border-bottom: 1px solid #2a2f42;
+            flex-shrink: 0; overflow-x: auto;
+            min-height: 38px;
+        }
+        .ed-header h1 { font-size: 1rem; color: #e8c87a; letter-spacing: .15em; margin-right: 6px; }
+        .ed-header a  { color: #7aa2ff; font-size: .8rem; text-decoration: none; margin-right: 8px; }
+        .ed-sep  { color: #333; user-select: none; }
+
+        /* Tool / action buttons */
+        .tool-btn, .act-btn, .ent-btn {
+            background: #1a1d2e; color: #ccc; border: 1px solid #3a4058;
+            border-radius: 4px; padding: 4px 9px; font-family: monospace;
+            font-size: .78rem; cursor: pointer; white-space: nowrap;
+        }
+        .tool-btn:hover, .act-btn:hover, .ent-btn:hover { background: #252840; border-color: #5a6080; }
+        .tool-btn.active { background: #2a4a2a; border-color: #5aca5a; color: #9ef09e; }
+        .ent-btn.active  { background: #2a1a3a; border-color: #b060d0; color: #e090ff; }
+        .act-btn.play    { background: #1a4a20; border-color: #4aaa4a; color: #aaf0aa; }
+        .act-btn.play:hover { background: #1e5a24; }
+        .act-btn.danger  { background: #3a0a00; border-color: #8a2a20; color: #f09090; }
+
+        #ed-room-label { color: #7aa2ff; font-size: .82rem; padding: 0 2px; }
+
+        /* ── Body layout ── */
+        .ed-body { display: flex; flex: 1; overflow: hidden; }
+
+        /* ── Left panel ── */
+        .ed-left {
+            width: 130px; flex-shrink: 0; overflow-y: auto;
+            background: #0f1019; border-right: 1px solid #1e2230;
+            padding: 8px 6px;
+        }
+        .ed-left h3 { font-size: .72rem; color: #7aa2ff; letter-spacing: .1em;
+                      margin-bottom: 6px; padding-bottom: 4px; border-bottom: 1px solid #1e2230; }
+        .ent-btn { display: block; width: 100%; text-align: left;
+                   margin-bottom: 4px; padding: 5px 8px; }
+
+        /* ── Canvas area ── */
+        .ed-center {
+            flex: 1; overflow: hidden; background: #080a10;
+            position: relative;
+        }
+        #ed-canvas {
+            position: absolute;
+            image-rendering: pixelated; image-rendering: crisp-edges;
+            cursor: crosshair; box-shadow: 0 0 20px rgba(0,0,0,0.8);
+            transform-origin: 0 0;
+        }
+
+        /* ── Right panel ── */
+        .ed-right {
+            width: 160px; flex-shrink: 0; overflow-y: auto;
+            background: #0f1019; border-left: 1px solid #1e2230;
+            padding: 8px 8px;
+        }
+        .ed-right h3 { font-size: .72rem; color: #7aa2ff; letter-spacing: .1em;
+                       margin-bottom: 8px; padding-bottom: 4px; border-bottom: 1px solid #1e2230; }
+        #ed-props label { display: flex; justify-content: space-between;
+                          align-items: center; gap: 4px; margin-bottom: 5px;
+                          font-size: .75rem; color: #bbc; }
+        #ed-props input[type=number] {
+            width: 72px; background: #1a1d2e; border: 1px solid #3a4058;
+            border-radius: 3px; color: #dde; padding: 3px 5px; font-family: monospace;
+            font-size: .75rem;
+        }
+        #ed-props input[type=color] {
+            width: 36px; height: 22px; border: none; background: none; cursor: pointer; padding: 0;
+        }
+        #ed-props select {
+            width: 72px; background: #1a1d2e; border: 1px solid #3a4058;
+            border-radius: 3px; color: #dde; padding: 3px; font-size: .73rem;
+        }
+        .prop-type { font-size: .8rem; font-weight: bold; color: #e8c87a;
+                     margin-bottom: 8px; }
+        .del-btn { background: #3a0a00; color: #f09090; border: 1px solid #8a2a20;
+                   border-radius: 4px; padding: 4px 8px; font-family: monospace;
+                   font-size: .72rem; cursor: pointer; width: 100%; margin-top: 10px; }
+        .del-btn:hover { background: #5a1000; }
+        .dim { color: #445; font-size: .75rem; }
+
+        /* ── Status bar ── */
+        .ed-statusbar {
+            display: flex; align-items: center; gap: 16px;
+            padding: 4px 12px; background: #0a0b10;
+            border-top: 1px solid #1a1c26; flex-shrink: 0;
+            font-size: .72rem; color: #556;
+        }
+        #ed-cursor { color: #7a9aaa; }
+        #ed-status { color: #8adf8a; }
+
+        /* ── Shortcut hint strip ── */
+        .ed-hints { font-size: .68rem; color: #334; }
+        .ed-hints kbd {
+            background: #1a1d2a; border: 1px solid #2a3040;
+            border-radius: 2px; padding: 1px 4px; color: #7a9aaa;
+        }
+    </style>
+</head>
+<body>
+
+<!-- ── Toolbar ───────────────────────────────────────────────────────── -->
+<header class="ed-header">
+    <a href="/game.html">← Game</a>
+    <h1>MAP EDITOR</h1>
+    <span class="ed-sep">|</span>
+
+    <!-- Tools -->
+    <button class="tool-btn" data-tool="select"   onclick="edSetTool('select')"  title="S — select &amp; move items">↖ Select</button>
+    <button class="tool-btn" data-tool="platform" onclick="edSetTool('platform')" title="P — draw platform (click-drag)">▭ Platform</button>
+    <button class="tool-btn" data-tool="entity"   onclick="edSetTool('entity')"  title="E — place entity (choose type on left)">★ Entity</button>
+    <button class="tool-btn" data-tool="erase"    onclick="edSetTool('erase')"   title="X — click to erase">✕ Erase</button>
+    <button class="tool-btn" data-tool="goal"     onclick="edSetTool('goal')"    title="G — place goal flag">⚑ Goal</button>
+
+    <span class="ed-sep">|</span>
+
+    <!-- Room navigation (any direction) -->
+    <button class="act-btn" onclick="edNavRoom(-1,0)" title="Move to room left (←)">◀</button>
+    <button class="act-btn" onclick="edNavRoom(0,-1)" title="Move to room above (↑)">▲</button>
+    <span id="ed-room-label">[0,0]  1 rooms</span>
+    <button class="act-btn" onclick="edNavRoom(0,1)"  title="Move to room below (↓)">▼</button>
+    <button class="act-btn" onclick="edNavRoom(1,0)"  title="Move to room right (→)">▶</button>
+    <button class="act-btn" onclick="edAddRoomDir(1,0)"  title="Add room to the right">+→</button>
+    <button class="act-btn" onclick="edAddRoomDir(-1,0)" title="Add room to the left">+←</button>
+    <button class="act-btn" onclick="edAddRoomDir(0,1)"  title="Add room below">+↓</button>
+    <button class="act-btn" onclick="edAddRoomDir(0,-1)" title="Add room above">+↑</button>
+    <button class="act-btn danger" onclick="edRemoveRoom()" title="Remove current room">−Room</button>
+
+    <span class="ed-sep">|</span>
+
+    <!-- File ops + undo -->
+    <button class="act-btn" onclick="edUndo()" title="Undo (Ctrl+Z)">↩</button>
+    <button class="act-btn" onclick="edRedo()" title="Redo (Ctrl+Y)">↪</button>
+    <button class="act-btn" onclick="edNew()"    title="Start fresh">New</button>
+    <button class="act-btn" onclick="edSave()"   title="Save to browser storage">Save</button>
+    <button class="act-btn" onclick="edExport()" title="Download as JSON">Export</button>
+    <button class="act-btn" onclick="edImport()" title="Load from JSON file">Import</button>
+    <button class="act-btn play" onclick="edPlay()" title="Save and launch in-game">▶ Play</button>
+</header>
+
+<!-- ── Body ──────────────────────────────────────────────────────────── -->
+<div class="ed-body">
+
+    <!-- Left: entity type picker -->
+    <aside class="ed-left">
+        <h3>ENTITIES</h3>
+        <button class="ent-btn active" data-ent="crystal"    onclick="edSetEnt('crystal');edSetTool('entity')">💎 Crystal</button>
+        <button class="ent-btn"        data-ent="spring"     onclick="edSetEnt('spring');edSetTool('entity')">🟢 Spring</button>
+        <button class="ent-btn"        data-ent="bumper"     onclick="edSetEnt('bumper');edSetTool('entity')">⭕ Bumper</button>
+        <button class="ent-btn"        data-ent="spike_up"   onclick="edSetEnt('spike_up');edSetTool('entity')">▲ Spike ↑</button>
+        <button class="ent-btn"        data-ent="spike_down" onclick="edSetEnt('spike_down');edSetTool('entity')">▼ Spike ↓</button>
+        <button class="ent-btn"        data-ent="spike_left" onclick="edSetEnt('spike_left');edSetTool('entity')">◀ Spike ←</button>
+        <button class="ent-btn"        data-ent="spike_right"onclick="edSetEnt('spike_right');edSetTool('entity')">▶ Spike →</button>
+        <button class="ent-btn"        data-ent="blade_h"    onclick="edSetEnt('blade_h');edSetTool('entity')">↔ Blade patrol</button>
+        <button class="ent-btn"        data-ent="blade_c"    onclick="edSetEnt('blade_c');edSetTool('entity')">⊙ Blade orbit</button>
+        <button class="ent-btn"        data-ent="strawberry" onclick="edSetEnt('strawberry');edSetTool('entity')">🍓 Strawberry</button>
+        <button class="ent-btn"        data-ent="crumble"    onclick="edSetEnt('crumble');edSetTool('entity')">▣ Crumble</button>
+        <button class="ent-btn"        data-ent="falling"    onclick="edSetEnt('falling');edSetTool('entity')">⬛ Falling</button>
+        <button class="ent-btn"        data-ent="golden"     onclick="edSetEnt('golden');edSetTool('entity')">★ Golden Berry</button>
+    </aside>
+
+    <!-- Center: canvas -->
+    <main class="ed-center">
+        <canvas id="ed-canvas"></canvas>
+    </main>
+
+    <!-- Right: properties -->
+    <aside class="ed-right">
+        <h3>PROPERTIES</h3>
+        <div id="ed-props"><span class="dim">Nothing selected</span></div>
+    </aside>
+
+</div>
+
+<!-- ── Status bar ─────────────────────────────────────────────────────── -->
+<footer class="ed-statusbar">
+    <span id="ed-cursor">x=0  y=0</span>
+    <span id="ed-status"></span>
+    <span class="ed-hints">
+        <kbd>P</kbd> platform &nbsp;
+        <kbd>E</kbd> entity &nbsp;
+        <kbd>S</kbd> select &nbsp;
+        <kbd>X</kbd> erase &nbsp;
+        <kbd>G</kbd> goal &nbsp;
+        <kbd>Del</kbd> delete &nbsp;
+        <kbd>Arrows</kbd> navigate rooms &nbsp;
+        <kbd>Ctrl+Z/Y</kbd> undo/redo &nbsp;
+        Right-click = delete &nbsp;
+        Alt+drag = move
+    </span>
+</footer>
+
+<input type="file" id="ed-file-input" accept=".json" style="display:none">
+<script src="/editor.js"></script>
+</body>
+</html>

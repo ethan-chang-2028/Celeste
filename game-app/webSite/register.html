@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Apex Platformer - Register</title>
+    <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+    <main class="login-container">
+        <h1>Apex Platformer</h1>
+        <h2>Create Account</h2>
+
+        <form id="registerForm">
+            <div class="form-group">
+                <label for="usernameInput">Username</label>
+                <input type="text" id="usernameInput" required>
+            </div>
+
+            <div class="form-group">
+                <label for="emailInput">Email</label>
+                <input type="email" id="emailInput" required>
+            </div>
+
+            <div class="form-group">
+                <label for="passwordInput">Password</label>
+                <input type="password" id="passwordInput" required minlength="6">
+            </div>
+
+            <div class="form-group">
+                <label for="countryInput">Country</label>
+                <input type="text" id="countryInput" placeholder="e.g. Canada" required>
+            </div>
+
+            <div class="form-group">
+                <label for="avatarInput">Avatar</label>
+                <select id="avatarInput">
+                    <option value="Madeline">Madeline</option>
+                    <option value="Badeline">Badeline</option>
+                    <option value="Granny">Granny</option>
+                    <option value="Theo">Theo</option>
+                </select>
+            </div>
+
+            <p id="errorMessage" style="color: red; display: none;"></p>
+            <p id="successMessage" style="color: green; display: none;"></p>
+
+            <button type="submit">Create Account</button>
+        </form>
+
+        <div class="links">
+            <p>Already have an account? <a href="/">Login here</a></p>
+        </div>
+    </main>
+
+    <script src="/register.js"></script>
+</body>
+</html>
