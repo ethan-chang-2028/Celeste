@@ -763,6 +763,15 @@
             cameraX = mazeRoomCol * ROOM_W;
             cameraY = worldMinY + mazeRoomRow * H;
         }
+        const sx0 = roomSpawns[0] ? roomSpawns[0].x : 0;
+        const sy0 = roomSpawns[0] ? roomSpawns[0].y : 0;
+        for (const gh of aiGhosts) {
+            gh.p.reset(sx0, sy0);
+            gh.stuckFrames = 0; gh.stuckX = sx0; gh.stuckY = sy0; gh.lastRow = -1;
+            gh.progressFrames = 0; gh.progressBest = -Infinity;
+        }
+        if (aiEnabled && typeof NeuralAI !== 'undefined') NeuralAI.resetAgents();
+        recordingFrames = []; recordingSeed = currentSeed;
     }
 
     // ── AI Player Controller (neural — delegates to NeuralAI in ai-neural.js) ─
@@ -910,22 +919,22 @@
         return -1;  // idle — skip
     }
 
-    async function saveRecording() {
-        const payload = { seed: recordingSeed, frames: recordingFrames };
+    async function saveRecording(silent = false) {
+        const framesToSave = recordingFrames.slice();
+        recordingFrames = [];
+        const payload = { seed: recordingSeed, frames: framesToSave };
         try {
-            const res = await fetch('/ai-recording', {
+            await fetch('/ai-recording', {
                 method:  'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body:    JSON.stringify(payload),
                 signal:  AbortSignal.timeout(5000),
             });
-            const obj = await res.json();
-            if (statusEl) statusEl.textContent =
-                `Recording saved: ${recordingFrames.length} frames.`;
+            if (!silent && statusEl) statusEl.textContent =
+                `Recording saved: ${framesToSave.length} frames.`;
         } catch (_) {
-            if (statusEl) statusEl.textContent = 'Recording save failed.';
+            if (!silent && statusEl) statusEl.textContent = 'Recording save failed.';
         }
-        recordingFrames = [];
     }
 
     window.toggleRecording = function () {
@@ -2629,7 +2638,7 @@
         const input = readInput();
 
         // Capture human demo frame for imitation learning
-        if (recordingActive && !aiEnabled && GOAL &&
+        if (!aiEnabled && GOAL &&
                 typeof NeuralAI !== 'undefined' && NeuralAI.readSensors) {
             const actionIdx = humanActionIndex(input);
             if (actionIdx >= 0) {
@@ -2765,6 +2774,7 @@
                 p2Time = performance.now() - raceStart;
                 p2CP   = NUM_ROOMS - 1;
                 if (typeof NeuralAI !== 'undefined') NeuralAI.learnFromRoute(p2Time);
+                if (recordingFrames.length > 30) saveRecording(true);
             }
         }
 
@@ -2780,6 +2790,7 @@
                 if (bestMs === null || winMs < bestMs) bestMs = winMs;
                 // Feed player's time into AI so it learns to race at human speed
                 if (typeof NeuralAI !== 'undefined') NeuralAI.learnFromRoute(racePlayerTime);
+                if (recordingFrames.length > 30) saveRecording(true);
             }
         }
 
@@ -2791,6 +2802,7 @@
                 NeuralAI.onGoal(winMs);
                 updateAIBtn();
             }
+            if (!aiEnabled && recordingFrames.length > 30) saveRecording(true);
         }
         if (player.y > DEATH_Y || player.y < worldMinY - 20) { respawn(); return; }
 
