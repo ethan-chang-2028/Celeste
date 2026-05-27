@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Apex Platformer - Admin Dashboard</title>
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+    <header>
+        <h1>Admin Control Panel</h1>
+        <nav>
+            <button class="tab-btn active" onclick="showTab('dev-menu')">Dev Quick Launch</button>
+            <button class="tab-btn" onclick="showTab('user-view')">User Table</button>
+            <button class="tab-btn" onclick="showTab('leaderboard-view')">Leaderboard Manager</button>
+            <button class="tab-btn" onclick="showTab('level-view')">Level Manager</button>
+            <button class="tab-btn" onclick="showTab('content-view')">Content Editor</button>
+            <a href="profile.html">Exit to Home</a>
+        </nav>
+    </header>
+
+    <main>
+        <div id="dev-menu" class="dashboard-tab">
+            <h2>Admin Testing Tools</h2>
+
+            <button class="menu-option" onclick="startGame('ai')">
+                <span class="menu-option__label">▶ Random AI Map</span>
+                <span class="menu-option__desc">Procedurally generated · seed-replayable · neural AI playable</span>
+            </button>
+
+            <button class="menu-option menu-option--gold" onclick="startGame('race')">
+                <span class="menu-option__label">🏁 Race the AI</span>
+                <span class="menu-option__desc">5-room race course · same seed for you and AI · named checkpoints · live timer · new seed each race</span>
+            </button>
+
+            <div class="online-lobby">
+                <h3>🌐 Online Race — play vs another person</h3>
+                <div class="online-lobby-row">
+                    <input id="online-name-input" type="text" placeholder="Your name" maxlength="20">
+                    <button onclick="joinOnlineRace()">Find Match</button>
+                    <button onclick="leaveOnlineRace()" style="background:#5a1010;">Leave</button>
+                </div>
+                <div id="online-status" class="online-status-info">Not connected — enter your name and click Find Match.</div>
+            </div>
+
+            <button class="menu-option" onclick="startGame('custom')">
+                <span class="menu-option__label">▶ Custom Level</span>
+                <span class="menu-option__desc">Play the map you built in the editor</span>
+            </button>
+
+            <a class="menu-option" href="/editor.html" style="text-decoration:none;">
+                <span class="menu-option__label" style="color:#7aa2ff;">🔧 Map Editor</span>
+                <span class="menu-option__desc">Draw platforms · place entities · save and play your own levels</span>
+            </a>
+        </div>
+
+        <section id="user-view" class="dashboard-tab" style="display:none;">
+            <h2>User Management</h2>
+            <input type="text" id="user-search" placeholder="Search users...">
+            <table>
+                <thead>
+                    <tr><th>ID</th><th>Username</th><th>Email</th><th>Role</th><th>Status</th><th>Actions</th></tr>
+                </thead>
+                <tbody id="user-table-body">
+                    </tbody>
+            </table>
+        </section>
+
+        <section id="leaderboard-view" class="dashboard-tab" style="display:none;">
+            <h2>Leaderboard Management</h2>
+            <table>
+                <thead>
+                    <tr><th>Run ID</th><th>Player ID</th><th>Level ID</th><th>Time</th><th>Deaths</th><th>Actions</th></tr>
+                </thead>
+                <tbody id="leaderboard-table-body">
+                    </tbody>
+            </table>
+        </section>
+
+        <section id="level-view" class="dashboard-tab" style="display:none;">
+            <h2>Level Management</h2>
+            <table>
+                <thead>
+                    <tr><th>Level ID</th><th>Name</th><th>Creator</th><th>Difficulty</th><th>Featured</th><th>Actions</th></tr>
+                </thead>
+                <tbody id="level-table-body">
+                    </tbody>
+            </table>
+        </section>
+
+        <section id="content-view" class="dashboard-tab" style="display:none;">
+            <h2>System Content Editor</h2>
+            <form id="announcement-form">
+                <textarea id="announcement-text" rows="8" placeholder="Type patch notes/announcements here..."></textarea>
+                <button type="submit">Publish Update</button>
+            </form>
+        </section>
+    </main>
+
+    <script>
+
+
+        // Tab Switching Engine
+        function showTab(tabId) {
+            document.querySelectorAll('.dashboard-tab').forEach(t => t.style.display = 'none');
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+
+            document.getElementById(tabId).style.display = 'block';
+            event.target.classList.add('active');
+        }
+
+        // Stubs for your existing onclick functions
+        function startGame(mode) {
+            console.log("Starting quick-launch game mode:", mode);
+        }
+
+        function joinOnlineRace() {
+            console.log("Finding match...");
+        }
+
+        function leaveOnlineRace() {
+            console.log("Leaving lobby...");
+        }
+    </script>
+</body>
+</html>
