@@ -763,13 +763,6 @@
             cameraX = mazeRoomCol * ROOM_W;
             cameraY = worldMinY + mazeRoomRow * H;
         }
-        const sx0 = roomSpawns[0] ? roomSpawns[0].x : 0;
-        const sy0 = roomSpawns[0] ? roomSpawns[0].y : 0;
-        for (const gh of aiGhosts) {
-            gh.p.reset(sx0, sy0);
-            gh.stuckFrames = 0; gh.stuckX = sx0; gh.stuckY = sy0; gh.lastRow = -1;
-            gh.progressFrames = 0; gh.progressBest = -Infinity;
-        }
         if (aiEnabled && typeof NeuralAI !== 'undefined') NeuralAI.resetAgents();
         recordingFrames = []; recordingSeed = currentSeed;
     }
