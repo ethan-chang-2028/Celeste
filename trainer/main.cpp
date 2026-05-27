@@ -412,7 +412,7 @@ int main(int argc, char* argv[]) {
     int  gensSinceImproved  = 0;
     float lastSavedBest     = globalBestFit;
 
-    for (int gen = startGen; gen < startGen + maxGens; gen++) {
+    for (int gen = startGen; gen - startGen < maxGens; gen++) {
         // ── Evaluate pool in parallel ──────────────────────
         std::vector<EpisodeResult> results(POOL_SIZE);
         std::atomic<int> nextIdx(0);
@@ -530,8 +530,10 @@ int main(int argc, char* argv[]) {
 
     // Final save
     if (globalBest) {
+        int finalGen = (maxGens == std::numeric_limits<int>::max())
+                     ? startGen : startGen + maxGens;
         saveModel(outputPath, *globalBest,
-                  startGen + maxGens, totalRuns, globalBestFit);
+                  finalGen, totalRuns, globalBestFit);
         std::cout << std::defaultfloat << std::setprecision(6)
                   << "\nDone. bestFit=" << globalBestFit
                   << "  saved to " << outputPath << '\n';
