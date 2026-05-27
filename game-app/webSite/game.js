@@ -729,16 +729,6 @@
             updateAIBtn();
         }
         player.reset(roomSpawns[respawnRoom].x, roomSpawns[respawnRoom].y);
-        // Reset ghost agents to their closest spawn point
-        for (const gh of aiGhosts) {
-            const si = closestRespawnIdx(gh.p.x, gh.p.y);
-            const gsx = roomSpawns[si] ? roomSpawns[si].x : roomSpawns[0].x;
-            const gsy = roomSpawns[si] ? roomSpawns[si].y : roomSpawns[0].y;
-            gh.p.reset(gsx, gsy);
-            gh.stuckFrames = 0; gh.stuckX = gsx; gh.stuckY = gsy; gh.lastRow = -1;
-            gh.progressFrames = 0; gh.progressBest = -Infinity;
-        }
-        if (typeof NeuralAI !== 'undefined') NeuralAI.resetAgents();
         // player.reset() clears keysHeld; also reset key/door entity states
         if (currentMode === 'maze') {
             for (const e of entities) {
@@ -773,20 +763,11 @@
             cameraX = mazeRoomCol * ROOM_W;
             cameraY = worldMinY + mazeRoomRow * H;
         }
-        const sx0 = roomSpawns[0] ? roomSpawns[0].x : 0;
-        const sy0 = roomSpawns[0] ? roomSpawns[0].y : 0;
-        for (const gh of aiGhosts) {
-            gh.p.reset(sx0, sy0);
-            gh.stuckFrames = 0; gh.stuckX = sx0; gh.stuckY = sy0; gh.lastRow = -1;
-            gh.progressFrames = 0; gh.progressBest = -Infinity;
-        }
-        if (aiEnabled && typeof NeuralAI !== 'undefined') NeuralAI.resetAgents();
     }
 
     // ── AI Player Controller (neural — delegates to NeuralAI in ai-neural.js) ─
     let aiEnabled   = false;
     let aiSpeedMult = 1;
-    let aiGhosts = [];  // ghost CelestePlayer instances for parallel training
 
     // ── Demo recording (imitation learning) ──────────────────────────────────
     let recordingActive = false;
@@ -804,29 +785,12 @@
         } else {
             NeuralAI.init(spawnX, GOAL ? GOAL.x + GOAL.w : 1600);
         }
-        spawnAIGhosts();
-    }
-
-    function spawnAIGhosts() {
-        aiGhosts = [];
-        if (!aiEnabled || typeof NeuralAI === 'undefined') return;
-        const n = NeuralAI.N_AGENTS - 1;
-        const sx = roomSpawns[0] ? roomSpawns[0].x : 0;
-        const sy = roomSpawns[0] ? roomSpawns[0].y : 0;
-        for (let i = 0; i < n; i++) {
-            const p = new CelestePlayer(sx, sy);
-            p.noDashRefill = player.noDashRefill;
-            aiGhosts.push({ p, idx: i, stuckFrames: 0, stuckX: sx, stuckY: sy,
-                            lastRow: -1, progressFrames: 0, progressBest: -Infinity });
-        }
-        NeuralAI.initAgents();
     }
 
     // Toggle AI control (called from button)
     window.toggleAIControl = function () {
         aiEnabled = !aiEnabled;
         if (aiEnabled) initNeuralAI();
-        if (!aiEnabled) aiGhosts = [];
         updateAIBtn();
     };
 
@@ -849,7 +813,7 @@
         if (!btn) return;
         if (aiEnabled) {
             const gen = (typeof NeuralAI !== 'undefined') ? NeuralAI.generation : 0;
-            btn.textContent = `🧠 Neural AI: ON  ×${NeuralAI.N_AGENTS} (Gen ${gen})`;
+            btn.textContent = `🧠 Neural AI: ON  (Gen ${gen})`;
             btn.style.background = '#1a7a1a';
         } else {
             btn.textContent = '🧠 Neural AI: OFF';
@@ -1307,7 +1271,6 @@
         if (typeof NeuralAI !== 'undefined') {
             NeuralAI.init(roomSpawns[0].x, GOAL ? GOAL.x + GOAL.w : NUM_ROOMS * ROOM_W);
             NeuralAI.reset(roomSpawns[0].x);
-            spawnAIGhosts();
         }
         bestMs = null;
         restartRun();
@@ -2347,16 +2310,6 @@
             }
         }
 
-        // Ghost AI agents
-        if (aiEnabled && aiGhosts.length > 0) {
-            ctx.globalAlpha = 0.20;
-            for (const gh of aiGhosts) {
-                ctx.fillStyle = '#44ff88';
-                ctx.fillRect(gh.p.x, gh.p.y, gh.p.w, gh.p.h);
-            }
-            ctx.globalAlpha = 1;
-        }
-
         // Race AI player — orange blinking rectangle
         if (raceMode && raceAIPlayer && !raceAIDone) {
             const blink = Math.sin(performance.now() / 160) > 0;
@@ -2497,7 +2450,7 @@
             ctx.fillStyle = '#44ff44'; ctx.font = 'bold 7px monospace';
             const aiEngine = (typeof CelesteAI !== 'undefined') ? 'C++' : 'JS';
             ctx.textAlign = 'right';
-            ctx.fillText(`NEURAL AI ×${NeuralAI.N_AGENTS}  ${aiSpeedMult}x  [${aiEngine}]`, W - 2, 10);
+            ctx.fillText(`NEURAL AI  ${aiSpeedMult}x  [${aiEngine}]`, W - 2, 10);
             ctx.font = '6px monospace';
             ctx.fillText(`Gen ${ai.generation}  Run ${ai.runCount}`, W - 2, 18);
             ctx.fillText(`Fit ${(ai.globalBestFit * 100).toFixed(0)}%`, W - 2, 25);
@@ -2736,61 +2689,6 @@
             cameraY += (Math.max(_camMinY, Math.min(_camMaxY, _targetY)) - cameraY) * 0.12;
         }
         transitionFlash = Math.max(0, transitionFlash - FIXED_DT);
-
-        // Ghost agents: parallel training
-        if (aiEnabled && aiGhosts.length > 0) {
-            const allPlats = dynPlat.length ? platforms.concat(dynPlat) : platforms;
-            const hazardRects = getHazardRects();
-            for (const gh of aiGhosts) {
-                const inp2 = NeuralAI.computeAgent(gh.idx, gh.p, platforms, GOAL, hazardRects);
-                if (!inp2) continue;
-                gh.p.update(inp2, allPlats, FIXED_DT);
-                // Dash refill on room change (mountain: by row; random: by column)
-                if (mountainMode) {
-                    const ghRow = Math.max(0, Math.floor((gh.p.y - worldMinY) / H));
-                    if (ghRow !== gh.lastRow) { gh.p.Dashes = gh.p.MaxDashes; gh.lastRow = ghRow; }
-                } else {
-                    const ghCol = Math.max(0, Math.min(NUM_ROOMS - 1, Math.floor(gh.p.x / ROOM_W)));
-                    if (ghCol !== (gh.lastRow ?? ghCol)) gh.p.Dashes = gh.p.MaxDashes;
-                    gh.lastRow = ghCol;
-                }
-                // Stuck detection — position and progress checks
-                if (Math.abs(gh.p.x - gh.stuckX) > 2 || Math.abs(gh.p.y - gh.stuckY) > 2) {
-                    gh.stuckFrames = 0; gh.stuckX = gh.p.x; gh.stuckY = gh.p.y;
-                } else { gh.stuckFrames++; }
-                const ghProg = mountainMode ? -gh.p.y : gh.p.x;
-                if (ghProg > gh.progressBest) { gh.progressBest = ghProg; gh.progressFrames = 0; }
-                else { gh.progressFrames++; }
-                if (gh.stuckFrames >= AI_STUCK_LIMIT || gh.progressFrames >= AI_PROGRESS_LIMIT) {
-                    const si = closestRespawnIdx(gh.p.x, gh.p.y);
-                    const rs = roomSpawns[si] || roomSpawns[0];
-                    NeuralAI.killAgent(gh.idx);
-                    gh.p.reset(rs.x, rs.y);
-                    gh.stuckFrames = 0; gh.stuckX = rs.x; gh.stuckY = rs.y;
-                    gh.progressFrames = 0; gh.progressBest = -Infinity; gh.lastRow = -1;
-                    continue;
-                }
-                // Death
-                if (gh.p.y > DEATH_Y || gh.p.y < worldMinY - 20) {
-                    const si = closestRespawnIdx(gh.p.x, gh.p.y);
-                    const rs = roomSpawns[si] || roomSpawns[0];
-                    NeuralAI.killAgent(gh.idx);
-                    gh.p.reset(rs.x, rs.y);
-                    gh.stuckFrames = 0; gh.stuckX = rs.x; gh.stuckY = rs.y;
-                    gh.progressFrames = 0; gh.progressBest = -Infinity; gh.lastRow = -1;
-                    continue;
-                }
-                // Goal — feed speed fitness into the gene pool
-                if (GOAL && gh.p.x < GOAL.x + GOAL.w && gh.p.x + gh.p.w > GOAL.x
-                         && gh.p.y < GOAL.y + GOAL.h && gh.p.y + gh.p.h > GOAL.y) {
-                    const rs = roomSpawns[0];
-                    NeuralAI.goalAgent(gh.idx); // timing tracked internally in _agentStates
-                    gh.p.reset(rs.x, rs.y);
-                    gh.stuckFrames = 0; gh.stuckX = rs.x; gh.stuckY = rs.y;
-                    gh.progressFrames = 0; gh.progressBest = -Infinity; gh.lastRow = -1;
-                }
-            }
-        }
 
         // ── Race AI opponent ────────────────────────────────────────────────────
         if (raceMode && raceAIPlayer && !raceAIDone && typeof NeuralAI !== 'undefined') {

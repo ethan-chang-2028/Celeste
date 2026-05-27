@@ -314,8 +314,6 @@
         _prevJ:             false,
         _runStartMs:        0,
         _runsSinceImproved: 0,
-        N_AGENTS:      8,
-        _agentStates:  [],
         _isVertical:        false,
         _spawnY:            0,
         _goalY:             0,
@@ -480,87 +478,6 @@
             this._adaptSt  = makeAdaptState();
             this._stuckSt  = makeStuckState(this._weights);
             this._memState = makeMemState();
-        },
-
-        // ── Ghost agent management ────────────────────────────────────────────
-
-        _makeGhostState() {
-            const w = this._pool.length >= 3
-                ? breedNext(this._pool, this.generation, this._globalBest)
-                : (this._globalBest ? spawnNoise(this._globalBest) : randWeights());
-            return { weights: w, adaptSt: makeAdaptState(), stuckSt: makeStuckState(w),
-                     memState: makeMemState(), prevJ: false,
-                     maxX: this._spawnX, minY: this._spawnY,
-                     runStartMs: performance.now() };
-        },
-
-        initAgents() {
-            this._agentStates = [];
-            for (let i = 0; i < this.N_AGENTS - 1; i++)
-                this._agentStates.push(this._makeGhostState());
-        },
-
-        resetAgents() {
-            for (const ag of this._agentStates) {
-                ag.maxX    = this._spawnX;
-                ag.minY    = this._spawnY;
-                ag.prevJ   = false;
-                ag.adaptSt = makeAdaptState();
-                ag.stuckSt = makeStuckState(ag.weights);
-                ag.memState = makeMemState();   // clear memory on respawn
-                ag.runStartMs = performance.now();
-            }
-        },
-
-        computeAgent(i, player, platforms, goal, hazards) {
-            const ag = this._agentStates[i];
-            if (!ag) return null;
-            ag.maxX = Math.max(ag.maxX, player.x);
-            if (this._isVertical) ag.minY = Math.min(ag.minY, player.y);
-            const fitNow = this._isVertical
-                ? Math.max(0, (this._spawnY - ag.minY) / Math.max(1, this._spawnY - this._goalY))
-                : ag.maxX / this._goalEnd;
-            ag.weights = adaptTick(ag.weights, ag.adaptSt, fitNow);
-            ag.stuckSt.weights = ag.weights;
-            ag.weights = stuckCheck(ag.stuckSt, fitNow, this._globalBest, ag.memState);
-            const w      = activeWeights(ag.weights, ag.adaptSt);
-            const inputs = buildSensorInputs(player, platforms, goal, hazards, ag.memState);
-            const action = think(w, inputs, ag.memState);  // updates ag.memState in-place
-            const jumpPressed = action.J && !ag.prevJ;
-            ag.prevJ = action.J;
-            const moveX2 = action.X ? action.DX : (action.R ? 1 : (action.L ? -1 : 0));
-            const moveY2 = action.X ? action.DY : ((action.G && !action.J) ? -1 : 0);
-            return { moveX: moveX2, moveY: moveY2,
-                     jumpPressed, jumpHeld: action.J, dashPressed: action.X, grabHeld: !!action.G };
-        },
-
-        killAgent(i) {
-            const ag = this._agentStates[i];
-            if (!ag) return;
-            const fitness = this._isVertical
-                ? Math.max(0, (this._spawnY - ag.minY) / Math.max(1, this._spawnY - this._goalY))
-                : ag.maxX / this._goalEnd;
-            this._poolUpdate(ag.weights, fitness);
-            const newW = this._breedWeights();
-            this._agentStates[i] = { weights: newW, adaptSt: makeAdaptState(),
-                                      stuckSt: makeStuckState(newW),
-                                      memState: makeMemState(), prevJ: false,
-                                      maxX: this._spawnX, minY: this._spawnY,
-                                      runStartMs: performance.now() };
-        },
-
-        goalAgent(i) {
-            const ag = this._agentStates[i];
-            if (!ag) return;
-            const ms = performance.now() - (ag.runStartMs || performance.now());
-            if (ms < this._bestTimeMs) this._bestTimeMs = ms;
-            this._poolUpdate(ag.weights, this._goalFitness(ms));
-            const newW = this._breedWeights();
-            this._agentStates[i] = { weights: newW, adaptSt: makeAdaptState(),
-                                      stuckSt: makeStuckState(newW),
-                                      memState: makeMemState(), prevJ: false,
-                                      maxX: this._spawnX, minY: this._spawnY,
-                                      runStartMs: performance.now() };
         },
 
         // ── Persistence: server-first, localStorage fallback ──────────────────
