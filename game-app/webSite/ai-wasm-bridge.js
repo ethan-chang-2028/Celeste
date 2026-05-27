@@ -112,8 +112,6 @@
             get runCount()      { return mgr.runCount;      },
             get globalBestFit() { return mgr.globalBestFit; },
             get _bestTimeMs()   { return mgr.bestTimeMs;    },
-            N_AGENTS: 8,
-
             // Keep JS values for ray visualisation (same config as C++)
             RAY_DIRS: window.NeuralAI ? window.NeuralAI.RAY_DIRS : [],
             RAY_LEN:  window.NeuralAI ? window.NeuralAI.RAY_LEN  : 110,
@@ -126,15 +124,11 @@
                 const b = window.AI_BOUNDS;
                 if (b) mgr.setBounds(b.minX, b.maxX, b.minY, b.maxY);
                 loadWeights();
-                this.initAgents();
             },
 
             reset(spawnX, opts) {
                 mgr.reset(spawnX || 0);
             },
-
-            initAgents()  { mgr.initAgents();  },
-            resetAgents() { mgr.resetAgents(); },
 
             compute(player, platforms, goal, hazards) {
                 if (!goal) return null;
@@ -143,16 +137,6 @@
                 const s = playerState(player);
                 return callMgrCompute(
                     mgr.compute.bind(mgr),
-                    [s.x, s.y, s.vx, s.vy, s.onGround, s.dashes],
-                    platforms, hazards, goal
-                );
-            },
-
-            computeAgent(i, player, platforms, goal, hazards) {
-                if (!goal) return null;
-                const s = playerState(player);
-                return callMgrCompute(
-                    (...a) => mgr.computeAgent(i, ...a),
                     [s.x, s.y, s.vx, s.vy, s.onGround, s.dashes],
                     platforms, hazards, goal
                 );
@@ -167,9 +151,6 @@
                 mgr.onGoal(timeMs || 0);
                 saveWeights();
             },
-
-            killAgent(i)         { mgr.killAgent(i);           },
-            goalAgent(i, timeMs) { mgr.goalAgent(i, timeMs || 0); saveWeights(); },
 
             learnFromRoute(timeMs) {
                 mgr.learnFromRoute(timeMs || 0);
