@@ -2,9 +2,16 @@
 const http = require('http');
 const fs = require('fs').promises;
 const path = require('path');
-const { WebSocketServer } = require('ws');
 
-const PORT = 3000;
+let WebSocketServer;
+try {
+    ({ WebSocketServer } = require('ws'));
+} catch {
+    console.error('\n❌  Missing dependency "ws". Run:  npm install ws\n');
+    process.exit(1);
+}
+
+const PORT = process.env.PORT || 3000;
 const DATA_FILE_PATH    = path.join(__dirname, 'game-app', 'Data', 'players.json');
 const LEADERBOARD_PATH  = path.join(__dirname, 'game-app', 'Data', 'leaderboard.json');
 const AI_MODEL_PATH      = path.join(__dirname, 'game-app', 'Data', 'ai-model.json');
@@ -335,6 +342,20 @@ const server = http.createServer(async (req, res) => {
 
 const wss = new WebSocketServer({ server });
 
+// Prevent unhandled-error crashes: the ws library re-emits HTTP server errors
+// onto the WebSocketServer; without these handlers Node.js would throw and exit.
+server.on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+        console.error(`\n❌  Port ${PORT} is already in use — is the server already running?\n`);
+    } else {
+        console.error('HTTP server error:', err);
+    }
+    process.exit(1);
+});
+wss.on('error', (err) => {
+    console.error('WebSocket server error:', err);
+});
+
 // Active rooms: roomId -> { id, seed, players:[ws, ws] }
 const rooms      = new Map();
 // Random-match queue
@@ -466,5 +487,5 @@ wss.on('connection', (ws) => {
 
 // Start the server
 server.listen(PORT, () => {
-    console.log('Server is running! Open your browser to http://localhost:' + PORT);
+    console.log(`\n✅  Server running — open http://localhost:${PORT} in your browser\n`);
 });

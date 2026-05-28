@@ -145,7 +145,7 @@
             };
 
             ws.onerror = () => {
-                this._notifyUI('WebSocket error — server may be offline.', 'error');
+                this._notifyUI(`Cannot connect — run: node server.js  (tried ${WS_URL})`, 'error');
             };
         },
 
