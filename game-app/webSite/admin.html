@@ -4,7 +4,316 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Apex Platformer - Admin Dashboard</title>
-    <link rel="stylesheet" href="css/styles.css">
+    <style>
+        /* Global Reset and Body Styling */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            background-color: #0b0e14; /* Deep midnight background */
+            color: #ffffff;
+            min-height: 100vh;
+        }
+
+        /* Dashboard Top Header & Nav */
+        header {
+            background-color: #121721; /* Dark UI panel blue */
+            border-bottom: 1px solid #1e2633;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 15px;
+        }
+
+        header h1 {
+            color: #f5cd5d; /* Signature Celeste Gold */
+            font-size: 1.8rem;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        nav {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            justify-content: center;
+            align-items: center;
+        }
+
+        /* Tab Controls Styling */
+        .tab-btn {
+            background-color: #0b0e14;
+            color: #7a8b9e;
+            border: 1px solid #2c3747;
+            padding: 10px 18px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .tab-btn:hover {
+            color: #ffffff;
+            border-color: #7a8b9e;
+        }
+
+        .tab-btn.active {
+            background-color: #0b57d0; /* Active platform primary blue */
+            color: #ffffff;
+            border-color: #1a69e5;
+            box-shadow: 0 0 12px rgba(11, 87, 208, 0.4);
+        }
+
+        nav a {
+            color: #f5cd5d;
+            text-decoration: none;
+            font-size: 0.85rem;
+            font-weight: bold;
+            text-transform: uppercase;
+            margin-left: 15px;
+            letter-spacing: 1px;
+            transition: color 0.2s ease;
+        }
+
+        nav a:hover {
+            color: #ffffff;
+            text-decoration: underline;
+        }
+
+        /* Core Layout Grid */
+        main {
+            max-width: 1000px;
+            width: 100%;
+            margin: 30px auto;
+            padding: 0 20px;
+        }
+
+        .dashboard-tab h2 {
+            color: #ffffff;
+            font-size: 1.3rem;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #1e2633;
+            padding-bottom: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        /* Testing Suite Button Options */
+        .menu-option {
+            display: block;
+            width: 100%;
+            background-color: #121721;
+            border: 1px solid #1e2633;
+            border-radius: 6px;
+            padding: 16px 20px;
+            text-align: left;
+            margin-bottom: 15px;
+            cursor: pointer;
+            transition: transform 0.1s ease, border-color 0.2s ease, background-color 0.2s ease;
+        }
+
+        .menu-option:hover {
+            border-color: #46ee9d; /* Tech Green highlight glow */
+            background-color: #161d2b;
+        }
+
+        .menu-option:active {
+            transform: scale(0.99);
+        }
+
+        .menu-option--gold {
+            border-color: #f5cd5d;
+        }
+
+        .menu-option--gold:hover {
+            border-color: #ffe082;
+            background-color: #1c1d24;
+        }
+
+        .menu-option__label {
+            display: block;
+            font-size: 1.05rem;
+            font-weight: bold;
+            color: #ffffff;
+            margin-bottom: 4px;
+        }
+
+        .menu-option--gold .menu-option__label {
+            color: #f5cd5d;
+        }
+
+        .menu-option__desc {
+            display: block;
+            font-size: 0.85rem;
+            color: #7a8b9e;
+        }
+
+        /* Lobby Sub-Panel Layout */
+        .online-lobby {
+            background-color: #121721;
+            border: 1px solid #1e2633;
+            border-radius: 6px;
+            padding: 20px;
+            margin-bottom: 15px;
+        }
+
+        .online-lobby h3 {
+            font-size: 0.95rem;
+            color: #46ee9d; /* UI modern green */
+            margin-bottom: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .online-lobby-row {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+
+        .online-lobby-row input[type="text"] {
+            flex: 1;
+            padding: 12px;
+            background-color: #0b0e14;
+            border: 1px solid #2c3747;
+            border-radius: 4px;
+            color: #ffffff;
+            font-size: 0.95rem;
+            outline: none;
+        }
+
+        .online-lobby-row input[type="text"]:focus {
+            border-color: #46ee9d;
+        }
+
+        .online-lobby-row button {
+            padding: 0 20px;
+            background-color: #0b57d0;
+            color: #ffffff;
+            border: none;
+            border-radius: 4px;
+            font-weight: bold;
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            transition: background-color 0.2s ease;
+        }
+
+        .online-lobby-row button:hover {
+            background-color: #1a69e5;
+        }
+
+        .online-status-info {
+            font-size: 0.85rem;
+            color: #7a8b9e;
+        }
+
+        /* Clean Admin Systems Table Styling */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+            background-color: #121721;
+            border-radius: 6px;
+            overflow: hidden;
+            border: 1px solid #1e2633;
+        }
+
+        th, td {
+            padding: 12px 15px;
+            text-align: left;
+        }
+
+        thead {
+            background-color: #0f141d;
+            border-bottom: 2px solid #1e2633;
+        }
+
+        th {
+            color: #7a8b9e;
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        tbody tr {
+            border-bottom: 1px solid #1e2633;
+            transition: background-color 0.15s ease;
+        }
+
+        tbody tr:last-child {
+            border-bottom: none;
+        }
+
+        tbody tr:hover {
+            background-color: #161d2b;
+        }
+
+        td {
+            color: #e6e8ef;
+            font-size: 0.9rem;
+        }
+
+        /* Filters and Actions inputs */
+        #user-search {
+            width: 100%;
+            max-width: 320px;
+            padding: 10px 14px;
+            background-color: #121721;
+            border: 1px solid #2c3747;
+            border-radius: 4px;
+            color: #ffffff;
+            margin-bottom: 15px;
+            outline: none;
+        }
+
+        #user-search:focus {
+            border-color: #46ee9d;
+        }
+
+        /* Content Editor Textareas */
+        #announcement-text {
+            width: 100%;
+            padding: 15px;
+            background-color: #121721;
+            border: 1px solid #2c3747;
+            border-radius: 6px;
+            color: #ffffff;
+            font-size: 1rem;
+            outline: none;
+            resize: vertical;
+            margin-bottom: 15px;
+        }
+
+        #announcement-text:focus {
+            border-color: #46ee9d;
+        }
+
+        #announcement-form button {
+            padding: 12px 24px;
+            background-color: #0b57d0;
+            color: #ffffff;
+            border: none;
+            border-radius: 4px;
+            font-weight: bold;
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            transition: background-color 0.2s ease;
+        }
+
+        #announcement-form button:hover {
+            background-color: #1a69e5;
+        }
+    </style>
 </head>
 <body>
 
