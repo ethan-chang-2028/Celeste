@@ -6,23 +6,219 @@
     <title>Apex Platformer - My Profile</title>
     <link rel="stylesheet" href="../webSite/game.css">
     <style>
-        .profile-container { max-width: 680px; margin: 40px auto; padding: 20px; text-align: center; }
-        .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 20px; }
-        .stat-box { background: #11131c; border: 1px solid #2a2f42; padding: 15px; border-radius: 10px; }
-        .stat-box h4 { margin: 0 0 8px; font-size: 0.8rem; color: #7aa2ff; text-transform: uppercase; letter-spacing: .07em; }
-        .stat-box p  { margin: 0; font-size: 1.8rem; font-weight: bold; font-family: monospace; color: #e6e8ef; }
-        .ai-box { background: #0d1117; border-color: #1a3a2a; }
-        .ai-box h4 { color: #44ff44; }
-        .ai-box p  { color: #aaffaa; }
-        .section-title { margin: 28px 0 8px; font-size: 0.72rem; letter-spacing: .12em; text-transform: uppercase; color: #7aa2ff; text-align: left; }
-        .logout-btn { margin-top: 30px; background: #8b1a1a; color: white; padding: 10px 22px; border: none; border-radius: 6px; cursor: pointer; font-size: 0.9rem; }
-        .logout-btn:hover { background: #b02020; }
-        .stats-link { display: inline-block; margin-top: 18px; padding: 10px 22px; background: #5a2a80; color: #fff; border-radius: 6px; text-decoration: none; font-size: 0.9rem; }
-        .stats-link:hover { background: #7a3aaa; }
-        .user-info-block { background: #11131c; border: 1px solid #2a2f42; border-radius: 10px; padding: 1.2rem 1.6rem; margin-bottom: 1.5rem; text-align: left; }
-        .user-info-block h2 { margin: 0 0 6px; }
-        .user-info-block p  { margin: 3px 0; font-size: 0.9rem; color: #aab1c6; }
-        .nav-row { display: flex; gap: 1rem; justify-content: flex-end; }
+        /* Global Reset and Body Styling */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            background-color: #0b0e14; /* Deep midnight background */
+            color: #ffffff;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 40px 20px;
+        }
+
+        /* Header and Nav Alignment */
+        .game-header {
+            width: 100%;
+            max-width: 680px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #1e2633;
+            margin-bottom: 30px;
+        }
+
+        .game-header h1 {
+            color: #f5cd5d; /* Signature Celeste Gold */
+            font-size: 1.8rem;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        .nav-row {
+            display: flex;
+            gap: 15px;
+        }
+
+        .back-link {
+            color: #7a8b9e;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            transition: color 0.2s ease;
+        }
+
+        .back-link:hover {
+            color: #f5cd5d;
+        }
+
+        /* Main Container */
+        .profile-container {
+            width: 100%;
+            max-width: 680px;
+            text-align: center;
+        }
+
+        /* User Info Card */
+        .user-info-block {
+            background-color: #121721; /* Dark blue-grey panel */
+            border: 1px solid #1e2633;
+            border-radius: 8px;
+            padding: 25px;
+            margin-bottom: 25px;
+            text-align: left;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4);
+        }
+
+        .user-info-block h2 {
+            font-size: 1.6rem;
+            color: #ffffff;
+            margin-bottom: 12px;
+        }
+
+        .user-info-block p {
+            font-size: 0.95rem;
+            color: #ffffff;
+            margin: 6px 0;
+        }
+
+        .user-info-block strong {
+            color: #8a99ad;
+            text-transform: uppercase;
+            font-size: 0.8rem;
+            letter-spacing: 1px;
+            margin-right: 5px;
+        }
+
+        .user-info-block span {
+            color: #e6e8ef;
+        }
+
+        /* Section Subtitles */
+        .section-title {
+            margin: 35px 0 12px;
+            font-size: 0.85rem;
+            letter-spacing: .12em;
+            text-transform: uppercase;
+            color: #f5cd5d; /* Gold subtitle text */
+            text-align: left;
+            font-weight: bold;
+        }
+
+        /* Grid Layout */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+            margin-top: 10px;
+        }
+
+        @media (max-width: 480px) {
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Player Stat Boxes */
+        .stat-box {
+            background-color: #121721;
+            border: 1px solid #1e2633;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        .stat-box h4 {
+            margin-bottom: 8px;
+            font-size: 0.8rem;
+            color: #7a8b9e;
+            text-transform: uppercase;
+            letter-spacing: .07em;
+        }
+
+        .stat-box p {
+            font-size: 2rem;
+            font-weight: bold;
+            font-family: 'Courier New', Courier, monospace; /* Clean vintage game stats look */
+            color: #e6e8ef;
+        }
+
+        /* AI Custom Accents */
+        .ai-box {
+            background-color: #0f151d; /* Slightly darker shift for tech AI look */
+            border-color: #1a3329;    /* Dark green border hint */
+        }
+
+        .ai-box h4 {
+            color: #46ee9d; /* Tech Green accent from the game screenshot UI */
+        }
+
+        .ai-box p {
+            color: #a3f7cc;
+        }
+
+        /* Interactive Buttons and Navigation Action Links */
+        .stats-link, .logout-btn, .play-button {
+            display: inline-block;
+            padding: 12px 24px;
+            font-size: 0.85rem;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            border-radius: 4px;
+            border: none;
+            cursor: pointer;
+            text-decoration: none;
+            margin: 8px 5px;
+            transition: background-color 0.2s ease, transform 0.1s ease;
+        }
+
+        /* View Full Stats Button */
+        .stats-link {
+            background-color: #121721;
+            color: #f5cd5d;
+            border: 1px solid #2c3747;
+        }
+
+        .stats-link:hover {
+            background-color: #1e2633;
+            color: #ffffff;
+        }
+
+        /* Play & Admin Buttons */
+        .play-button {
+            background-color: #0b57d0; /* Match standard UI blue primary button */
+            color: #ffffff;
+        }
+
+        .play-button:hover {
+            background-color: #1a69e5;
+        }
+
+        /* Danger/Logout Button */
+        .logout-btn {
+            background-color: #a82020; /* Deep responsive red */
+            color: white;
+        }
+
+        .logout-btn:hover {
+            background-color: #cc2929;
+        }
+
+        /* Click feedback */
+        .stats-link:active, .logout-btn:active, .play-button:active {
+            transform: scale(0.97);
+        }
     </style>
 </head>
 <body>
