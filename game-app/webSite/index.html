@@ -6,6 +6,172 @@
     <title>Apex Platformer - Login</title>
     <link rel="stylesheet" href="style.css">
 </head>
+    <style>
+        /* Global Reset and Body Styling */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            background-color: #0b0e14; /* Deep midnight background from the image */
+            color: #ffffff;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        /* Central Login Card Container */
+        .login-container {
+            background-color: #121721; /* Slightly lighter dark blue for the card */
+            border: 1px solid #1e2633;  /* Subtle border matching the level panels */
+            border-radius: 8px;
+            padding: 40px;
+            width: 100%;
+            max-width: 420px;
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.6);
+        }
+
+        /* Headings */
+        h1 {
+            color: #f5cd5d; /* Exactly matching the gold CELESTE header */
+            text-align: center;
+            font-size: 2rem;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-bottom: 5px;
+        }
+
+        h2 {
+            color: #7a8b9e; /* Soft blue-gray subtext */
+            text-align: center;
+            font-size: 1rem;
+            font-weight: 400;
+            margin-bottom: 30px;
+        }
+
+        /* Form Layout & Inputs */
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            color: #8a99ad;
+            font-size: 0.85rem;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        input[type="text"],
+        input[type="password"] {
+            width: 100%;
+            padding: 12px;
+            background-color: #0b0e14; /* Dark input slots */
+            border: 1px solid #2c3747;
+            border-radius: 4px;
+            color: #ffffff;
+            font-size: 1rem;
+            outline: none;
+            transition: border-color 0.2s ease;
+        }
+
+        /* Glow effect matching the green/blue interactive elements when typing */
+        input[type="text"]:focus,
+        input[type="password"]:focus {
+            border-color: #46ee9d; /* Tech green accent color from the bottom section */
+        }
+
+        /* Checkbox Alignment */
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+        }
+
+        .checkbox-group input[type="checkbox"] {
+            accent-color: #46ee9d; /* Green accent for checked state */
+            width: 16px;
+            height: 16px;
+            cursor: pointer;
+        }
+
+        .checkbox-group label {
+            margin-bottom: 0;
+            text-transform: none;
+            letter-spacing: normal;
+            font-size: 0.9rem;
+            cursor: pointer;
+        }
+
+        /* Action Button */
+        button[type="submit"] {
+            width: 100%;
+            padding: 14px;
+            background-color: #0b57d0; /* Matches the "+ Create Room" blue button */
+            color: #ffffff;
+            border: none;
+            border-radius: 4px;
+            font-size: 1rem;
+            font-weight: bold;
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-top: 10px;
+            transition: background-color 0.2s ease, transform 0.1s ease;
+        }
+
+        button[type="submit"]:hover {
+            background-color: #1a69e5;
+        }
+
+        button[type="submit"]:active {
+            transform: scale(0.98);
+        }
+
+        /* Error Message styling just in case */
+        #errorMessage {
+            font-size: 0.85rem;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+
+        /* Links Section */
+        .links {
+            margin-top: 25px;
+            padding-top: 20px;
+            border-top: 1px solid #1e2633;
+            text-align: center;
+            font-size: 0.85rem;
+        }
+
+        .links p {
+            color: #7a8b9e;
+            margin-bottom: 8px;
+        }
+
+        .links p:last-child {
+            margin-bottom: 0;
+        }
+
+        .links a {
+            color: #f5cd5d; /* Using the gold color for interactive links */
+            text-decoration: none;
+            font-weight: 600;
+            transition: color 0.2s ease;
+        }
+
+        .links a:hover {
+            color: #ffffff;
+            text-decoration: underline;
+        }
+    </style>
 <body>
     <main class="login-container">
         <h1>Apex Platformer</h1>
