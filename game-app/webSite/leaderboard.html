@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Apex Platformer — Leaderboard</title>
+    <link rel="stylesheet" href="/game.css">
+    <style>
+        .nav-row { display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; }
+        .lb-page { max-width: 920px; margin: 0 auto; padding: 2rem 1.5rem 3rem; }
+
+        .filters {
+            display: flex; gap: 1rem; flex-wrap: wrap; align-items: flex-end;
+            background: #11131c; border: 1px solid #2a2f42; border-radius: 10px;
+            padding: 1.1rem 1.3rem; margin-bottom: 1.4rem;
+        }
+        .filter-group { display: flex; flex-direction: column; gap: .4rem; }
+        .filter-group label { font-size: .7rem; text-transform: uppercase; letter-spacing: .08em; color: #7aa2ff; }
+        select {
+            background: #0b0e14; color: #e6e8ef; border: 1px solid #2c3747;
+            border-radius: 4px; padding: .5rem .6rem; font-size: .9rem; outline: none; min-width: 140px;
+        }
+        select:focus { border-color: #46ee9d; }
+
+        table { width: 100%; border-collapse: collapse; background: #11131c; border: 1px solid #2a2f42; border-radius: 10px; overflow: hidden; }
+        th, td { padding: .7rem 1rem; text-align: left; font-size: .88rem; }
+        thead th {
+            color: #7aa2ff; font-size: .72rem; text-transform: uppercase; letter-spacing: .08em;
+            border-bottom: 1px solid #2a2f42; cursor: pointer; user-select: none; white-space: nowrap;
+        }
+        thead th .arrow { color: #f5cd5d; font-size: .7rem; }
+        tbody tr { border-top: 1px solid #1c2030; cursor: pointer; transition: background .12s; }
+        tbody tr:hover { background: #181c2b; }
+        td.rank { font-family: monospace; color: #f5cd5d; }
+        td.time { font-family: monospace; }
+        .pill { font-size: .7rem; padding: .15rem .5rem; border-radius: 999px; background: #20283d; color: #9aa6c4; }
+        .pill.pvp  { background: #3a1f4a; color: #d8a6ff; }
+        .pill.pvai { background: #0c2a16; color: #8effb0; }
+        .empty { text-align: center; color: #7a82a6; padding: 2rem; }
+    </style>
+</head>
+<body>
+
+<header class="game-header">
+    <h1>Apex Platformer</h1>
+    <nav class="nav-row">
+        <a href="/home.html" class="back-link">Home</a>
+        <a href="/game.html" class="back-link">Play</a>
+        <a href="/achievements.html" class="back-link">Achievements</a>
+        <a href="/profile.html" class="back-link">Profile</a>
+        <a href="/" class="back-link">&larr; Menu</a>
+    </nav>
+</header>
+
+<main class="lb-page">
+    <h2 style="margin:0 0 1.2rem;">Global Leaderboard</h2>
+
+    <div class="filters">
+        <div class="filter-group">
+            <label for="levelFilter">Level</label>
+            <select id="levelFilter"><option value="all">All levels</option></select>
+        </div>
+        <div class="filter-group">
+            <label for="periodFilter">Time period</label>
+            <select id="periodFilter">
+                <option value="all">All time</option>
+                <option value="weekly">This week</option>
+                <option value="daily">Today</option>
+            </select>
+        </div>
+        <div class="filter-group">
+            <label for="countryFilter">Country</label>
+            <select id="countryFilter"><option value="all">All countries</option></select>
+        </div>
+    </div>
+
+    <table>
+        <thead>
+            <tr>
+                <th data-sort="rank">#</th>
+                <th data-sort="player">Player</th>
+                <th data-sort="level">Level</th>
+                <th data-sort="time">Time</th>
+                <th data-sort="deaths">Deaths</th>
+                <th data-sort="mode">Mode</th>
+                <th data-sort="date">Date</th>
+            </tr>
+        </thead>
+        <tbody id="lbBody">
+            <tr><td colspan="7" class="empty">Loading…</td></tr>
+        </tbody>
+    </table>
+</main>
+
+<script src="/platform-data.js"></script>
+<script src="/leaderboard.js"></script>
+</body>
+</html>

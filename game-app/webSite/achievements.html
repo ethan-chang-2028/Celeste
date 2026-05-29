@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Apex Platformer — Achievements</title>
+    <link rel="stylesheet" href="/game.css">
+    <style>
+        .nav-row { display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; }
+        .ach-page { max-width: 900px; margin: 0 auto; padding: 2rem 1.5rem 3rem; }
+
+        .ach-header {
+            display: flex; align-items: center; gap: 1.2rem; flex-wrap: wrap;
+            background: #11131c; border: 1px solid #2a2f42; border-radius: 10px;
+            padding: 1.2rem 1.6rem; margin-bottom: 1.6rem;
+        }
+        .avatar-badge {
+            width: 52px; height: 52px; border-radius: 50%;
+            background: linear-gradient(135deg, #5a2a80, #7aa2ff);
+            display: flex; align-items: center; justify-content: center; font-size: 1.5rem; flex-shrink: 0;
+        }
+        .ach-header h2 { margin: 0 0 3px; font-size: 1.2rem; }
+        .ach-header p  { margin: 0; font-size: .85rem; color: #7aa2ff; }
+        .overall { margin-left: auto; text-align: right; min-width: 160px; }
+        .overall .count { font-family: monospace; font-size: 1.5rem; color: #f5cd5d; }
+        .overall-bar { height: 6px; background: #20283d; border-radius: 999px; margin-top: 6px; overflow: hidden; }
+        .overall-bar span { display: block; height: 100%; background: #46ee9d; border-radius: 999px; }
+
+        .section-label {
+            font-size: .72rem; letter-spacing: .12em; text-transform: uppercase;
+            color: #7aa2ff; margin: 1.6rem 0 .9rem;
+        }
+
+        /* Badge gallery — only earned achievements */
+        .gallery { display: flex; gap: .8rem; flex-wrap: wrap; }
+        .badge {
+            width: 64px; height: 64px; border-radius: 12px; flex-shrink: 0;
+            background: radial-gradient(circle at 50% 35%, #2a3350, #11131c);
+            border: 1px solid #46ee9d; display: flex; align-items: center; justify-content: center;
+            font-size: 1.8rem; box-shadow: 0 0 12px rgba(70,238,157,.25);
+        }
+        .gallery-empty { color: #7a82a6; font-size: .85rem; }
+
+        /* Full achievement grid */
+        .ach-grid { display: grid; gap: 1rem; grid-template-columns: 1fr; }
+        @media (min-width: 600px) { .ach-grid { grid-template-columns: repeat(2, 1fr); } }
+        .ach {
+            display: flex; gap: 1rem; align-items: flex-start;
+            background: #11131c; border: 1px solid #2a2f42; border-radius: 10px; padding: 1rem 1.1rem;
+        }
+        .ach.locked { opacity: .62; }
+        .ach .ico {
+            font-size: 1.7rem; width: 46px; height: 46px; border-radius: 10px; flex-shrink: 0;
+            display: flex; align-items: center; justify-content: center; background: #0d1117; border: 1px solid #2a2f42;
+        }
+        .ach.unlocked .ico { border-color: #46ee9d; }
+        .ach-body { flex: 1; min-width: 0; }
+        .ach-name { margin: 0 0 2px; font-size: .95rem; display: flex; align-items: center; gap: .5rem; }
+        .ach-name .tick { color: #46ee9d; font-size: .8rem; }
+        .ach-desc { margin: 0 0 .6rem; font-size: .8rem; color: #8a93ad; line-height: 1.4; }
+        .pbar { height: 6px; background: #20283d; border-radius: 999px; overflow: hidden; }
+        .pbar span { display: block; height: 100%; background: #7aa2ff; border-radius: 999px; }
+        .ach.unlocked .pbar span { background: #46ee9d; }
+        .pmeta { font-size: .72rem; color: #7a82a6; margin-top: 4px; font-family: monospace; }
+    </style>
+</head>
+<body>
+
+<header class="game-header">
+    <h1>Apex Platformer</h1>
+    <nav class="nav-row">
+        <a href="/home.html" class="back-link">Home</a>
+        <a href="/game.html" class="back-link">Play</a>
+        <a href="/leaderboard.html" class="back-link">Leaderboard</a>
+        <a href="/profile.html" class="back-link">Profile</a>
+        <a href="/" class="back-link">&larr; Menu</a>
+    </nav>
+</header>
+
+<main class="ach-page">
+
+    <div class="ach-header">
+        <div class="avatar-badge" id="avatarBadge">?</div>
+        <div>
+            <h2 id="displayUsername">Loading…</h2>
+            <p id="displayRole">—</p>
+        </div>
+        <div class="overall">
+            <div class="count"><span id="earnedCount">0</span> / <span id="totalCount">0</span></div>
+            <div class="overall-bar"><span id="overallFill" style="width:0%"></span></div>
+        </div>
+    </div>
+
+    <p class="section-label">Badge Gallery</p>
+    <div class="gallery" id="gallery">
+        <span class="gallery-empty">No badges earned yet — play to unlock some!</span>
+    </div>
+
+    <p class="section-label">All Achievements</p>
+    <div class="ach-grid" id="achGrid"></div>
+
+</main>
+
+<script src="/platform-data.js"></script>
+<script src="/achievements.js"></script>
+</body>
+</html>

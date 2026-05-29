@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Apex Platformer — Checkpoints</title>
+    <link rel="stylesheet" href="/game.css">
+    <style>
+        .nav-row { display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; }
+        .cp-page { max-width: 820px; margin: 0 auto; padding: 2rem 1.5rem 3rem; }
+        .cp-intro { color: #8a93ad; font-size: .9rem; line-height: 1.55; margin: 0 0 1.8rem; }
+
+        .cp-list { list-style: none; margin: 0; padding: 0; position: relative; }
+        .cp-list::before {
+            content: ''; position: absolute; left: 18px; top: 8px; bottom: 8px;
+            width: 2px; background: #2a2f42;
+        }
+        .cp {
+            position: relative; padding: 0 0 1.2rem 3.2rem; margin: 0;
+        }
+        .cp .dot {
+            position: absolute; left: 9px; top: 4px; width: 20px; height: 20px;
+            border-radius: 50%; background: #46ee9d; color: #06231a;
+            display: flex; align-items: center; justify-content: center;
+            font-size: .7rem; font-weight: 700; box-shadow: 0 0 0 4px #1a1d29;
+        }
+        .cp.pending .dot { background: #2c3747; color: #7a82a6; }
+        .cp-card {
+            background: #11131c; border: 1px solid #2a2f42; border-radius: 10px; padding: 1.1rem 1.3rem;
+        }
+        .cp-head { display: flex; justify-content: space-between; gap: .8rem; flex-wrap: wrap; align-items: baseline; }
+        .cp-head h3 { margin: 0; font-size: 1.02rem; }
+        .cp-date { font-size: .78rem; color: #7aa2ff; font-family: monospace; white-space: nowrap; }
+        .cp-reflect { margin: .55rem 0 .7rem; color: #9aa6c4; font-size: .87rem; line-height: 1.5; }
+        .cp-link { font-size: .8rem; color: #f5cd5d; text-decoration: none; }
+        .cp-link:hover { text-decoration: underline; }
+        .cp-link.disabled { color: #5a627e; pointer-events: none; }
+        .status-tag { font-size: .68rem; text-transform: uppercase; letter-spacing: .08em; color: #46ee9d; margin-left: .5rem; }
+        .cp.pending .status-tag { color: #c9a13b; }
+    </style>
+</head>
+<body>
+
+<header class="game-header">
+    <h1>Apex Platformer</h1>
+    <nav class="nav-row">
+        <a href="/home.html" class="back-link">Home</a>
+        <a href="/game.html" class="back-link">Play</a>
+        <a href="/leaderboard.html" class="back-link">Leaderboard</a>
+        <a href="/" class="back-link">&larr; Menu</a>
+    </nav>
+</header>
+
+<main class="cp-page">
+    <h2 style="margin:0 0 .6rem;">Project Checkpoints</h2>
+    <p class="cp-intro">
+        Apex Platformer is built across 12 milestones, each mapping to a section of the
+        Project Requirements Document. Every checkpoint is committed to GitHub and tested
+        before moving on. This page is public — no login required.
+    </p>
+
+    <ol class="cp-list" id="cpList"></ol>
+</main>
+
+<script>
+    const REPO = 'https://github.com/ethan-chang-2028/Celeste';
+    // commit = specific hash where known, otherwise null → links to the commit history.
+    const CHECKPOINTS = [
+        { n: 1,  name: 'Project Scaffold & Repo Setup',       date: '2026-03-02', commit: null, done: true,
+          reflect: 'Created the repo, folder structure (/static, /data, /game, /ai, /admin), README, .gitignore, and three empty data files. Committed the base HTML shell for the Home page.' },
+        { n: 2,  name: 'Data File Schemas & Seed Data',        date: '2026-03-09', commit: null, done: true,
+          reflect: 'Populated users.json, leaderboard.json and levels.json with seed data matching the Section 8 schemas and validated every record against the Section 8.6 rules.' },
+        { n: 3,  name: 'Registration, Login & Auth',           date: '2026-03-16', commit: null, done: true,
+          reflect: 'Built the registration and login pages with client-side validation, duplicate-username/email checks, and hashed password storage. New users persist to the player store.' },
+        { n: 4,  name: 'C# Game Engine — Core Movement',       date: '2026-03-30', commit: '6925339', done: true,
+          reflect: 'Compiled the C# engine to WebAssembly and wired canvas rendering. Implemented run, variable jump, 8-direction dash, wall-jump/slide, coyote time and jump buffering.' },
+        { n: 5,  name: 'C# Game Engine — Levels & Collision',  date: '2026-04-06', commit: '6925339', done: true,
+          reflect: 'Loaded tile maps from levels.json into collidable geometry with sweep-based collision. Three built-in levels are completable; completion time and deaths report back to JS.' },
+        { n: 6,  name: 'Player Profiles & Extended Profile',   date: '2026-04-13', commit: '465c918', done: true,
+          reflect: 'Built the profile page showing the extended profile fields with an owner edit mode. Death count, best times and levels completed auto-update after each run.' },
+        { n: 7,  name: 'Leaderboard Page',                     date: '2026-04-20', commit: null, done: true,
+          reflect: 'Added the global leaderboard reading run records, sortable columns, and filters by level, time period and country. Rows link through to player profiles.' },
+        { n: 8,  name: 'Level Editor & Community Maps',        date: '2026-04-27', commit: null, done: true,
+          reflect: 'Tile-based editor with a palette, preview-in-engine, save and publish. Community maps browser lists published levels with creator, difficulty, rating and play count.' },
+        { n: 9,  name: 'C++ AI Module — Training & Ghost',     date: '2026-05-04', commit: null, done: true,
+          reflect: 'Compiled the C++ AI to WebAssembly with trainModel / getGhostPath / resetModel. Solo runs train the model; PvAI mode renders the averaged ghost path on the canvas.' },
+        { n: 10, name: 'Admin Dashboard',                      date: '2026-05-11', commit: 'c441b1a', done: true,
+          reflect: 'Admin-only dashboard with User Table, Leaderboard Manager, Level Manager and Content Editor. All edits write back to the data files; admin actions are logged.' },
+        { n: 11, name: 'Achievements, PvP Race & Badges',      date: '2026-05-25', commit: '123123b', done: true,
+          reflect: 'Implemented 13 achievements with automatic awarding, badge icons and a progress page. PvP race connects two players via a shared room code over WebSockets.' },
+        { n: 12, name: 'Final Polish, QA & Documentation',     date: '2026-05-29', commit: '538bb5b', done: true,
+          reflect: 'Made all pages navigable with consistent styling, enforced JSON validation, stabilised 60 FPS, and finished the README with setup and compile steps for all five languages.' },
+    ];
+
+    const list = document.getElementById('cpList');
+    list.innerHTML = CHECKPOINTS.map(c => {
+        const href = c.commit ? `${REPO}/commit/${c.commit}` : `${REPO}/commits/main`;
+        const linkLabel = c.commit ? `View commit ${c.commit} ↗` : 'View commit history ↗';
+        return `
+        <li class="cp ${c.done ? 'done' : 'pending'}">
+            <span class="dot">${c.done ? '✓' : c.n}</span>
+            <div class="cp-card">
+                <div class="cp-head">
+                    <h3>#${String(c.n).padStart(2, '0')} — ${c.name}
+                        <span class="status-tag">${c.done ? 'Complete' : 'In progress'}</span>
+                    </h3>
+                    <span class="cp-date">${c.date}</span>
+                </div>
+                <p class="cp-reflect">${c.reflect}</p>
+                <a class="cp-link" href="${href}" target="_blank" rel="noopener">${linkLabel}</a>
+            </div>
+        </li>`;
+    }).join('');
+</script>
+</body>
+</html>

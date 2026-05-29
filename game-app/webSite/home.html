@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Apex Platformer — Home</title>
+    <link rel="stylesheet" href="/game.css">
+    <style>
+        .nav-row { display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; }
+
+        .hero {
+            text-align: center;
+            padding: 3.5rem 1.5rem 2.5rem;
+            background: radial-gradient(circle at 50% -10%, #2a2150 0%, #11131c 60%);
+            border-bottom: 1px solid #2a2f42;
+        }
+        .hero .logo { font-size: 2.6rem; margin: 0 0 .4rem; color: #f5cd5d; letter-spacing: .06em; }
+        .hero .tag  { color: #9aa6c4; font-size: 1.05rem; max-width: 620px; margin: 0 auto 1.6rem; line-height: 1.5; }
+        .cta-row { display: flex; gap: .8rem; justify-content: center; flex-wrap: wrap; }
+        .btn {
+            display: inline-block; padding: .8rem 1.6rem; border-radius: 6px;
+            font-weight: 700; text-decoration: none; font-size: .95rem;
+            text-transform: uppercase; letter-spacing: .05em; transition: transform .1s, background .2s;
+        }
+        .btn:active { transform: scale(.97); }
+        .btn-play { background: #46ee9d; color: #06231a; }
+        .btn-play:hover { background: #6bf3b3; }
+        .btn-join { background: #0b57d0; color: #fff; }
+        .btn-join:hover { background: #1a69e5; }
+        .btn-ghost { background: transparent; border: 1px solid #2c3747; color: #cdd6e6; }
+        .btn-ghost:hover { border-color: #46ee9d; }
+
+        .wrap { max-width: 960px; margin: 0 auto; padding: 2.5rem 1.5rem 3.5rem; }
+        .section-label {
+            font-size: .72rem; letter-spacing: .12em; text-transform: uppercase;
+            color: #7aa2ff; margin: 0 0 1rem;
+        }
+
+        .feature-grid { display: grid; gap: 1rem; grid-template-columns: 1fr; margin-bottom: 2.8rem; }
+        @media (min-width: 640px) { .feature-grid { grid-template-columns: repeat(3, 1fr); } }
+        .feature {
+            background: #11131c; border: 1px solid #2a2f42; border-radius: 10px;
+            padding: 1.3rem; text-align: center;
+        }
+        .feature .ico { font-size: 1.9rem; }
+        .feature h3 { margin: .6rem 0 .4rem; font-size: 1rem; }
+        .feature p { margin: 0; color: #8a93ad; font-size: .85rem; line-height: 1.45; }
+
+        .shots { display: grid; gap: .8rem; grid-template-columns: repeat(3, 1fr); margin-bottom: 2.8rem; }
+        .shot {
+            aspect-ratio: 16/10; border-radius: 8px; border: 1px solid #2a2f42;
+            background: linear-gradient(135deg, #2d3450, #4a5a8a);
+            display: flex; align-items: flex-end; padding: .6rem; font-size: .75rem; color: #dfe5f5;
+        }
+        .shot:nth-child(2) { background: linear-gradient(135deg, #5a2a80, #b06bd8); }
+        .shot:nth-child(3) { background: linear-gradient(135deg, #0b1712, #1a5a30); }
+
+        table { width: 100%; border-collapse: collapse; background: #11131c; border: 1px solid #2a2f42; border-radius: 10px; overflow: hidden; }
+        th, td { padding: .7rem 1rem; text-align: left; font-size: .88rem; }
+        thead th { color: #7aa2ff; font-size: .72rem; text-transform: uppercase; letter-spacing: .08em; border-bottom: 1px solid #2a2f42; }
+        tbody tr { border-top: 1px solid #1c2030; }
+        tbody td.rank { font-family: monospace; color: #f5cd5d; }
+        tbody td.time { font-family: monospace; }
+        .more-link { display: inline-block; margin-top: .9rem; color: #7aa2ff; text-decoration: none; font-size: .85rem; }
+        .more-link:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+
+<header class="game-header">
+    <h1>Apex Platformer</h1>
+    <nav class="nav-row">
+        <a href="/game.html" class="back-link">Play</a>
+        <a href="/leaderboard.html" class="back-link">Leaderboard</a>
+        <a href="/achievements.html" class="back-link">Achievements</a>
+        <a href="/checkpoints.html" class="back-link">Checkpoints</a>
+        <a href="/" class="back-link" id="authLink">Login</a>
+    </nav>
+</header>
+
+<section class="hero">
+    <h2 class="logo">APEX PLATFORMER</h2>
+    <p class="tag">
+        A Celeste-inspired precision platformer in your browser. Dash, wall-jump
+        and clutch your way up the mountain — then race a C++ AI ghost that learns
+        from how you play.
+    </p>
+    <div class="cta-row">
+        <a href="/game.html" class="btn btn-play">▶ Quick Play</a>
+        <a href="/register.html" class="btn btn-join" id="registerCta">Create Account</a>
+        <a href="/" class="btn btn-ghost" id="loginCta">Log In</a>
+    </div>
+</section>
+
+<main class="wrap">
+
+    <p class="section-label">Why Apex</p>
+    <div class="feature-grid">
+        <div class="feature">
+            <div class="ico">🎮</div>
+            <h3>Tight Movement</h3>
+            <p>Variable jumps, 8-direction air dashes, wall-jumps, coyote time and jump buffering — all run in C# WebAssembly.</p>
+        </div>
+        <div class="feature">
+            <div class="ico">🧠</div>
+            <h3>AI Ghost Racer</h3>
+            <p>A C++ opponent learns the average of every recorded run and gets tougher to beat each session.</p>
+        </div>
+        <div class="feature">
+            <div class="ico">🛠️</div>
+            <h3>Build &amp; Share</h3>
+            <p>Design levels in the tile editor, publish them, and climb the global leaderboard against friends.</p>
+        </div>
+    </div>
+
+    <p class="section-label">Screenshots</p>
+    <div class="shots">
+        <div class="shot">Forsaken City</div>
+        <div class="shot">Crystal Caverns</div>
+        <div class="shot">PvAI Ghost Race</div>
+    </div>
+
+    <p class="section-label">Top Times</p>
+    <table>
+        <thead>
+            <tr><th>#</th><th>Player</th><th>Level</th><th>Time</th></tr>
+        </thead>
+        <tbody id="snapshotBody">
+            <tr><td colspan="4" style="color:#7a82a6">Loading…</td></tr>
+        </tbody>
+    </table>
+    <a href="/leaderboard.html" class="more-link">View full leaderboard →</a>
+
+</main>
+
+<script src="/platform-data.js"></script>
+<script src="/home.js"></script>
+</body>
+</html>
