@@ -77,6 +77,7 @@
         },
 
         disconnect() {
+            this._stopKeepalive();
             if (this._ws) {
                 try { this._send({ type: 'leave' }); } catch (_) {}
                 this._ws.close();
@@ -85,6 +86,23 @@
             this.status   = STATE.IDLE;
             this.opponent = null;
             this.roomCode = null;
+        },
+
+        // Heartbeat — keep the WebSocket (and a waiting host's room) alive.
+        // Proxies (incl. Replit's) drop idle WebSocket connections after ~30-60s;
+        // a host sitting in the lobby sends no traffic, so without this their
+        // room silently disappears and a friend's join fails with "not found".
+        _keepalive: null,
+        _startKeepalive() {
+            this._stopKeepalive();
+            this._keepalive = setInterval(() => {
+                if (this._ws && this._ws.readyState === WebSocket.OPEN) {
+                    this._send({ type: 'ping' });
+                }
+            }, 20000);
+        },
+        _stopKeepalive() {
+            if (this._keepalive) { clearInterval(this._keepalive); this._keepalive = null; }
         },
 
         // ── Called every game frame ───────────────────────────────────────────
@@ -127,7 +145,7 @@
 
             const ws = this._ws;
 
-            ws.onopen = () => { if (this._ws === ws) onOpen(); };
+            ws.onopen = () => { if (this._ws === ws) { this._startKeepalive(); onOpen(); } };
 
             ws.onmessage = (ev) => {
                 if (this._ws !== ws) return;  // ignore messages from a replaced socket
@@ -141,6 +159,7 @@
                 // a quick reconnect (Create → Join, retries) would tear the new
                 // connection down and the race would never start.
                 if (this._ws !== ws) return;
+                this._stopKeepalive();
                 if (this.status === STATE.MATCHED) {
                     this._notifyUI('Connection lost.', 'error');
                     if (this.onOpponentLeft) this.onOpponentLeft();
@@ -161,7 +180,9 @@
         },
 
         _handle(msg) {
-            if (msg.type === 'created') {
+            if (msg.type === 'pong') {
+                // heartbeat acknowledgement — nothing to do
+            } else if (msg.type === 'created') {
                 this.roomCode = msg.code;
                 this._notifyUI('Room ready! Code: ' + msg.code, 'waiting');
                 if (this.onRoomCreated) this.onRoomCreated(msg.code);

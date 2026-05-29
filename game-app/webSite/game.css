@@ -164,7 +164,22 @@ kbd {
     letter-spacing: 0.28em;
     font-weight: bold;
     color: #54ffaa;
+    cursor: pointer;
 }
+#room-code-text:hover { background: #123c20; }
+.btn-copy {
+    margin-left: 8px;
+    padding: 4px 10px;
+    border: 1px solid #2a6a3a;
+    border-radius: 5px;
+    background: #133;
+    color: #aaffcc;
+    font-family: monospace;
+    font-size: 0.72rem;
+    cursor: pointer;
+    vertical-align: middle;
+}
+.btn-copy:hover { background: #1a5a30; }
 .code-hint {
     display: block;
     font-size: 0.72rem;

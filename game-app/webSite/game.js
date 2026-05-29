@@ -1533,12 +1533,46 @@
         OnlineRace.create(name);
     };
 
+    // Copy the room code to the clipboard so it can't be mistyped.
+    window.copyRoomCode = function () {
+        const codeText = document.getElementById('room-code-text');
+        const code = codeText ? codeText.textContent.trim() : '';
+        if (!code || code === '------') return;
+        const done = () => {
+            const el = document.getElementById('online-status');
+            if (el) { el.textContent = `Copied room code ${code} — send it to your friend.`; el.className = 'online-status-matched'; }
+        };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(code).then(done).catch(done);
+        } else {
+            // Fallback for non-secure contexts
+            const ta = document.createElement('textarea');
+            ta.value = code; document.body.appendChild(ta); ta.select();
+            try { document.execCommand('copy'); } catch (_) {}
+            document.body.removeChild(ta);
+            done();
+        }
+    };
+
     // Join by room code (if code input has a value) or random queue
     window.joinOnlineRace = function () {
         const nameInput = document.getElementById('online-name-input');
         const codeInput = document.getElementById('online-code-input');
         const name = nameInput ? nameInput.value.trim() || 'Player' : 'Player';
         const code = codeInput ? codeInput.value.trim() : '';
+        // Guard against the most common confusion: you created a room and then
+        // tried to join your OWN code in the same browser. That can't work —
+        // PvP needs a second player on another device/tab. Tell them instead of
+        // tearing down their room and failing with "not found".
+        if (typeof OnlineRace !== 'undefined' && OnlineRace.roomCode
+                && code && code.toUpperCase() === OnlineRace.roomCode.toUpperCase()) {
+            const el = document.getElementById('online-status');
+            if (el) {
+                el.textContent = `That's your own room code (${OnlineRace.roomCode}). Open the game on another device or browser and enter it there to join you.`;
+                el.className = 'online-status-error';
+            }
+            return;
+        }
         if (!_onlineInit(name)) return;
         OnlineRace.join(name, code || null);
     };

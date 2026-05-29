@@ -67,8 +67,10 @@
 
                             <!-- Room code display (shown after host creates a room) -->
                             <div id="room-code-display">
-                                Room code: <strong id="room-code-text">------</strong>
-                                <span class="code-hint">Share this code with your friend — they enter it in the box above and click Join</span>
+                                Room code:
+                                <strong id="room-code-text" title="Click to copy" onclick="copyRoomCode()">------</strong>
+                                <button type="button" class="btn-copy" onclick="copyRoomCode()">Copy</button>
+                                <span class="code-hint">Share this code with your friend — they open the game on their own device, type it above, and click Join. (You can't join your own room in this tab.)</span>
                             </div>
 
                             <div id="online-status" class="online-status-info">Enter your name, then create a room or join one with a code.</div>

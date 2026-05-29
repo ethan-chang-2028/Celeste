@@ -483,6 +483,11 @@ function onConnection(ws) {
                 }
             }
 
+        } else if (msg.type === 'ping') {
+            // Heartbeat — reply so the client knows the link is alive and the
+            // connection (and any room this socket is hosting) stays open.
+            send(ws, { type: 'pong' });
+
         } else if (msg.type === 'leave') {
             cleanup(ws);
         }
