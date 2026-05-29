@@ -18,5 +18,22 @@
     "rank": null,
     "registeredAt": "2026-05-21T18:48:10.802Z",
     "lastLogin": null
+  },
+  {
+    "id": "u-0hhs34",
+    "username": "1",
+    "email": "1@1",
+    "password": "123456",
+    "country": "1",
+    "avatar": "Madeline",
+    "role": "player",
+    "bio": "",
+    "deathCount": 0,
+    "bestTimes": {},
+    "levelsCompleted": 0,
+    "achievements": [],
+    "rank": null,
+    "registeredAt": "2026-05-29T05:16:41.826Z",
+    "lastLogin": "2026-05-29T05:16:47.915Z"
   }
 ]
