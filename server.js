@@ -3,12 +3,16 @@ const http = require('http');
 const fs = require('fs').promises;
 const path = require('path');
 
-let WebSocketServer;
+// The "ws" package powers online 1v1 races. If it isn't installed we still
+// want the game itself to load and be playable — only online race is disabled.
+// (Previously a missing "ws" exited the whole process, so nothing served at
+// all and the browser could never even reach the page, let alone connect.)
+let WebSocketServer = null;
 try {
     ({ WebSocketServer } = require('ws'));
 } catch {
-    console.error('\n❌  Missing dependency "ws". Run:  npm install ws\n');
-    process.exit(1);
+    console.error('\n⚠️   Dependency "ws" not found — online race is DISABLED.');
+    console.error('     Install it to enable multiplayer:  pnpm install   (or: npm install ws)\n');
 }
 
 const PORT = process.env.PORT || 3000;
@@ -340,7 +344,7 @@ const server = http.createServer(async (req, res) => {
 //     { type:'opponentLeft' }
 //     { type:'error',       message }
 
-const wss = new WebSocketServer({ server });
+const wss = WebSocketServer ? new WebSocketServer({ server }) : null;
 
 // Prevent unhandled-error crashes: the ws library re-emits HTTP server errors
 // onto the WebSocketServer; without these handlers Node.js would throw and exit.
@@ -352,7 +356,7 @@ server.on('error', (err) => {
     }
     process.exit(1);
 });
-wss.on('error', (err) => {
+if (wss) wss.on('error', (err) => {
     console.error('WebSocket server error:', err);
 });
 
@@ -411,7 +415,7 @@ function cleanup(ws) {
     }
 }
 
-wss.on('connection', (ws) => {
+if (wss) wss.on('connection', (ws) => {
     ws._name      = 'Player';
     ws._roomId    = null;
     ws._namedCode = null;
@@ -487,5 +491,8 @@ wss.on('connection', (ws) => {
 
 // Start the server
 server.listen(PORT, () => {
-    console.log(`\n✅  Server running — open http://localhost:${PORT} in your browser\n`);
+    console.log(`\n✅  Server running — open http://localhost:${PORT} in your browser`);
+    console.log(wss
+        ? '🌐  Online race: ENABLED (WebSocket ready on the same port)\n'
+        : '⚠️   Online race: DISABLED — run "pnpm install" to enable it\n');
 });

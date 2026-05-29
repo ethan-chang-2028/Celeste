@@ -4,6 +4,11 @@ _Replace the heading above with the project's name, and this line with one sente
 
 ## Run & Operate
 
+- `node server.js` — run the web game + online-race server (port 3000, mapped to
+  external port 80). Serves `game-app/webSite/*` and the WebSocket used by 1v1
+  online races on the **same** origin/port.
+- Online race needs the `ws` package (`pnpm install`). Without it the game still
+  loads, but online race is disabled — the server prints a warning on startup.
 - `pnpm --filter @workspace/api-server run dev` — run the API server (port 5000)
 - `pnpm run typecheck` — full typecheck across all packages
 - `pnpm run build` — typecheck + build all packages
@@ -38,7 +43,12 @@ _Populate as you build — explicit user instructions worth remembering across s
 
 ## Gotchas
 
-_Populate as you build — sharp edges, "always run X before Y" rules._
+- Online race matchmaking + room state lives in-memory in `server.js` (Maps).
+  This requires a single, always-on instance. The `.replit` `deploymentTarget`
+  is `autoscale`, which can run multiple stateless instances and may not hold
+  persistent WebSocket connections — if online race "never connects" in a
+  *deployed* build, switch the deployment to a Reserved VM (single instance).
+  The dev Run button (one process on port 3000) works fine.
 
 ## Pointers
 

@@ -127,15 +127,20 @@
 
             const ws = this._ws;
 
-            ws.onopen = () => { onOpen(); };
+            ws.onopen = () => { if (this._ws === ws) onOpen(); };
 
             ws.onmessage = (ev) => {
+                if (this._ws !== ws) return;  // ignore messages from a replaced socket
                 let msg;
                 try { msg = JSON.parse(ev.data); } catch { return; }
                 this._handle(msg);
             };
 
             ws.onclose = () => {
+                // Ignore the close of an old socket we already replaced — otherwise
+                // a quick reconnect (Create → Join, retries) would tear the new
+                // connection down and the race would never start.
+                if (this._ws !== ws) return;
                 if (this.status === STATE.MATCHED) {
                     this._notifyUI('Connection lost.', 'error');
                     if (this.onOpponentLeft) this.onOpponentLeft();
@@ -145,6 +150,7 @@
             };
 
             ws.onerror = () => {
+                if (this._ws !== ws) return;
                 this._notifyUI(`Cannot connect — run: node server.js  (tried ${WS_URL})`, 'error');
             };
         },

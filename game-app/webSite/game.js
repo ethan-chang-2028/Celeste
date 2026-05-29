@@ -123,6 +123,18 @@
             reset() {},
             update(player, dt) {
                 if (!rectsOverlap(player, this)) return;
+                // Directional spikes (Celeste-style): a spike only kills when the
+                // player is moving INTO its pointing face. This lets you cling /
+                // climb / wall-slide alongside a spike — or brush its back or
+                // side — without the unfair "cling death". You still die landing
+                // on floor spikes (falling = Speed.Y > 0) or rising into ceiling
+                // spikes, exactly as before.
+                const vx = player.Speed ? player.Speed.X : 0;
+                const vy = player.Speed ? player.Speed.Y : 0;
+                if (dir === 'up'    && vy < 0)  return;  // climbing up past it
+                if (dir === 'down'  && vy > 0)  return;  // dropping away from a ceiling spike
+                if (dir === 'left'  && vx < 0)  return;  // moving away to the left
+                if (dir === 'right' && vx > 0)  return;  // moving away to the right
                 if (isDashing(player)) {
                     const d = player.DashDir;
                     if (dir === 'up'    && d.Y < -0.5) return;
@@ -480,6 +492,10 @@
     let roomNames   = [];
     let roomSkies   = [];
     let roomLabels  = [];
+    // Per-cell respawn points for grid (maze / mountain) levels, keyed "col,row".
+    // Lets the player respawn in the SAME room they died in, instead of being
+    // sent back to a single column/bottom spawn.
+    let roomSpawnMap = {};
     let GOAL        = { x: 0, y: 0, w: 12, h: 12, color: '#d4af37' };
     let currentSeed = 0;
     let entities    = [];
@@ -631,6 +647,7 @@
         roomSpawns = data.roomSpawns; roomNames   = data.roomNames;
         roomSkies  = data.roomSkies;  roomLabels  = data.roomLabels;
         GOAL = data.goal; currentSeed = seed;
+        roomSpawnMap = data._roomSpawnMap || {};
         entities = data.entities || [];
         const el = document.getElementById('map-seed');
         if (el) el.textContent = `Seed: ${seed}`;
@@ -654,6 +671,9 @@
     let worldMinY    = 0;    // world Y of the topmost row (can be negative)
     let respawnRoom  = 0;
     let furthestRoom = 0;
+    // Tracked respawn point for grid (maze / mountain) levels — updated every
+    // frame the player is alive so death returns them to the same room.
+    let respawnSpawn = null;
     let mazeRoomCol  = 0;
     let mazeRoomRow  = 1;
     let mazeRoomNameMap = {};
@@ -808,6 +828,11 @@
         aiProgressFrames = 0;
         aiStuckLastX  = player.x;
         aiStuckLastY  = player.y;
+
+        // Choose respawn coordinates. AI training keeps its original
+        // closest-spawn behaviour; a human in a grid (maze / mountain) level
+        // respawns in the SAME room they died in via the tracked respawnSpawn.
+        let rx, ry;
         if (aiEnabled && typeof NeuralAI !== 'undefined') {
             const si = closestRespawnIdx(player.x, player.y);
             NeuralAI.onDeath();
@@ -815,17 +840,22 @@
             respawnRoom = si;
             NeuralAI.reset(roomSpawns[si].x);
             updateAIBtn();
+            rx = roomSpawns[si].x; ry = roomSpawns[si].y;
+        } else if (currentMode === 'maze' && respawnSpawn) {
+            rx = respawnSpawn.x; ry = respawnSpawn.y;
+        } else {
+            rx = roomSpawns[respawnRoom].x; ry = roomSpawns[respawnRoom].y;
         }
-        player.reset(roomSpawns[respawnRoom].x, roomSpawns[respawnRoom].y);
+        player.reset(rx, ry);
         // player.reset() clears keysHeld; also reset key/door entity states
         if (currentMode === 'maze') {
             for (const e of entities) {
                 if (e.type === 'key' || e.type === 'keyDoor') e.reset();
                 if (mountainMode && (e.type === 'crumbleBlock' || e.type === 'fallingBlock')) e.reset();
             }
-            const sp = roomSpawns[respawnRoom];
-            mazeRoomCol = Math.max(0, Math.floor(sp.x / ROOM_W));
-            mazeRoomRow = Math.max(0, Math.floor((sp.y - worldMinY) / H));
+            const rows = Math.round(worldH / H);
+            mazeRoomCol = Math.max(0, Math.floor(rx / ROOM_W));
+            mazeRoomRow = Math.max(0, Math.min(rows - 1, Math.floor((ry - worldMinY) / H)));
             cameraX = mazeRoomCol * ROOM_W;
             cameraY = worldMinY + mazeRoomRow * H;
             RoomTrans.active = false; RoomTrans.timer = 0;
@@ -842,6 +872,7 @@
         aiStuckLastX  = roomSpawns[0] ? roomSpawns[0].x : 0;
         aiStuckLastY  = roomSpawns[0] ? roomSpawns[0].y : 0;
         respawnRoom = furthestRoom = 0;
+        respawnSpawn = roomSpawns[0] ? { x: roomSpawns[0].x, y: roomSpawns[0].y } : null;
         player.reset(roomSpawns[0].x, roomSpawns[0].y);
         runStart = performance.now();
         deaths = 0; won = false;
@@ -1966,6 +1997,20 @@
                 '3,1': 'MIRROR SUMMIT',
                 '3,2': 'THE CORE',
             },
+            // Per-cell respawn points (world coords), keyed by runtime "col,row"
+            // where row = floor((worldY - worldMinY) / H), worldMinY = -180.
+            // Each lands on a safe floor/ledge clear of that room's hazards.
+            _roomSpawnMap: {
+                '0,1': { x: 14,   y: 155 },  // A — Mirror Entrance
+                '0,0': { x: 20,   y: -25 },  // H — Hollow Heights
+                '1,1': { x: 340,  y: 155 },  // D — Mirrored Nexus
+                '1,0': { x: 340,  y: -25 },  // B — Ice Gallery
+                '2,0': { x: 654,  y: -25 },  // C — Crystal Cavern
+                '2,1': { x: 654,  y: 155 },  // E — Blade Corridor
+                '1,2': { x: 340,  y: 335 },  // F — Spike Descent (left floor, clear of spikes)
+                '3,1': { x: 974,  y: 155 },  // G — Mirror Summit
+                '3,2': { x: 1210, y: 307 },  // CORE — on the safe goal pedestal, not the lava
+            },
         };
     }
 
@@ -2133,6 +2178,17 @@
                 '0,2': 'ICE CORE',
                 '0,3': 'EMBER SHAFT',
                 '0,4': 'VOLCANIC ENTRY',
+            },
+            // Per-row respawn points (world coords), keyed by runtime "col,row"
+            // where row = floor(worldY / H). Each lands on the room's left
+            // floor section, so a death returns the player to that room rather
+            // than dropping them all the way back to the bottom entry.
+            _roomSpawnMap: {
+                '0,0': { x: 30, y: 155 },  // Mountain Heart (goal room)
+                '0,1': { x: 30, y: 335 },  // Storm Gates
+                '0,2': { x: 30, y: 515 },  // Ice Core
+                '0,3': { x: 30, y: 695 },  // Ember Shaft
+                '0,4': { x: 30, y: 875 },  // Volcanic Entry (start)
             },
             _skyByRow: true,
         };
@@ -2846,6 +2902,15 @@
         if (player.y <= DEATH_Y) {
             respawnRoom  = getRoomIdx();
             furthestRoom = Math.max(furthestRoom, respawnRoom);
+            // Grid levels: remember the spawn of the room the player is in now,
+            // so a death sends them back to this room (not column 0 / the bottom).
+            if (currentMode === 'maze' && player.y >= worldMinY) {
+                const rows = Math.round(worldH / H);
+                const col  = getRoomIdx();
+                const row  = Math.max(0, Math.min(rows - 1, Math.floor((player.y - worldMinY) / H)));
+                const sp   = roomSpawnMap[`${col},${row}`];
+                if (sp) respawnSpawn = sp;
+            }
         }
         // Refill dash when entering a new room (random mode) — prevents chimney/climb
         // rooms draining the dash before the player even starts the obstacle.
