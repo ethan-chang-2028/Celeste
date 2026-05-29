@@ -1,81 +1,76 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Leaderboard — Celeste</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="stylesheet" href="style.css" />
-  <style>
-    .lb-wrap { max-width: 1000px; margin: 0 auto; padding: 24px 16px 80px; }
-    .lb-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin: 20px 0 4px; }
-    .lb-tab {
-      background: #1a1a2e; color: #bbb; border: 1px solid #333;
-      padding: 9px 16px; border-radius: 10px; font-size: 14px; font-weight: 600;
-      cursor: pointer; transition: background 0.15s, color 0.15s, border-color 0.15s;
-    }
-    .lb-tab:hover { color: #eee; border-color: #555; }
-    .lb-tab.active { background: #2a2a4e; color: #fff; border-color: #7a6cff; }
-    .lb-subtitle { font-size: 13px; color: #888; margin: 8px 0 0; }
-    .lb-table { width: 100%; border-collapse: collapse; margin-top: 16px; }
-    .lb-table th, .lb-table td { padding: 12px 14px; text-align: left; }
-    .lb-table th {
-      font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px;
-      color: #888; border-bottom: 2px solid #333; cursor: pointer; user-select: none;
-    }
-    .lb-table th:hover { color: #bbb; }
-    .lb-table tbody tr { border-bottom: 1px solid #222; transition: background 0.15s; }
-    .lb-table tbody tr:hover { background: #16162a; }
-    .lb-rank { font-weight: 700; color: #ffd700; width: 50px; }
-    .lb-rank.silver { color: #c0c0c0; }
-    .lb-rank.bronze { color: #cd7f32; }
-    .lb-player { display: flex; align-items: center; gap: 10px; }
-    .lb-player img, .lb-player .avatar-fallback {
-      width: 32px; height: 32px; border-radius: 50%; object-fit: cover;
-      background: #333; display: inline-flex; align-items: center; justify-content: center;
-    }
-    .lb-flag { font-size: 18px; }
-    .lb-rate { font-weight: 700; color: #7affc0; }
-    .lb-record { color: #888; font-size: 13px; }
-    .lb-time { font-variant-numeric: tabular-nums; }
-    .lb-empty { text-align: center; padding: 60px 20px; color: #666; }
-    .lb-loading { text-align: center; padding: 60px 20px; color: #888; }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Apex Platformer — Leaderboard</title>
+    <link rel="stylesheet" href="/game.css">
+    <style>
+        .nav-row { display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; }
+        .lb-page { max-width: 920px; margin: 0 auto; padding: 2rem 1.5rem 3rem; }
+
+        .tabs { display: flex; flex-wrap: wrap; gap: .6rem; margin-bottom: 1.2rem; }
+        .tab {
+            background: #11131c; color: #9aa6c4; border: 1px solid #2a2f42;
+            border-radius: 8px; padding: .55rem 1rem; font-size: .9rem; font-weight: 600;
+            cursor: pointer; transition: background .12s, color .12s, border-color .12s;
+        }
+        .tab:hover { color: #e6e8ef; border-color: #3a4a66; }
+        .tab.active { background: #1b2741; color: #fff; border-color: #46ee9d; }
+        .subtitle { color: #7a82a6; font-size: .85rem; margin: 0 0 1rem; }
+
+        table { width: 100%; border-collapse: collapse; background: #11131c; border: 1px solid #2a2f42; border-radius: 10px; overflow: hidden; }
+        th, td { padding: .7rem 1rem; text-align: left; font-size: .88rem; }
+        thead th {
+            color: #7aa2ff; font-size: .72rem; text-transform: uppercase; letter-spacing: .08em;
+            border-bottom: 1px solid #2a2f42; cursor: pointer; user-select: none; white-space: nowrap;
+        }
+        thead th .arrow { color: #f5cd5d; font-size: .7rem; }
+        tbody tr { border-top: 1px solid #1c2030; transition: background .12s; }
+        tbody tr:hover { background: #181c2b; }
+        td.rank { font-family: monospace; color: #f5cd5d; }
+        td.rank.silver { color: #c0c0c0; }
+        td.rank.bronze { color: #cd7f32; }
+        td.time { font-family: monospace; }
+        td.rate { font-family: monospace; font-weight: 700; color: #46ee9d; }
+        td.record { color: #9aa6c4; font-size: .82rem; }
+        .country { color: #5a627e; font-size: .78rem; }
+        .empty { text-align: center; color: #7a82a6; padding: 2rem; }
+    </style>
 </head>
 <body>
-  <nav class="nav">
-    <a href="home.html" class="brand">🏔️ Celeste</a>
-    <div class="nav-links">
-      <a href="home.html">Home</a>
-      <a href="game.html">Play</a>
-      <a href="leaderboard.html" class="active">Leaderboard</a>
-      <a href="achievements.html">Achievements</a>
-      <a href="stats.html">Stats</a>
-      <a href="profile/profile.html">Profile</a>
+
+<header class="game-header">
+    <h1>Apex Platformer</h1>
+    <nav class="nav-row">
+        <a href="/home.html" class="back-link">Home</a>
+        <a href="/game.html" class="back-link">Play</a>
+        <a href="/achievements.html" class="back-link">Achievements</a>
+        <a href="/profile.html" class="back-link">Profile</a>
+        <a href="/" class="back-link">&larr; Menu</a>
+    </nav>
+</header>
+
+<main class="lb-page">
+    <h2 style="margin:0 0 1.2rem;">Global Leaderboard</h2>
+
+    <div class="tabs" id="tabs">
+        <button class="tab active" data-board="ai">🤖 AI Win Rate</button>
+        <button class="tab" data-board="pvp">⚔️ PvP Win Rate</button>
+        <button class="tab" data-board="maze">🪞 Mirror Temple</button>
+        <button class="tab" data-board="mountain">🔥 Heart of the Mountain</button>
     </div>
-  </nav>
+    <p class="subtitle" id="subtitle"></p>
 
-  <div class="lb-wrap">
-    <h1>🏆 Leaderboard</h1>
-    <p class="muted">Win rates and fastest completions. Click any column to sort.</p>
-
-    <div class="lb-tabs" id="lb-tabs">
-      <button class="lb-tab active" data-board="ai">🤖 AI Win Rate</button>
-      <button class="lb-tab" data-board="pvp">⚔️ PvP Win Rate</button>
-      <button class="lb-tab" data-board="maze">🪞 Mirror Temple</button>
-      <button class="lb-tab" data-board="mountain">🔥 Heart of the Mountain</button>
-    </div>
-    <p class="lb-subtitle" id="lb-subtitle"></p>
-
-    <table class="lb-table">
-      <thead id="lb-head"></thead>
-      <tbody id="lb-body">
-        <tr><td class="lb-loading">Loading leaderboard…</td></tr>
-      </tbody>
+    <table>
+        <thead id="lbHead"></thead>
+        <tbody id="lbBody">
+            <tr><td class="empty">Loading…</td></tr>
+        </tbody>
     </table>
-  </div>
+</main>
 
-  <script src="platform-data.js"></script>
-  <script src="leaderboard.js"></script>
+<script src="/platform-data.js"></script>
+<script src="/leaderboard.js"></script>
 </body>
 </html>
