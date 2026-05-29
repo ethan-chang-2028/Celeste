@@ -4,14 +4,7 @@ run = "node server.js"
 
 [deployment]
 router = "application"
-# Reserved VM = a single, always-on instance with a persistent disk. Accounts,
-# leaderboard runs, etc. written to game-app/Data/*.json survive restarts and are
-# shared by every device that visits the same deployed URL (so cross-device login
-# works). Autoscale ("autoscale") can run multiple short-lived instances that
-# don't share that file, which is why saved data could appear to vanish there.
-# NOTE: the deployment TYPE is also picked in Replit's Deployments pane — choose
-# "Reserved VM" there to match this. Reserved VM is a paid, always-on tier.
-deploymentTarget = "gce"
+deploymentTarget = "autoscale"
 run = ["node", "server.js"]
 
 [deployment.postBuild]
