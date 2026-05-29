@@ -151,7 +151,7 @@
 
             ws.onerror = () => {
                 if (this._ws !== ws) return;
-                this._notifyUI(`Cannot connect — run: node server.js  (tried ${WS_URL})`, 'error');
+                this._notifyUI('Couldn’t reach the race server. Make sure the game is open through the running server, then try again.', 'error');
             };
         },
 

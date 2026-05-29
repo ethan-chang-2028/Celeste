@@ -67,3 +67,241 @@ kbd {
     font-size: 0.85em;
     color: #e6e8ef;
 }
+
+/* ── Level-select menu / online lobby / AI panel ──────────────────────────
+   Restored to the stylesheet (previously inline in game.html). ── */
+/* ── Online lobby panel ── */
+.online-lobby {
+    margin-top: 1.2rem;
+    padding: 1rem 1.1rem 1.1rem;
+    border: 1px solid #244;
+    border-radius: 10px;
+    background: linear-gradient(180deg, #0b1712 0%, #0a120f 100%);
+    box-shadow: inset 0 1px 0 rgba(68,255,153,0.06);
+}
+.online-lobby h3 {
+    margin: 0 0 0.85rem;
+    font-size: 0.9rem;
+    color: #44ff99;
+    font-family: monospace;
+    letter-spacing: 0.08em;
+}
+.online-lobby-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-bottom: 8px;
+}
+.online-lobby-row input {
+    flex: 1;
+    min-width: 110px;
+    padding: 9px 11px;
+    border: 1px solid #2a5a3a;
+    border-radius: 6px;
+    background: #0d1a12;
+    color: #cfeede;
+    font-family: monospace;
+    font-size: 0.85rem;
+    transition: border-color 0.15s, box-shadow 0.15s;
+}
+.online-lobby-row input::placeholder { color: #5a8a6a; }
+.online-lobby-row input:focus {
+    outline: none;
+    border-color: #44ff99;
+    box-shadow: 0 0 0 2px rgba(68,255,153,0.18);
+}
+.online-lobby-row input.code-input {
+    flex: 0 0 96px;
+    text-align: center;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    font-weight: bold;
+}
+.online-lobby-row button {
+    background: #1a5a30;
+    color: #eafff2;
+    border: none;
+    border-radius: 6px;
+    padding: 9px 16px;
+    font-size: 0.85rem;
+    font-weight: bold;
+    cursor: pointer;
+    font-family: monospace;
+    white-space: nowrap;
+    transition: background 0.15s, transform 0.05s;
+}
+.online-lobby-row button:hover { background: #2a8a50; }
+.online-lobby-row button:active { transform: translateY(1px); }
+/* Distinct, harmonious button roles */
+.online-lobby-row button.btn-create { background: #1f4fb0; }
+.online-lobby-row button.btn-create:hover { background: #2f66d8; }
+.online-lobby-row button.btn-leave { background: #7a2222; }
+.online-lobby-row button.btn-leave:hover { background: #a83333; }
+.online-divider {
+    color: #5a6478;
+    font-size: 0.75rem;
+    padding: 0 2px;
+}
+#room-code-display {
+    display: none;
+    margin: 10px 0 4px;
+    padding: 10px 14px;
+    background: #051a0d;
+    border: 1px solid #1a5a2a;
+    border-radius: 8px;
+    font-family: monospace;
+    font-size: 0.82rem;
+    color: #aaffcc;
+}
+#room-code-text {
+    display: inline-block;
+    margin-left: 4px;
+    padding: 2px 10px;
+    border-radius: 5px;
+    background: #0c2a16;
+    font-size: 1.45rem;
+    letter-spacing: 0.28em;
+    font-weight: bold;
+    color: #54ffaa;
+}
+.code-hint {
+    display: block;
+    font-size: 0.72rem;
+    color: #6a9a7a;
+    margin-top: 6px;
+}
+#online-status {
+    margin-top: 10px;
+    padding: 7px 10px;
+    border-radius: 6px;
+    background: rgba(255,255,255,0.03);
+    font-family: monospace;
+    font-size: 0.8rem;
+    line-height: 1.35;
+    word-break: break-word;
+    min-height: 1.2em;
+}
+.online-status-waiting { color: #ffcc44; }
+.online-status-matched { color: #44ff99; }
+.online-status-error   { color: #ff6b5a; }
+.online-status-info    { color: #9aa6b2; }
+
+/* ── AI panel ── */
+.ai-panel {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 10px 0;
+    flex-wrap: wrap;
+}
+.ai-panel button {
+    background: #5a2a80;
+    color: #fff;
+    border: none;
+    border-radius: 5px;
+    padding: 8px 16px;
+    font-size: 0.85rem;
+    cursor: pointer;
+    font-family: monospace;
+}
+.ai-panel button:hover { background: #7a3aaa; }
+.ai-panel input[type="number"] {
+    width: 90px;
+    padding: 7px 8px;
+    border: 1px solid #555;
+    border-radius: 5px;
+    background: #1a1a2a;
+    color: #ddd;
+    font-family: monospace;
+    font-size: 0.85rem;
+}
+#map-seed {
+    font-family: monospace;
+    font-size: 0.8rem;
+    color: #aaa;
+}
+.ai-speed-btn {
+    padding: 7px 10px !important;
+    min-width: 36px;
+}
+
+/* ── Level-select menu ── */
+#level-menu {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 420px;
+    width: 100%;
+    padding: 2rem 1rem;
+}
+.menu-card {
+    background: #11131c;
+    border: 1px solid #2a2f42;
+    border-radius: 10px;
+    padding: 2.5rem 2.5rem 2rem;
+    max-width: 560px;
+    width: 100%;
+    text-align: center;
+}
+.menu-title {
+    margin: 0 0 6px;
+    font-size: 2.2rem;
+    letter-spacing: 0.25em;
+    color: #e8c87a;
+    font-family: monospace;
+}
+.menu-sub {
+    margin: 0 0 1.8rem;
+    color: #7aa2ff;
+    font-size: 0.9rem;
+}
+.menu-options {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    margin-bottom: 1.75rem;
+}
+.menu-option {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 5px;
+    padding: 1rem 1.25rem;
+    background: #1a1d29;
+    border: 1px solid #3a4258;
+    border-radius: 6px;
+    cursor: pointer;
+    text-align: left;
+    font-family: monospace;
+    transition: border-color 0.15s, background 0.15s;
+}
+.menu-option:hover { background: #1e2233; border-color: #5a6288; }
+.menu-option--gold { border-color: #7a6030; }
+.menu-option--gold:hover { border-color: #d4af37; }
+.menu-option__label {
+    font-size: 1rem;
+    color: #e6e8ef;
+    font-weight: bold;
+}
+.menu-option--gold .menu-option__label { color: #e8c87a; }
+.menu-option__desc {
+    font-size: 0.75rem;
+    color: #7aa2ff;
+    font-family: sans-serif;
+    line-height: 1.4;
+}
+.menu-keys {
+    font-size: 0.78rem;
+    color: #555;
+    font-family: monospace;
+    margin: 0;
+}
+/* game-ui is a flex column; display toggled by JS */
+#game-ui {
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+    width: 100%;
+}

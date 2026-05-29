@@ -11,8 +11,9 @@ let WebSocketServer = null;
 try {
     ({ WebSocketServer } = require('ws'));
 } catch {
-    console.error('\n⚠️   Dependency "ws" not found — online race is DISABLED.');
-    console.error('     Install it to enable multiplayer:  pnpm install   (or: npm install ws)\n');
+    // Not fatal: a built-in WebSocket fallback (below) keeps online race working.
+    console.error('\nℹ️   Dependency "ws" not found — using the built-in WebSocket server instead.');
+    console.error('    (Run "pnpm install" if you prefer the optimized "ws" implementation.)\n');
 }
 
 const PORT = process.env.PORT || 3000;
@@ -415,7 +416,9 @@ function cleanup(ws) {
     }
 }
 
-if (wss) wss.on('connection', (ws) => {
+if (wss) wss.on('connection', onConnection);
+
+function onConnection(ws) {
     ws._name      = 'Player';
     ws._roomId    = null;
     ws._namedCode = null;
@@ -487,12 +490,111 @@ if (wss) wss.on('connection', (ws) => {
 
     ws.on('close', () => cleanup(ws));
     ws.on('error', () => cleanup(ws));
-});
+}
+
+// ── Built-in WebSocket fallback ───────────────────────────────────────────────
+// If the "ws" package isn't installed, online race would be dead. To keep
+// multiplayer working with zero external dependencies, implement the small
+// slice of RFC 6455 this app needs (text frames, masking, ping/close) using
+// only Node's built-in http + crypto. Messages here are tiny JSON strings.
+if (!wss) {
+    const crypto = require('crypto');
+    const GUID = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11';
+
+    function encodeFrame(payload, opcode = 0x1) {
+        const len = payload.length;
+        let header;
+        if (len < 126) {
+            header = Buffer.from([0x80 | opcode, len]);
+        } else if (len < 65536) {
+            header = Buffer.alloc(4);
+            header[0] = 0x80 | opcode; header[1] = 126;
+            header.writeUInt16BE(len, 2);
+        } else {
+            header = Buffer.alloc(10);
+            header[0] = 0x80 | opcode; header[1] = 127;
+            header.writeUInt32BE(Math.floor(len / 2 ** 32), 2);
+            header.writeUInt32BE(len >>> 0, 6);
+        }
+        return Buffer.concat([header, payload]);
+    }
+
+    function parseFrame(buf) {
+        if (buf.length < 2) return null;
+        const fin = (buf[0] & 0x80) !== 0;
+        const opcode = buf[0] & 0x0f;
+        const masked = (buf[1] & 0x80) !== 0;
+        let len = buf[1] & 0x7f;
+        let offset = 2;
+        if (len === 126) {
+            if (buf.length < 4) return null;
+            len = buf.readUInt16BE(2); offset = 4;
+        } else if (len === 127) {
+            if (buf.length < 10) return null;
+            len = buf.readUInt32BE(2) * 2 ** 32 + buf.readUInt32BE(6); offset = 10;
+        }
+        let mask = null;
+        if (masked) {
+            if (buf.length < offset + 4) return null;
+            mask = buf.slice(offset, offset + 4); offset += 4;
+        }
+        if (buf.length < offset + len) return null;
+        let payload = Buffer.from(buf.slice(offset, offset + len));
+        if (masked) for (let i = 0; i < payload.length; i++) payload[i] ^= mask[i & 3];
+        return { fin, opcode, payload, totalLen: offset + len };
+    }
+
+    server.on('upgrade', (req, socket) => {
+        const key = req.headers['sec-websocket-key'];
+        if (!key) { socket.destroy(); return; }
+        const accept = crypto.createHash('sha1').update(key + GUID).digest('base64');
+        socket.write(
+            'HTTP/1.1 101 Switching Protocols\r\n' +
+            'Upgrade: websocket\r\n' +
+            'Connection: Upgrade\r\n' +
+            'Sec-WebSocket-Accept: ' + accept + '\r\n\r\n'
+        );
+
+        // Minimal ws-compatible connection object (send / on / readyState).
+        const conn = new (require('events').EventEmitter)();
+        conn.OPEN = 1;
+        conn.readyState = 1;
+        conn.send = (str) => {
+            if (conn.readyState !== 1) return;
+            try { socket.write(encodeFrame(Buffer.from(String(str), 'utf8'))); } catch { /* socket gone */ }
+        };
+        conn.close = () => { conn.readyState = 3; try { socket.end(); } catch {} };
+
+        let buf = Buffer.alloc(0);
+        let fragOpcode = 0, fragParts = [];
+        socket.on('data', (d) => {
+            buf = Buffer.concat([buf, d]);
+            let frame;
+            while ((frame = parseFrame(buf))) {
+                buf = buf.slice(frame.totalLen);
+                if (frame.opcode === 0x8) { conn.close(); conn.emit('close'); return; }
+                if (frame.opcode === 0x9) { try { socket.write(encodeFrame(frame.payload, 0xA)); } catch {} continue; }
+                if (frame.opcode === 0xA) continue;  // pong
+                if (frame.opcode === 0x0) fragParts.push(frame.payload);
+                else { fragOpcode = frame.opcode; fragParts = [frame.payload]; }
+                if (frame.fin) {
+                    const full = Buffer.concat(fragParts);
+                    fragParts = [];
+                    if (fragOpcode === 0x1 || fragOpcode === 0x2) conn.emit('message', full.toString('utf8'));
+                }
+            }
+        });
+        socket.on('close', () => { conn.readyState = 3; conn.emit('close'); });
+        socket.on('error', () => { conn.readyState = 3; conn.emit('error'); });
+
+        onConnection(conn);
+    });
+
+    console.log('🌐  Online race: using built-in WebSocket server (no "ws" package needed)');
+}
 
 // Start the server
 server.listen(PORT, () => {
     console.log(`\n✅  Server running — open http://localhost:${PORT} in your browser`);
-    console.log(wss
-        ? '🌐  Online race: ENABLED (WebSocket ready on the same port)\n'
-        : '⚠️   Online race: DISABLED — run "pnpm install" to enable it\n');
+    console.log(`🌐  Online race: ENABLED via ${wss ? 'the "ws" package' : 'the built-in WebSocket server'}\n`);
 });

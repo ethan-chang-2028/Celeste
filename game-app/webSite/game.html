@@ -58,11 +58,11 @@
 
                             <!-- Row 2: create or join -->
                             <div class="online-lobby-row">
-                                <button onclick="createOnlineRoom()" style="background:#1a3a7a;" title="Create a private room and share the code with a friend">+ Create Room</button>
+                                <button class="btn-create" onclick="createOnlineRoom()" title="Create a private room and share the code with a friend">+ Create Room</button>
                                 <span class="online-divider">or</span>
                                 <input id="online-code-input" class="code-input" type="text" placeholder="CODE" maxlength="6" title="Enter a 6-letter room code">
                                 <button onclick="joinOnlineRace()" title="Join by code above, or find a random opponent if blank">Join</button>
-                                <button onclick="leaveOnlineRace()" style="background:#5a1010;">Leave</button>
+                                <button class="btn-leave" onclick="leaveOnlineRace()">Leave</button>
                             </div>
 
                             <!-- Room code display (shown after host creates a room) -->
