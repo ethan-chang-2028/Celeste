@@ -1,8 +1,11 @@
 modules = ["nodejs-24"]
 
+run = "node server.js"
+
 [deployment]
 router = "application"
 deploymentTarget = "autoscale"
+run = ["node", "server.js"]
 
 [deployment.postBuild]
 args = ["pnpm", "store", "prune"]
@@ -10,6 +13,14 @@ env = { "CI" = "true" }
 
 [workflows]
 runButton = "Project"
+
+[[workflows.workflow]]
+name = "Project"
+mode = "sequential"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "node server.js"
 
 
 [agent]
