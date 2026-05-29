@@ -2772,10 +2772,12 @@
             ctx.fillStyle = 'rgba(0,0,0,0.58)';
             ctx.fillRect(0, 0, W, panelH);
 
-            // Timer (P1 clock)
+            // Timer (P1 clock) — show logged-in username when available
+            let p1Label = 'You';
+            try { const _u = JSON.parse(sessionStorage.getItem('loggedInUser') || 'null'); if (_u && _u.username) p1Label = _u.username; } catch (_) {}
             ctx.fillStyle = racePlayerDone ? '#d4af37' : '#aaddff';
             ctx.font = 'bold 8px monospace';
-            ctx.fillText(`P1 ⏱ ${elapsed.toFixed(2)}s`, 6, 9);
+            ctx.fillText(`${p1Label} ⏱ ${elapsed.toFixed(2)}s`, 6, 9);
 
             // P2 timer
             if (p2Active) {
@@ -2814,6 +2816,12 @@
                     ctx.fillStyle = '#ff6622';
                     const third = Math.ceil(barH / 3);
                     ctx.fillRect(bx, barBase + third, barW, third);
+                }
+                // Online opponent — top third (green)
+                if (onlineMode && OnlineRace.opponent && i <= OnlineRace.opponent.cp) {
+                    ctx.fillStyle = '#44ff99';
+                    const third = Math.ceil(barH / 3);
+                    ctx.fillRect(bx, barBase, barW, third);
                 }
                 // Checkpoint name
                 ctx.fillStyle = 'rgba(200,200,200,0.65)';
@@ -2861,7 +2869,9 @@
             if (anyDone) {
                 // Collect all times into a ranked list
                 const entries = [];
-                if (racePlayerDone) entries.push({ label: 'You', t: racePlayerTime, col: '#aaddff' });
+                let _p1Name = 'You';
+                try { const _u2 = JSON.parse(sessionStorage.getItem('loggedInUser') || 'null'); if (_u2 && _u2.username) _p1Name = _u2.username; } catch (_) {}
+                if (racePlayerDone) entries.push({ label: _p1Name, t: racePlayerTime, col: '#aaddff' });
                 if (p2Active && p2Done) entries.push({ label: 'P2', t: p2Time, col: '#dd44ff' });
                 if (!onlineMode && raceAIDone) entries.push({ label: 'AI', t: raceAITime, col: '#ff8844' });
                 if (opDone) entries.push({ label: onlineName||'Opponent', t: OnlineRace.opponent.time, col: '#44ff99' });
@@ -2870,8 +2880,7 @@
                 if (allDone) {
                     ctx.fillStyle = 'rgba(0,0,0,0.72)'; ctx.fillRect(35, 55, 250, 78);
                     const winnerCol = entries[0].col;
-                    const winnerTxt = entries[0].label === 'AI' ? 'AI WINS!'
-                                    : entries[0].label === 'P2' ? 'P2 WINS!' : 'YOU WIN!';
+                    const winnerTxt = `${entries[0].label} WINS!`;
                     ctx.fillStyle = winnerCol; ctx.font = 'bold 12px monospace';
                     ctx.fillText(winnerTxt, W / 2 - ctx.measureText(winnerTxt).width / 2, 73);
                     ctx.font = '7px monospace';
