@@ -956,7 +956,18 @@
         'KeyW','KeyA','KeyD','KeyS','KeyE',
     ]);
 
+    // True when the user is typing in a form field — game keys must not
+    // intercept those keystrokes (otherwise letters like A/C/D/E/R/S/W/X/Z,
+    // which are movement controls, can't be typed into the room-code or name
+    // inputs, and R would restart the race mid-typing).
+    function isTypingTarget(el) {
+        if (!el) return false;
+        const tag = el.tagName;
+        return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el.isContentEditable;
+    }
+
     window.addEventListener('keydown', (e) => {
+        if (isTypingTarget(e.target)) return;
         if (tracked.has(e.code)) {
             if (!keys[e.code]) pressed[e.code] = true;
             keys[e.code] = true;
@@ -967,7 +978,10 @@
             else restartRun();
         }
     });
-    window.addEventListener('keyup', (e) => { if (tracked.has(e.code)) keys[e.code] = false; });
+    window.addEventListener('keyup', (e) => {
+        if (isTypingTarget(e.target)) return;
+        if (tracked.has(e.code)) keys[e.code] = false;
+    });
 
     function readInputP2() {
         const moveX = (keys['KeyD'] ? 1 : 0) - (keys['KeyA'] ? 1 : 0);
