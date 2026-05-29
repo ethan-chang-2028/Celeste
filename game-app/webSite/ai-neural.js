@@ -202,22 +202,84 @@
         return baseW;
     }
 
+    // ── Scenario answer keys ──────────────────────────────────────────────────
+    // Each entry is an array of frames returned directly from compute(), bypassing
+    // the neural net for the duration of the escape.
+    //
+    // Climb-to-top: hold grab + moveY=-1 against the wall until the ceiling ray
+    // clears, then ClimbJump off the top.  We budget 60 frames (≈1 s at 60 fps)
+    // which is enough to scale any wall height used in the game.
+    function makeClimbFrames(wallDir) {
+        // wallDir: 1 = right wall (face right), -1 = left wall (face left)
+        const frames = [];
+        // Frames 0-54: grab the wall and pull upward
+        for (let i = 0; i < 55; i++)
+            frames.push({ moveX: wallDir, moveY: -1, jumpPressed: false, jumpHeld: false, dashPressed: false, grabHeld: true });
+        // Frames 55-57: ClimbJump off the top — release grab, press jump
+        for (let i = 0; i < 3; i++)
+            frames.push({ moveX: wallDir, moveY: 0, jumpPressed: i === 0, jumpHeld: true, dashPressed: false, grabHeld: false });
+        // Frames 58-59: drift away from wall
+        for (let i = 0; i < 2; i++)
+            frames.push({ moveX: wallDir, moveY: 0, jumpPressed: false, jumpHeld: false, dashPressed: false, grabHeld: false });
+        return frames;
+    }
+
+    // Fallback wall-jump escape (3 frames) when stamina is low or climb fails
+    function makeWallJumpFrames(wallDir) {
+        // wallDir: 1 = right wall → jump fires WallJump(-1), -1 = left wall → WallJump(1)
+        return [
+            { moveX: 0,         moveY: 0, jumpPressed: true,  jumpHeld: true,  dashPressed: false, grabHeld: false },
+            { moveX: -wallDir,  moveY: 0, jumpPressed: false, jumpHeld: true,  dashPressed: false, grabHeld: false },
+            { moveX: -wallDir,  moveY: 0, jumpPressed: false, jumpHeld: false, dashPressed: false, grabHeld: false },
+        ];
+    }
+
+    // Returns { wallDir, useClimb } if the sensor snapshot shows the AI pressed
+    // against a wall in mid-air, otherwise null.
+    // Ray indices: 0=right, 4=left, 2=up, 7=down.  inp[12]=onGround, inp[15]=hasDash.
+    function detectWallScenario(inputs) {
+        const rightClose = inputs[0] < 0.25;
+        const leftClose  = inputs[4] < 0.25;
+        const inAir      = inputs[12] < 0.5;
+        const hasDash    = inputs[15] > 0.5;
+        const ceilingFar = inputs[2] > 0.35;   // enough vertical room to climb
+
+        if (!inAir) return null;
+        if (rightClose) return { wallDir:  1, useClimb: ceilingFar && !hasDash };
+        if (leftClose)  return { wallDir: -1, useClimb: ceilingFar && !hasDash };
+        return null;
+    }
+
     // ── Stuck detection ───────────────────────────────────────────────────────
-    // Two-stage recovery:
+    // Three-stage recovery:
     //   Stage 1 (MEM_RESET_THRESH frames): wipe memory cells — fresh context, keep weights
-    //   Stage 2 (STUCK_THRESH frames):     mutate weights — last resort if memory reset didn't help
+    //   Stage 2 (SCENARIO_THRESH frames):  run scenario escape sequence if wall detected
+    //   Stage 3 (STUCK_THRESH frames):     mutate weights — last resort
+    const SCENARIO_THRESH = 80;   // frames stuck before trying scenario escape
+
     function makeStuckState(w) {
         return { weights: copyW(w), stuckFor: 0, lastFit: 0 };
     }
 
-    function stuckCheck(stuckSt, fitNow, globalBestW, memState) {
+    function stuckCheck(stuckSt, fitNow, globalBestW, memState, inputs, escapeRef) {
         if (fitNow > stuckSt.lastFit + 0.1) stuckSt.stuckFor = 0;
         else stuckSt.stuckFor++;
         stuckSt.lastFit = fitNow;
         // Stage 1: clear memory — agent gets a fresh context without losing learned weights
         if (stuckSt.stuckFor === HP.MEM_RESET_THRESH && memState) memState.fill(0);
+        // Stage 2: scenario escape — climb or wall-jump out of the stuck position
+        if (stuckSt.stuckFor === SCENARIO_THRESH && inputs && escapeRef) {
+            const sc = detectWallScenario(inputs);
+            if (sc) {
+                escapeRef.frames = sc.useClimb
+                    ? makeClimbFrames(sc.wallDir)
+                    : makeWallJumpFrames(sc.wallDir);
+                stuckSt.stuckFor = 0;
+                return stuckSt.weights;
+            }
+        }
         if (stuckSt.stuckFor < HP.STUCK_THRESH) return stuckSt.weights;
-        // Stage 2: mutate weights (only after much longer stagnation)
+        // Stage 3: mutate weights (only after much longer stagnation)
         const noise = Math.min(0.5, 0.1 + stuckSt.stuckFor / 500);
         let w = mutateWeights(stuckSt.weights, HP.STUCK_NOISE, noise);
         if (globalBestW && rand() < HP.STUCK_PULL_P) w = crossoverWeights(w, globalBestW, 0.3);
@@ -318,6 +380,7 @@
         _spawnY:            0,
         _goalY:             0,
         _minY:              0,
+        _escape:            null,   // { frames: [] } — active scenario escape sequence
 
         RAY_DIRS,
         RAY_LEN,
@@ -342,6 +405,7 @@
             this._memState   = makeMemState();
             this._maxX       = this._spawnX;
             this._prevJ      = false;
+            this._escape     = null;
             this._pool       = [];
             this._runStartMs = performance.now();
         },
@@ -359,6 +423,7 @@
             this._stuckSt = makeStuckState(this._weights);
             this._memState = makeMemState();
             this._prevJ   = false;
+            this._escape  = null;
             this._runStartMs = performance.now();
         },
 
@@ -372,11 +437,22 @@
 
             this._weights = adaptTick(this._weights, this._adaptSt, fitNow);
 
+            // Build sensors before stuckCheck so the scenario detector can read them
+            const inputs = buildSensorInputs(player, platforms, goal, hazards, this._memState);
+
+            if (!this._escape) this._escape = { frames: [] };
             this._stuckSt.weights = this._weights;
-            this._weights = stuckCheck(this._stuckSt, fitNow, this._globalBest, this._memState);
+            this._weights = stuckCheck(
+                this._stuckSt, fitNow, this._globalBest, this._memState,
+                inputs, this._escape
+            );
+
+            // If a scenario escape is active, play the next scripted frame
+            if (this._escape.frames.length > 0) {
+                return this._escape.frames.shift();
+            }
 
             const w      = activeWeights(this._weights, this._adaptSt);
-            const inputs = buildSensorInputs(player, platforms, goal, hazards, this._memState);
             const action = think(w, inputs, this._memState);  // updates _memState in-place
 
             const jumpPressed = action.J && !this._prevJ;
