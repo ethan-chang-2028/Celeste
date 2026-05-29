@@ -58,5 +58,17 @@
     "completedAt": "2026-05-29T06:37:05.589Z",
     "raceType": "solo",
     "savedAt": "2026-05-29T06:37:36.564Z"
+  },
+  {
+    "runId": "r-mpr28mfvo5o7",
+    "playerId": "u-0hhs34",
+    "playerName": "1",
+    "country": "1",
+    "levelId": "maze",
+    "completionTime": 48.68,
+    "deathCount": 1,
+    "completedAt": "2026-05-29T15:11:56.827Z",
+    "raceType": "solo",
+    "savedAt": "2026-05-29T15:11:55.419Z"
   }
 ]
