@@ -25,13 +25,9 @@
             <!-- ── Level-select menu (shown on load) ──────────────────────── -->
             <div id="level-menu">
                 <div class="menu-card">
-                    <h2 class="menu-title">CELESTE</h2>
+                    <h2 class="menu-title">Apex Platformer</h2>
                     <p class="menu-sub">Select a level to play</p>
                     <div class="menu-options">
-                        <button class="menu-option menu-option--gold" onclick="startGame('gauntlet')">
-                            <span class="menu-option__label">▶ The Gauntlet</span>
-                            <span class="menu-option__desc">6-room hand-crafted challenge — Entry Hall → Pillar Hall → Lock Room → Crush Zone → Fly Zone → Summit</span>
-                        </button>
                         <button class="menu-option menu-option--gold" onclick="startGame('maze')">
                             <span class="menu-option__label">🪞 Mirror Temple</span>
                             <span class="menu-option__desc">8-room ice maze — explore 4 columns × 3 rows · dead ends · hidden strawberries · find the summit</span>
@@ -79,13 +75,6 @@
 
                             <div id="online-status" class="online-status-info">Enter your name, then create a room or join one with a code.</div>
                         </div>
-                        <button class="menu-option" onclick="startGame('custom')">
-                            <span class="menu-option__label">▶ Custom Level</span>
-                            <span class="menu-option__desc">Play the map you built in the editor</span>
-                        </button>
-                        <a class="menu-option" href="/editor.html" style="text-decoration:none;">
-                            <span class="menu-option__label" style="color:#7aa2ff;">🔧 Map Editor</span>
-                            <span class="menu-option__desc">Draw platforms · place entities · save and play your own levels</span>
                         </a>
                     </div>
                     <p class="menu-keys">
@@ -112,7 +101,6 @@
                     <button class="random-only" style="display:none;" onclick="loadRandomSeed()">Load Seed</button>
                     <span   class="random-only" style="display:none;font-family:monospace;font-size:0.8rem;color:#aaa;" id="random-map-seed">Seed: —</span>
                     <button class="race-only" style="display:none;background:#7a3000;" onclick="raceGenerateMap()">&#127937; New Race</button>
-                    <button class="race-only" id="p2-toggle-btn" style="display:none;background:#5a1a7a;" onclick="toggle2Player()">&#128101; 2P: OFF</button>
                     <input  class="race-only" style="display:none;" type="number" id="race-seed-input" placeholder="Seed #" min="0" max="999999">
                     <button class="race-only" style="display:none;" onclick="loadRaceSeed()">Load Seed</button>
                     <span   class="race-only" style="display:none;font-family:monospace;font-size:0.8rem;color:#ffaa66;" id="race-seed-display">Seed: —</span>
