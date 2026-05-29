@@ -6,6 +6,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (user) {
         const authLink = document.getElementById('authLink');
         if (authLink) { authLink.textContent = user.username; authLink.href = '/profile.html'; }
+        const logoutLink = document.getElementById('logoutLink');
+        if (logoutLink) { logoutLink.style.display = ''; }
         const loginCta = document.getElementById('loginCta');
         if (loginCta) { loginCta.textContent = 'My Profile'; loginCta.href = '/profile.html'; }
         const reg = document.getElementById('registerCta');
