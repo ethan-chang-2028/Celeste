@@ -20,6 +20,46 @@
             color: #ffffff;
             min-height: 100vh;
             display: flex;
+            flex-direction: column;
+        }
+
+        /* Shared navigation header (consistent with the other pages) */
+        .game-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 1rem 2rem;
+            background: #11131c;
+            border-bottom: 1px solid #2a2f42;
+        }
+
+        .game-header h1 {
+            margin: 0;
+            font-size: 1.25rem;
+            letter-spacing: 0.05em;
+            color: #f5cd5d;
+            text-transform: uppercase;
+        }
+
+        .nav-row {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .back-link {
+            color: #7aa2ff;
+            text-decoration: none;
+            font-size: 0.9rem;
+        }
+
+        .back-link:hover { text-decoration: underline; }
+
+        /* Centres the login card in the remaining space below the header */
+        .login-wrap {
+            flex: 1;
+            display: flex;
             justify-content: center;
             align-items: center;
             padding: 20px;
@@ -173,6 +213,17 @@
         }
     </style>
 <body>
+    <header class="game-header">
+        <h1>Apex Platformer</h1>
+        <nav class="nav-row">
+            <a href="home.html" class="back-link">Home</a>
+            <a href="leaderboard.html" class="back-link">Leaderboard</a>
+            <a href="achievements.html" class="back-link">Achievements</a>
+            <a href="checkpoints.html" class="back-link">Checkpoints</a>
+        </nav>
+    </header>
+
+    <div class="login-wrap">
     <main class="login-container">
         <h1>Apex Platformer</h1>
         <h2>Welcome Back!</h2>
@@ -205,6 +256,7 @@
             <p>Track our progress on the <a href="checkpoints.html">checkpoints page</a></p>
         </div>
     </main>
+    </div>
 
     <script src="app.js"></script>
 </body>
