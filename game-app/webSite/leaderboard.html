@@ -9,18 +9,15 @@
         .nav-row { display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; }
         .lb-page { max-width: 920px; margin: 0 auto; padding: 2rem 1.5rem 3rem; }
 
-        .filters {
-            display: flex; gap: 1rem; flex-wrap: wrap; align-items: flex-end;
-            background: #11131c; border: 1px solid #2a2f42; border-radius: 10px;
-            padding: 1.1rem 1.3rem; margin-bottom: 1.4rem;
+        .tabs { display: flex; flex-wrap: wrap; gap: .6rem; margin-bottom: 1.2rem; }
+        .tab {
+            background: #11131c; color: #9aa6c4; border: 1px solid #2a2f42;
+            border-radius: 8px; padding: .55rem 1rem; font-size: .9rem; font-weight: 600;
+            cursor: pointer; transition: background .12s, color .12s, border-color .12s;
         }
-        .filter-group { display: flex; flex-direction: column; gap: .4rem; }
-        .filter-group label { font-size: .7rem; text-transform: uppercase; letter-spacing: .08em; color: #7aa2ff; }
-        select {
-            background: #0b0e14; color: #e6e8ef; border: 1px solid #2c3747;
-            border-radius: 4px; padding: .5rem .6rem; font-size: .9rem; outline: none; min-width: 140px;
-        }
-        select:focus { border-color: #46ee9d; }
+        .tab:hover { color: #e6e8ef; border-color: #3a4a66; }
+        .tab.active { background: #1b2741; color: #fff; border-color: #46ee9d; }
+        .subtitle { color: #7a82a6; font-size: .85rem; margin: 0 0 1rem; }
 
         table { width: 100%; border-collapse: collapse; background: #11131c; border: 1px solid #2a2f42; border-radius: 10px; overflow: hidden; }
         th, td { padding: .7rem 1rem; text-align: left; font-size: .88rem; }
@@ -29,13 +26,15 @@
             border-bottom: 1px solid #2a2f42; cursor: pointer; user-select: none; white-space: nowrap;
         }
         thead th .arrow { color: #f5cd5d; font-size: .7rem; }
-        tbody tr { border-top: 1px solid #1c2030; cursor: pointer; transition: background .12s; }
+        tbody tr { border-top: 1px solid #1c2030; transition: background .12s; }
         tbody tr:hover { background: #181c2b; }
         td.rank { font-family: monospace; color: #f5cd5d; }
+        td.rank.silver { color: #c0c0c0; }
+        td.rank.bronze { color: #cd7f32; }
         td.time { font-family: monospace; }
-        .pill { font-size: .7rem; padding: .15rem .5rem; border-radius: 999px; background: #20283d; color: #9aa6c4; }
-        .pill.pvp  { background: #3a1f4a; color: #d8a6ff; }
-        .pill.pvai { background: #0c2a16; color: #8effb0; }
+        td.rate { font-family: monospace; font-weight: 700; color: #46ee9d; }
+        td.record { color: #9aa6c4; font-size: .82rem; }
+        .country { color: #5a627e; font-size: .78rem; }
         .empty { text-align: center; color: #7a82a6; padding: 2rem; }
     </style>
 </head>
@@ -55,39 +54,18 @@
 <main class="lb-page">
     <h2 style="margin:0 0 1.2rem;">Global Leaderboard</h2>
 
-    <div class="filters">
-        <div class="filter-group">
-            <label for="levelFilter">Level</label>
-            <select id="levelFilter"><option value="all">All levels</option></select>
-        </div>
-        <div class="filter-group">
-            <label for="periodFilter">Time period</label>
-            <select id="periodFilter">
-                <option value="all">All time</option>
-                <option value="weekly">This week</option>
-                <option value="daily">Today</option>
-            </select>
-        </div>
-        <div class="filter-group">
-            <label for="countryFilter">Country</label>
-            <select id="countryFilter"><option value="all">All countries</option></select>
-        </div>
+    <div class="tabs" id="tabs">
+        <button class="tab active" data-board="ai">🤖 AI Win Rate</button>
+        <button class="tab" data-board="pvp">⚔️ PvP Win Rate</button>
+        <button class="tab" data-board="maze">🪞 Mirror Temple</button>
+        <button class="tab" data-board="mountain">🔥 Heart of the Mountain</button>
     </div>
+    <p class="subtitle" id="subtitle"></p>
 
     <table>
-        <thead>
-            <tr>
-                <th data-sort="rank">#</th>
-                <th data-sort="player">Player</th>
-                <th data-sort="level">Level</th>
-                <th data-sort="time">Time</th>
-                <th data-sort="deaths">Deaths</th>
-                <th data-sort="mode">Mode</th>
-                <th data-sort="date">Date</th>
-            </tr>
-        </thead>
+        <thead id="lbHead"></thead>
         <tbody id="lbBody">
-            <tr><td colspan="7" class="empty">Loading…</td></tr>
+            <tr><td class="empty">Loading…</td></tr>
         </tbody>
     </table>
 </main>
