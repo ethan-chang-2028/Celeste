@@ -1838,6 +1838,7 @@
             { x:90,  y:108, w:50,  h:8,   color:ICE3 }, // step 2
             { x:150, y:76,  w:46,  h:8,   color:ICE3 }, // step 3 (inside shaft)
         ], [
+            { type:'golden',  x:50,  y:124 }, // golden strawberry near spawn
             { type:'crystal', x:50,  y:127 },
             { type:'spring',  x:240, y:168, orientation:'floor' },
         ]);
@@ -2019,7 +2020,6 @@
             { type:'spike', x:188, y:168, size:8, dir:'up' },
             { type:'spike', x:208, y:168, size:8, dir:'up' },
             { type:'crystal', x:140, y:30 },  // dash refill near top
-            { type:'golden',  x:270, y:124 }, // golden strawberry on pedestal
         ]);
         roomSkiesOut.push(['#1a0404', '#3a0a08']);
 
@@ -2110,6 +2110,7 @@
             { type:'fireball',   x:160, y:96,  vx:55  },
             { type:'crystal',    x:205, y:32  },           // teach: crystals refill dash
             { type:'coreSwitch', x:80,  y:156 },           // switch on the floor — intro to mechanic
+            { type:'golden',     x:30,  y:124 },           // golden strawberry near spawn
             { type:'spike',      x:95,  y:168, size:8, dir:'up' },
             { type:'spike',      x:215, y:168, size:8, dir:'up' },
         ]);
@@ -2206,7 +2207,6 @@
             { type:'fireball', x:155, y:84,  vx:85  },
             { type:'fireball', x:80,  y:130, vx:68  },
             { type:'crystal',  x:120, y:52  },
-            { type:'golden',   x:262, y:18  },
         ]);
         roomSkiesOut.push(['#020408', '#050a14']); // near-black summit
 
