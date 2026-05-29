@@ -3,6 +3,7 @@ import cors from "cors";
 import pinoHttp from "pino-http";
 import path from "path";
 import router from "./routes";
+import gameDataRouter from "./game-data";
 import { logger } from "./lib/logger";
 
 const app: Express = express();
@@ -31,6 +32,11 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 app.use("/api", router);
+
+// JSON-file-backed game data endpoints (register / login / leaderboard / ai).
+// Mounted before the static + catch-all handlers so e.g. GET /leaderboard
+// returns JSON instead of falling through to index.html.
+app.use(gameDataRouter);
 
 const webSitePath = path.resolve(__dirname, "../../../game-app/webSite");
 const profilePath = path.resolve(__dirname, "../../../game-app/profile");

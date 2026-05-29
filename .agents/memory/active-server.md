@@ -12,3 +12,5 @@ The root **`server.js`** is NOT running. It contains its own HTTP + WebSocket im
 - PvP online race WebSocket "closed before connection established" — WS server existed only in server.js; had to port matchmaking into `artifacts/api-server/src/online-race.ts` and create the http server via `createServer(app)` in index.ts so WS + HTTP share one port.
 
 **How to apply:** When wiring up any new route, static file, or WebSocket behavior, edit the **api-server** artifact, not server.js. Client connects WS to same-origin `ws://host/`, which the proxy routes to api-server (path `/`).
+
+**Data endpoints (register/login/leaderboard/ai):** these existed only in server.js, so under the api-server runtime POST /register & /login 404'd and GET /leaderboard fell through to the catch-all (returned index.html, not JSON) — the cause of "registration data isn't saved." They are now ported into the api-server at `artifacts/api-server/src/game-data.ts` (mounted in `app.ts` before static + catch-all), JSON-file-backed against `game-app/Data/*.json`, matching server.js. Keep the two in sync.
