@@ -30,42 +30,7 @@
     const now = Date.now();
     const days = (n) => new Date(now - n * 86400000).toISOString();
     const SEED_RUNS = [
-        { runId: 'r-0001', playerId: 'u-nova003',  levelId: 'maze',     completionTime: 41.28, deathCount: 4,  completedAt: days(0),  raceType: 'solo' },
-        { runId: 'r-0002', playerId: 'u-4f2a9c',   levelId: 'maze',     completionTime: 47.10, deathCount: 7,  completedAt: days(1),  raceType: 'solo' },
-        { runId: 'r-0003', playerId: 'u-blink04',  levelId: 'maze',     completionTime: 53.94, deathCount: 12, completedAt: days(9),  raceType: 'solo' },
-        { runId: 'r-0004', playerId: 'u-megan002', levelId: 'maze',     completionTime: 58.62, deathCount: 9,  completedAt: days(3),  raceType: 'solo' },
-        { runId: 'r-0005', playerId: 'u-ethan001', levelId: 'maze',     completionTime: 66.41, deathCount: 18, completedAt: days(20), raceType: 'solo' },
-        { runId: 'r-0006', playerId: 'u-nova003',  levelId: 'mountain', completionTime: 72.83, deathCount: 11, completedAt: days(0),  raceType: 'solo' },
-        { runId: 'r-0007', playerId: 'u-blink04',  levelId: 'mountain', completionTime: 81.55, deathCount: 16, completedAt: days(2),  raceType: 'solo' },
-        { runId: 'r-0008', playerId: 'u-4f2a9c',   levelId: 'mountain', completionTime: 88.07, deathCount: 14, completedAt: days(6),  raceType: 'solo' },
-        { runId: 'r-0009', playerId: 'u-megan002', levelId: 'mountain', completionTime: 95.30, deathCount: 21, completedAt: days(12), raceType: 'solo' },
-        { runId: 'r-0010', playerId: 'u-ethan001', levelId: 'mountain', completionTime: 110.4, deathCount: 27, completedAt: days(5),  raceType: 'solo' },
-
-        // Player-vs-AI races — feed the AI win-rate board (`won` = beat the AI ghost).
-        { runId: 'a-0001', playerId: 'u-nova003',  levelId: 'maze',     completionTime: 44.10, deathCount: 5,  completedAt: days(0), raceType: 'pvai', won: true  },
-        { runId: 'a-0002', playerId: 'u-nova003',  levelId: 'mountain', completionTime: 75.20, deathCount: 8,  completedAt: days(1), raceType: 'pvai', won: true  },
-        { runId: 'a-0003', playerId: 'u-nova003',  levelId: 'maze',     completionTime: 49.00, deathCount: 6,  completedAt: days(2), raceType: 'pvai', won: true  },
-        { runId: 'a-0004', playerId: 'u-4f2a9c',   levelId: 'maze',     completionTime: 48.30, deathCount: 7,  completedAt: days(0), raceType: 'pvai', won: true  },
-        { runId: 'a-0005', playerId: 'u-4f2a9c',   levelId: 'mountain', completionTime: 90.10, deathCount: 13, completedAt: days(1), raceType: 'pvai', won: true  },
-        { runId: 'a-0006', playerId: 'u-4f2a9c',   levelId: 'maze',     completionTime: 51.70, deathCount: 9,  completedAt: days(3), raceType: 'pvai', won: false },
-        { runId: 'a-0007', playerId: 'u-megan002', levelId: 'maze',     completionTime: 57.40, deathCount: 10, completedAt: days(1), raceType: 'pvai', won: true  },
-        { runId: 'a-0008', playerId: 'u-megan002', levelId: 'mountain', completionTime: 99.80, deathCount: 19, completedAt: days(2), raceType: 'pvai', won: false },
-        { runId: 'a-0009', playerId: 'u-megan002', levelId: 'maze',     completionTime: 60.20, deathCount: 12, completedAt: days(4), raceType: 'pvai', won: false },
-        { runId: 'a-0010', playerId: 'u-blink04',  levelId: 'mountain', completionTime: 84.60, deathCount: 15, completedAt: days(1), raceType: 'pvai', won: true  },
-        { runId: 'a-0011', playerId: 'u-blink04',  levelId: 'maze',     completionTime: 56.10, deathCount: 11, completedAt: days(3), raceType: 'pvai', won: false },
-
-        // Player-vs-Player races — feed the PvP win-rate board.
-        { runId: 'p-0001', playerId: 'u-4f2a9c',   levelId: 'maze',     completionTime: 46.90, deathCount: 6,  completedAt: days(0), raceType: 'pvp', won: true  },
-        { runId: 'p-0002', playerId: 'u-4f2a9c',   levelId: 'mountain', completionTime: 87.30, deathCount: 12, completedAt: days(1), raceType: 'pvp', won: true  },
-        { runId: 'p-0003', playerId: 'u-4f2a9c',   levelId: 'maze',     completionTime: 50.40, deathCount: 8,  completedAt: days(2), raceType: 'pvp', won: true  },
-        { runId: 'p-0004', playerId: 'u-4f2a9c',   levelId: 'mountain', completionTime: 92.00, deathCount: 14, completedAt: days(4), raceType: 'pvp', won: false },
-        { runId: 'p-0005', playerId: 'u-ethan001', levelId: 'maze',     completionTime: 63.20, deathCount: 16, completedAt: days(0), raceType: 'pvp', won: true  },
-        { runId: 'p-0006', playerId: 'u-ethan001', levelId: 'mountain', completionTime: 108.0, deathCount: 24, completedAt: days(1), raceType: 'pvp', won: true  },
-        { runId: 'p-0007', playerId: 'u-ethan001', levelId: 'maze',     completionTime: 67.50, deathCount: 18, completedAt: days(3), raceType: 'pvp', won: false },
-        { runId: 'p-0008', playerId: 'u-nova003',  levelId: 'maze',     completionTime: 43.80, deathCount: 4,  completedAt: days(0), raceType: 'pvp', won: true  },
-        { runId: 'p-0009', playerId: 'u-nova003',  levelId: 'mountain', completionTime: 74.10, deathCount: 9,  completedAt: days(2), raceType: 'pvp', won: false },
-        { runId: 'p-0010', playerId: 'u-megan002', levelId: 'maze',     completionTime: 59.00, deathCount: 11, completedAt: days(1), raceType: 'pvp', won: false },
-        { runId: 'p-0011', playerId: 'u-megan002', levelId: 'mountain', completionTime: 97.20, deathCount: 20, completedAt: days(3), raceType: 'pvp', won: false },
+        // Leaderboard starts empty — real runs are added as players submit them.
     ];
 
     // ── Achievement definitions (Section 5.2 / Checkpoint 11) ─────────────────
