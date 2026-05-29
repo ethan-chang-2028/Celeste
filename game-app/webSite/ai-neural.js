@@ -235,18 +235,17 @@
     }
 
     // Returns { wallDir, useClimb } if the sensor snapshot shows the AI pressed
-    // against a wall in mid-air, otherwise null.
+    // against a wall (on the ground OR in the air), otherwise null.
     // Ray indices: 0=right, 4=left, 2=up, 7=down.  inp[12]=onGround, inp[15]=hasDash.
     function detectWallScenario(inputs) {
         const rightClose = inputs[0] < 0.25;
         const leftClose  = inputs[4] < 0.25;
-        const inAir      = inputs[12] < 0.5;
-        const hasDash    = inputs[15] > 0.5;
         const ceilingFar = inputs[2] > 0.35;   // enough vertical room to climb
 
-        if (!inAir) return null;
-        if (rightClose) return { wallDir:  1, useClimb: ceilingFar && !hasDash };
-        if (leftClose)  return { wallDir: -1, useClimb: ceilingFar && !hasDash };
+        // Trigger whether on ground or in air — the AI commonly runs into a wall
+        // from the ground and needs to climb over it.
+        if (rightClose) return { wallDir:  1, useClimb: ceilingFar };
+        if (leftClose)  return { wallDir: -1, useClimb: ceilingFar };
         return null;
     }
 
