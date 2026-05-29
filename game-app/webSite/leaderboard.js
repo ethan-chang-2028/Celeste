@@ -1,142 +1,192 @@
-document.addEventListener('DOMContentLoaded', async () => {
-    const D = window.ApexData;
-    const body = document.getElementById('lbBody');
+// ---------------------------------------------------------------------------
+// leaderboard.js — four boards: AI win rate, PvP win rate, and per-map run
+// records (Mirror Temple, Heart of the Mountain) ranked by time & deaths.
+// ---------------------------------------------------------------------------
 
-    const levelSel   = document.getElementById('levelFilter');
-    const periodSel  = document.getElementById('periodFilter');
-    const countrySel = document.getElementById('countryFilter');
+(function () {
+  'use strict';
 
-    let runs = [];
-    let sortKey = 'time';   // default: best completion time ascending
-    let sortDir = 'asc';
+  const tbody     = document.getElementById('lb-body');
+  const thead     = document.getElementById('lb-head');
+  const tabsWrap  = document.getElementById('lb-tabs');
+  const subtitle  = document.getElementById('lb-subtitle');
 
-    try {
-        runs = await D.fetchRuns();
-    } catch (_) {
-        body.innerHTML = '<tr><td colspan="7" class="empty">Could not load runs.</td></tr>';
-        return;
+  let allRecords = [];
+  let activeBoard = 'ai';
+  let sortKey = null;
+  let sortDir = 1; // 1 = asc, -1 = desc
+
+  // -- Cell renderers ------------------------------------------------------
+  function rankCell(row, i) {
+    const cls = i === 1 ? 'silver' : i === 2 ? 'bronze' : '';
+    return `<td class="lb-rank ${cls}">${i + 1}</td>`;
+  }
+
+  function playerCell(row) {
+    const flag = row.country ? countryFlag(row.country) : '';
+    const avatar = row.avatarUrl
+      ? `<img src="${row.avatarUrl}" alt="" onerror="this.style.display='none'">`
+      : `<span class="avatar-fallback">${(row.playerName || '?')[0].toUpperCase()}</span>`;
+    return `<td><div class="lb-player">${avatar}<span>${row.playerName || 'Anonymous'}</span> <span class="lb-flag">${flag}</span></div></td>`;
+  }
+
+  // -- Board definitions ---------------------------------------------------
+  const BOARDS = {
+    ai: {
+      subtitle: 'Win rate against the C++ AI opponent across Player-vs-AI races.',
+      defaultSort: 'winRate',
+      data: () => aggregateWinRates('pvai'),
+      columns: [
+        { key: 'rank',    label: '#',        cell: rankCell },
+        { key: 'player',  label: 'Player',   cell: playerCell, value: r => r.playerName || '' },
+        { key: 'winRate', label: 'Win Rate', cell: r => `<td class="lb-rate">${fmtPct(r.winRate)}</td>`, value: r => r.winRate, defaultDir: -1 },
+        { key: 'record',  label: 'Record',   cell: r => `<td class="lb-record">${r.wins}W – ${r.losses}L</td>`, value: r => r.wins, defaultDir: -1 },
+      ],
+    },
+    pvp: {
+      subtitle: 'Win rate in online Player-vs-Player races.',
+      defaultSort: 'winRate',
+      data: () => aggregateWinRates('pvp'),
+      columns: [
+        { key: 'rank',    label: '#',        cell: rankCell },
+        { key: 'player',  label: 'Player',   cell: playerCell, value: r => r.playerName || '' },
+        { key: 'winRate', label: 'Win Rate', cell: r => `<td class="lb-rate">${fmtPct(r.winRate)}</td>`, value: r => r.winRate, defaultDir: -1 },
+        { key: 'record',  label: 'Record',   cell: r => `<td class="lb-record">${r.wins}W – ${r.losses}L</td>`, value: r => r.wins, defaultDir: -1 },
+      ],
+    },
+    maze: {
+      subtitle: 'Fastest Mirror Temple completions — lowest time wins, deaths break ties.',
+      defaultSort: 'time',
+      data: () => runsForLevel('maze'),
+      columns: [
+        { key: 'rank',   label: '#',      cell: rankCell },
+        { key: 'player', label: 'Player', cell: playerCell, value: r => r.playerName || '' },
+        { key: 'time',   label: 'Time',   cell: r => `<td class="lb-time">${fmtTime(r.completionTime)}</td>`, value: r => r.completionTime },
+        { key: 'deaths', label: 'Deaths', cell: r => `<td>${r.deathCount}</td>`, value: r => r.deathCount },
+      ],
+    },
+    mountain: {
+      subtitle: 'Fastest Heart of the Mountain completions — lowest time wins, deaths break ties.',
+      defaultSort: 'time',
+      data: () => runsForLevel('mountain'),
+      columns: [
+        { key: 'rank',   label: '#',      cell: rankCell },
+        { key: 'player', label: 'Player', cell: playerCell, value: r => r.playerName || '' },
+        { key: 'time',   label: 'Time',   cell: r => `<td class="lb-time">${fmtTime(r.completionTime)}</td>`, value: r => r.completionTime },
+        { key: 'deaths', label: 'Deaths', cell: r => `<td>${r.deathCount}</td>`, value: r => r.deathCount },
+      ],
+    },
+  };
+
+  // -- Aggregation ---------------------------------------------------------
+  function aggregateWinRates(raceType) {
+    const byPlayer = new Map();
+    for (const r of allRecords) {
+      if (r.raceType !== raceType) continue;
+      const key = r.playerName || 'Anonymous';
+      let e = byPlayer.get(key);
+      if (!e) {
+        e = { playerName: key, country: r.country, avatarUrl: r.avatarUrl, wins: 0, total: 0 };
+        byPlayer.set(key, e);
+      }
+      e.total += 1;
+      if (r.won) e.wins += 1;
     }
+    return [...byPlayer.values()].map(e => ({
+      ...e,
+      losses: e.total - e.wins,
+      winRate: e.total ? e.wins / e.total : 0,
+    }));
+  }
 
-    // ── Build a denormalised view joining player info ─────────────────────────
-    const rows = runs.map(r => {
-        const id = D.runIdentity(r);
-        return {
-            ...r,
-            username: id.username,
-            country: id.country || '—',
-            avatar: id.avatar,
-            levelLabel: D.levelName(r.levelId),
-            date: new Date(r.completedAt),
-        };
+  function runsForLevel(levelId) {
+    return allRecords.filter(r => r.levelId === levelId && r.completionTime != null);
+  }
+
+  // -- Render --------------------------------------------------------------
+  function render() {
+    const board = BOARDS[activeBoard];
+    const cols = board.columns;
+    subtitle.textContent = board.subtitle;
+
+    // Header
+    thead.innerHTML = '<tr>' + cols.map(c =>
+      `<th data-sort="${c.key}">${c.label}</th>`).join('') + '</tr>';
+    thead.querySelectorAll('th').forEach(th => {
+      th.addEventListener('click', () => {
+        const key = th.dataset.sort;
+        const col = cols.find(c => c.key === key);
+        if (!col || !col.value) return; // rank column is not sortable
+        if (key === sortKey) sortDir *= -1;
+        else { sortKey = key; sortDir = col.defaultDir || 1; }
+        render();
+      });
     });
 
-    // ── Populate filter dropdowns ─────────────────────────────────────────────
-    D.LEVELS.forEach(l => {
-        const o = document.createElement('option');
-        o.value = l.id; o.textContent = l.name;
-        levelSel.appendChild(o);
-    });
-    [...new Set(rows.map(r => r.country).filter(c => c && c !== '—'))].sort().forEach(c => {
-        const o = document.createElement('option');
-        o.value = c; o.textContent = c;
-        countrySel.appendChild(o);
-    });
-
-    // ── Filtering ─────────────────────────────────────────────────────────────
-    function withinPeriod(date, period) {
-        if (period === 'all') return true;
-        const ageDays = (Date.now() - date.getTime()) / 86400000;
-        if (period === 'weekly') return ageDays <= 7;
-        if (period === 'daily')  return ageDays <= 1;
-        return true;
+    // Rows
+    let rows = board.data();
+    const sortCol = cols.find(c => c.key === sortKey);
+    if (sortCol && sortCol.value) {
+      rows = rows.slice().sort((a, b) => {
+        const av = sortCol.value(a), bv = sortCol.value(b);
+        if (typeof av === 'string') return av.localeCompare(bv) * sortDir;
+        return (av - bv) * sortDir;
+      });
     }
 
-    function applyFilters() {
-        const lvl = levelSel.value, per = periodSel.value, cty = countrySel.value;
-        return rows.filter(r =>
-            (lvl === 'all' || r.levelId === lvl) &&
-            (cty === 'all' || r.country === cty) &&
-            withinPeriod(r.date, per)
-        );
+    if (rows.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="${cols.length}" class="lb-empty">No results yet. Be the first!</td></tr>`;
+      return;
     }
 
-    // ── Sorting ───────────────────────────────────────────────────────────────
-    function sortRows(list) {
-        const dir = sortDir === 'asc' ? 1 : -1;
-        const getters = {
-            rank:   r => r.completionTime,         // rank tracks time
-            player: r => r.username.toLowerCase(),
-            level:  r => r.levelLabel.toLowerCase(),
-            time:   r => r.completionTime,
-            deaths: r => r.deathCount,
-            mode:   r => r.raceType,
-            date:   r => r.date.getTime(),
-        };
-        const g = getters[sortKey] || getters.time;
-        return list.slice().sort((a, b) => {
-            const av = g(a), bv = g(b);
-            if (av < bv) return -1 * dir;
-            if (av > bv) return 1 * dir;
-            return 0;
-        });
-    }
+    tbody.innerHTML = rows.map((row, i) =>
+      '<tr>' + cols.map(c => c.cell(row, i)).join('') + '</tr>').join('');
+  }
 
-    // ── Render ────────────────────────────────────────────────────────────────
-    function render() {
-        const list = sortRows(applyFilters());
+  function selectBoard(board) {
+    if (!BOARDS[board]) return;
+    activeBoard = board;
+    sortKey = BOARDS[board].defaultSort;
+    const col = BOARDS[board].columns.find(c => c.key === sortKey);
+    sortDir = col && col.defaultDir ? col.defaultDir : 1;
 
-        // Update header arrows
-        document.querySelectorAll('thead th').forEach(th => {
-            const k = th.dataset.sort;
-            const base = th.textContent.replace(/[▲▼]\s*$/, '').trim();
-            th.innerHTML = k === sortKey
-                ? `${base} <span class="arrow">${sortDir === 'asc' ? '▲' : '▼'}</span>`
-                : base;
-        });
-
-        if (!list.length) {
-            body.innerHTML = '<tr><td colspan="7" class="empty">No runs match these filters.</td></tr>';
-            return;
-        }
-
-        body.innerHTML = list.map((r, i) => {
-            const modeClass = r.raceType === 'pvp' ? 'pvp' : r.raceType === 'pvai' ? 'pvai' : '';
-            return `<tr data-uid="${escapeAttr(r.playerId)}">
-                <td class="rank">${i + 1}</td>
-                <td>${D.avatarEmoji(r.avatar)} ${escapeHtml(r.username)} <span style="color:#5a627e;font-size:.78rem;">${escapeHtml(r.country)}</span></td>
-                <td>${escapeHtml(r.levelLabel)}</td>
-                <td class="time">${r.completionTime.toFixed(2)}s</td>
-                <td>${r.deathCount}</td>
-                <td><span class="pill ${modeClass}">${r.raceType.toUpperCase()}</span></td>
-                <td>${r.date.toLocaleDateString()}</td>
-            </tr>`;
-        }).join('');
-
-        // Clickable rows → that player's profile
-        body.querySelectorAll('tr[data-uid]').forEach(tr => {
-            tr.addEventListener('click', () => {
-                window.location.href = `/profile.html?user=${encodeURIComponent(tr.dataset.uid)}`;
-            });
-        });
-    }
-
-    // ── Wire up controls ──────────────────────────────────────────────────────
-    [levelSel, periodSel, countrySel].forEach(s => s.addEventListener('change', render));
-    document.querySelectorAll('thead th').forEach(th => {
-        th.addEventListener('click', () => {
-            const k = th.dataset.sort;
-            if (sortKey === k) { sortDir = sortDir === 'asc' ? 'desc' : 'asc'; }
-            else { sortKey = k; sortDir = (k === 'player' || k === 'level' || k === 'mode') ? 'asc' : 'asc'; }
-            render();
-        });
-    });
-
+    tabsWrap.querySelectorAll('.lb-tab').forEach(t =>
+      t.classList.toggle('active', t.dataset.board === board));
     render();
+  }
 
-    function escapeHtml(s) {
-        return String(s).replace(/[&<>"']/g, c => (
-            { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
-        ));
+  // -- Helpers -------------------------------------------------------------
+  function fmtPct(rate) {
+    return `${(rate * 100).toFixed(1)}%`;
+  }
+
+  function fmtTime(s) {
+    if (s == null) return '—';
+    const m = Math.floor(s / 60);
+    const sec = (s % 60).toFixed(2).padStart(5, '0');
+    return m > 0 ? `${m}:${sec}` : `${sec}s`;
+  }
+
+  function countryFlag(c) {
+    // tiny ISO-2 -> regional indicator conversion
+    if (!c || c.length !== 2) return '';
+    return String.fromCodePoint(...[...c.toUpperCase()].map(ch => 0x1f1a5 + ch.charCodeAt(0)));
+  }
+
+  // -- Init ----------------------------------------------------------------
+  tabsWrap.querySelectorAll('.lb-tab').forEach(t =>
+    t.addEventListener('click', () => selectBoard(t.dataset.board)));
+
+  async function loadLeaderboard() {
+    try {
+      allRecords = await Platform.getLeaderboard();
+    } catch (err) {
+      console.error('Failed to load leaderboard:', err);
+      tbody.innerHTML = '<tr><td class="lb-empty">Failed to load leaderboard data.</td></tr>';
+      return;
     }
-    function escapeAttr(s) { return escapeHtml(s); }
-});
+    selectBoard(activeBoard);
+  }
+
+  loadLeaderboard();
+})();
