@@ -19,12 +19,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // ── Build a denormalised view joining player info ─────────────────────────
     const rows = runs.map(r => {
-        const u = D.resolveUser(r.playerId);
+        const id = D.runIdentity(r);
         return {
             ...r,
-            username: u.username,
-            country: u.country || '—',
-            avatar: u.avatar,
+            username: id.username,
+            country: id.country || '—',
+            avatar: id.avatar,
             levelLabel: D.levelName(r.levelId),
             date: new Date(r.completedAt),
         };

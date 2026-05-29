@@ -52,6 +52,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const data = await res.json();
             if (res.ok) {
+                // Mirror the account into localStorage too, so it survives even if
+                // the server's data file is later reset (ephemeral/autoscale
+                // container) and so login can always fall back to it.
+                localRegister({ username, email, password, country, avatar });
                 successMessage.textContent = 'Account created! Redirecting to login...';
                 successMessage.style.display = 'block';
                 setTimeout(() => { window.location.href = '/'; }, 1500);

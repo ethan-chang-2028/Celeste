@@ -9,12 +9,11 @@
 (function (global) {
     'use strict';
 
-    // ── Built-in levels (mirrors levels.json schema, Section 8.4) ─────────────
+    // ── Ranked levels — the two hand-crafted levels (mirrors levels.json) ─────
+    // These ids match the keys the game submits (game.js `levelKey`).
     const LEVELS = [
-        { id: 'level-1', name: 'Forsaken City',  difficulty: 'easy' },
-        { id: 'level-2', name: 'Old Site',       difficulty: 'medium' },
-        { id: 'level-3', name: 'Crystal Caverns', difficulty: 'hard' },
-        { id: 'level-4', name: 'Golden Ridge',   difficulty: 'expert' },
+        { id: 'maze',     name: 'Mirror Temple',         difficulty: 'hard' },
+        { id: 'mountain', name: 'Heart of the Mountain', difficulty: 'expert' },
     ];
 
     // ── Seed users (matches users.json, Section 8.2) ──────────────────────────
@@ -31,16 +30,16 @@
     const now = Date.now();
     const days = (n) => new Date(now - n * 86400000).toISOString();
     const SEED_RUNS = [
-        { runId: 'r-0001', playerId: 'u-nova003',  levelId: 'level-1', completionTime: 28.41, deathCount: 1,  completedAt: days(0),  raceType: 'solo' },
-        { runId: 'r-0002', playerId: 'u-4f2a9c',   levelId: 'level-1', completionTime: 31.07, deathCount: 3,  completedAt: days(1),  raceType: 'solo' },
-        { runId: 'r-0003', playerId: 'u-blink04',  levelId: 'level-1', completionTime: 34.88, deathCount: 6,  completedAt: days(9),  raceType: 'pvai' },
-        { runId: 'r-0004', playerId: 'u-4f2a9c',   levelId: 'level-2', completionTime: 52.19, deathCount: 4,  completedAt: days(2),  raceType: 'solo' },
-        { runId: 'r-0005', playerId: 'u-megan002', levelId: 'level-2', completionTime: 49.63, deathCount: 2,  completedAt: days(0),  raceType: 'pvp'  },
-        { runId: 'r-0006', playerId: 'u-nova003',  levelId: 'level-2', completionTime: 58.02, deathCount: 9,  completedAt: days(12), raceType: 'solo' },
-        { runId: 'r-0007', playerId: 'u-blink04',  levelId: 'level-3', completionTime: 77.45, deathCount: 14, completedAt: days(3),  raceType: 'solo' },
-        { runId: 'r-0008', playerId: 'u-megan002', levelId: 'level-3', completionTime: 71.90, deathCount: 8,  completedAt: days(0),  raceType: 'pvai' },
-        { runId: 'r-0009', playerId: 'u-ethan001', levelId: 'level-3', completionTime: 84.12, deathCount: 18, completedAt: days(20), raceType: 'solo' },
-        { runId: 'r-0010', playerId: 'u-nova003',  levelId: 'level-4', completionTime: 119.7, deathCount: 25, completedAt: days(5),  raceType: 'pvp'  },
+        { runId: 'r-0001', playerId: 'u-nova003',  levelId: 'maze',     completionTime: 41.28, deathCount: 4,  completedAt: days(0),  raceType: 'solo' },
+        { runId: 'r-0002', playerId: 'u-4f2a9c',   levelId: 'maze',     completionTime: 47.10, deathCount: 7,  completedAt: days(1),  raceType: 'solo' },
+        { runId: 'r-0003', playerId: 'u-blink04',  levelId: 'maze',     completionTime: 53.94, deathCount: 12, completedAt: days(9),  raceType: 'solo' },
+        { runId: 'r-0004', playerId: 'u-megan002', levelId: 'maze',     completionTime: 58.62, deathCount: 9,  completedAt: days(3),  raceType: 'solo' },
+        { runId: 'r-0005', playerId: 'u-ethan001', levelId: 'maze',     completionTime: 66.41, deathCount: 18, completedAt: days(20), raceType: 'solo' },
+        { runId: 'r-0006', playerId: 'u-nova003',  levelId: 'mountain', completionTime: 72.83, deathCount: 11, completedAt: days(0),  raceType: 'solo' },
+        { runId: 'r-0007', playerId: 'u-blink04',  levelId: 'mountain', completionTime: 81.55, deathCount: 16, completedAt: days(2),  raceType: 'solo' },
+        { runId: 'r-0008', playerId: 'u-4f2a9c',   levelId: 'mountain', completionTime: 88.07, deathCount: 14, completedAt: days(6),  raceType: 'solo' },
+        { runId: 'r-0009', playerId: 'u-megan002', levelId: 'mountain', completionTime: 95.30, deathCount: 21, completedAt: days(12), raceType: 'solo' },
+        { runId: 'r-0010', playerId: 'u-ethan001', levelId: 'mountain', completionTime: 110.4, deathCount: 27, completedAt: days(5),  raceType: 'solo' },
     ];
 
     // ── Achievement definitions (Section 5.2 / Checkpoint 11) ─────────────────
@@ -92,7 +91,8 @@
         catch { return null; }
     }
 
-    // Fetch run records: server first, then merge seed so the page is never empty.
+    // Fetch run records: seed + locally-saved runs + server, merged so the page
+    // is never empty and player-submitted runs always appear.
     async function fetchRuns() {
         let server = [];
         try {
@@ -104,27 +104,46 @@
                 const data = await res.json();
                 if (Array.isArray(data)) server = data;
             }
-        } catch (_) { /* offline / file:// — use seed only */ }
+        } catch (_) { /* offline / file:// — use seed + local only */ }
 
-        // Normalise + de-duplicate by runId (server records win).
+        let local = [];
+        try { local = JSON.parse(localStorage.getItem('apex_runs') || '[]'); }
+        catch (_) { local = []; }
+
+        // De-duplicate by runId; later sources win (local + server over seed).
         const byId = new Map();
-        for (const r of SEED_RUNS) byId.set(r.runId, r);
-        for (const r of server) {
-            const id = r.runId || `srv-${byId.size}`;
+        for (const r of SEED_RUNS) byId.set(r.runId, normaliseRun(r));
+        for (const r of [...local, ...server]) {
+            const id = r.runId || `auto-${byId.size}`;
             byId.set(id, normaliseRun({ runId: id, ...r }));
         }
-        return [...byId.values()].filter(r => typeof r.completionTime === 'number');
+        return [...byId.values()]
+            .filter(r => typeof r.completionTime === 'number' && !isNaN(r.completionTime));
     }
 
     function normaliseRun(r) {
         return {
             runId: r.runId,
             playerId: r.playerId || r.userId || r.player || 'unknown',
-            levelId: r.levelId || r.level || 'level-1',
-            completionTime: Number(r.completionTime ?? r.time ?? r.timeMs / 1000),
+            playerName: r.playerName || null,
+            country: r.country || null,
+            levelId: r.levelId || r.level || 'maze',
+            completionTime: Number(r.completionTime ?? r.time ?? (r.timeMs != null ? r.timeMs / 1000 : NaN)),
             deathCount: Number(r.deathCount ?? r.deaths ?? 0),
             completedAt: r.completedAt || r.savedAt || new Date().toISOString(),
             raceType: r.raceType || 'solo',
+        };
+    }
+
+    // Resolve a run's display identity: prefer a known user (registered/seed),
+    // then fall back to the name/country embedded in the run itself.
+    function runIdentity(run) {
+        const u = resolveUser(run.playerId);
+        const known = u.username !== run.playerId;
+        return {
+            username: known ? u.username : (run.playerName || run.playerId),
+            country:  (known && u.country) ? u.country : (run.country || '—'),
+            avatar:   u.avatar,
         };
     }
 
@@ -135,7 +154,7 @@
 
     global.ApexData = {
         LEVELS, ACHIEVEMENTS,
-        allUsers, resolveUser, avatarEmoji, currentUser,
+        allUsers, resolveUser, runIdentity, avatarEmoji, currentUser,
         fetchRuns, levelName,
     };
 })(window);

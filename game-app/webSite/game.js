@@ -665,6 +665,11 @@
     // ── Run state ────────────────────────────────────────────────────────────
     let gameActive   = false;   // true only after the user picks a level
     let currentMode  = 'ai';    // 'gauntlet' | 'ai'
+    // The level the user actually picked. `currentMode` gets rewritten to 'maze'
+    // for the mountain level (it reuses maze logic), so we keep the original key
+    // here to identify the two ranked levels (maze = Mirror Temple,
+    // mountain = Heart of the Mountain) for leaderboard submissions.
+    let levelKey     = '';
     let cameraX      = 0;
     let cameraY      = 0;
     let worldH       = H;    // total world height for custom levels
@@ -2339,6 +2344,7 @@
     // ── Level-select API (called from game.html buttons) ─────────────────────
     window.startGame = function (mode) {
         currentMode = mode;
+        levelKey    = mode;     // preserved even when mountain rewrites currentMode
         aiEnabled   = false;
         updateAIBtn();
 
@@ -2897,6 +2903,38 @@
         }
     }
 
+    // ── Leaderboard submission ─────────────────────────────────────────────────
+    // Saves a completed run (time + deaths) for the ranked levels. Persists to
+    // localStorage so it shows even offline, and best-effort POSTs to the server
+    // (server.js appends it to game-app/Data/leaderboard.json).
+    function submitLeaderboardRun(levelId, completionTime, deathCount) {
+        let user = null;
+        try { user = JSON.parse(sessionStorage.getItem('loggedInUser') || 'null'); } catch (e) {}
+        const run = {
+            runId: 'r-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+            playerId:  user && user.id       ? user.id       : 'guest',
+            playerName: user && user.username ? user.username : 'Guest',
+            country:    user && user.country  ? user.country  : '',
+            levelId,
+            completionTime: Math.round(completionTime * 100) / 100,
+            deathCount,
+            completedAt: new Date().toISOString(),
+            raceType: 'solo',
+        };
+        try {
+            const runs = JSON.parse(localStorage.getItem('apex_runs') || '[]');
+            runs.push(run);
+            localStorage.setItem('apex_runs', JSON.stringify(runs));
+        } catch (e) { /* storage full / unavailable */ }
+        try {
+            fetch('/leaderboard', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(run),
+            }).catch(() => {});
+        } catch (e) { /* offline / file:// */ }
+    }
+
     // ── Loop ─────────────────────────────────────────────────────────────────
     let last = performance.now(), accum = 0;
     let stepCount = 0, fpsWindow = last, measuredFps = 60;
@@ -2921,6 +2959,12 @@
             }
             return;
         }
+
+        // ── Level complete: freeze the world ───────────────────────────────────
+        // Once the player reaches the goal the run is over — stop simulating so
+        // the level no longer continues. The timer is already pinned to winMs and
+        // the CLEARED banner is drawn by render(). Press R (restartRun) to replay.
+        if (won) return;
 
         const input = readInput();
 
@@ -3100,9 +3144,16 @@
                 saveAIGlobalStats();
                 updateAIBtn();
             }
+            // Record a ranked run for the two hand-crafted levels (Mirror Temple
+            // and Heart of the Mountain) — time + deaths go to the leaderboard.
+            if (!aiEnabled && (levelKey === 'maze' || levelKey === 'mountain')) {
+                submitLeaderboardRun(levelKey, winMs / 1000, deaths);
+            }
             if (!aiEnabled && recordingFrames.length > 30) saveRecording(true);
         }
-        if (player.y > DEATH_Y || player.y < worldMinY - 20) {
+        // Death only from falling off the BOTTOM. Flying above the top of the
+        // world no longer kills the player (gravity simply pulls them back down).
+        if (player.y > DEATH_Y) {
             if (entities.some(e => e.type === 'goldenStrawberry' && e._collected)) { restartRun(); return; }
             respawn(); return;
         }

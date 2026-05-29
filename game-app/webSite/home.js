@@ -24,10 +24,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         body.innerHTML = top.map((r, i) => {
-            const u = D.resolveUser(r.playerId);
+            const id = D.runIdentity(r);
             return `<tr>
                 <td class="rank">${i + 1}</td>
-                <td>${D.avatarEmoji(u.avatar)} ${escapeHtml(u.username)}</td>
+                <td>${D.avatarEmoji(id.avatar)} ${escapeHtml(id.username)}</td>
                 <td>${escapeHtml(D.levelName(r.levelId))}</td>
                 <td class="time">${r.completionTime.toFixed(2)}s</td>
             </tr>`;

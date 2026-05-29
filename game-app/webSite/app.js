@@ -52,6 +52,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 return;
             }
+            // Server is up but didn't recognise the account. It may live only in
+            // this browser's localStorage (e.g. the server's data file was reset
+            // on an ephemeral/autoscale container), so try the local store before
+            // giving up.
+            const localUser = localLogin(identifier, password);
+            if (localUser) {
+                sessionStorage.setItem('loggedInUser', JSON.stringify(localUser));
+                window.location.href = window.location.protocol === 'file:'
+                    ? '../profile/profile.html' : '/profile.html';
+                return;
+            }
             errorMessage.textContent = data.message || 'Invalid username or password.';
             errorMessage.style.display = 'block';
             return;
