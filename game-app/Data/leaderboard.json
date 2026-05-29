@@ -1,1 +1,26 @@
-[]
+[
+  {
+    "runId": "r-mpqimtckrnt5",
+    "playerId": "u-0hhs34",
+    "playerName": "1",
+    "country": "1",
+    "levelId": "maze",
+    "completionTime": 85.32,
+    "deathCount": 10,
+    "completedAt": "2026-05-29T06:03:06.644Z",
+    "raceType": "solo",
+    "savedAt": "2026-05-29T06:03:09.033Z"
+  },
+  {
+    "runId": "r-mpqitsemr9yw",
+    "playerId": "u-0hhs34",
+    "playerName": "1",
+    "country": "1",
+    "levelId": "mountain",
+    "completionTime": 42.58,
+    "deathCount": 0,
+    "completedAt": "2026-05-29T06:08:32.014Z",
+    "raceType": "solo",
+    "savedAt": "2026-05-29T06:08:38.970Z"
+  }
+]
